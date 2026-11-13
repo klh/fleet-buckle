@@ -6,12 +6,12 @@ established capability folders; no organization drift.
 
 ## Fixtures are REAL captures — never hand-typed
 
-The stub catalogs (`deploy/fixtures/*.models.json`) are slices of the
+The stub catalogs (`test/deploy/fixtures/*.models.json`) are slices of the
 providers' REAL `/v1/models` responses, captured by
 `bun tools/src/buckle.capture-fixtures.ts` (keys are machine-local
 paths, never committed). Refresh whenever the demo should ride new
 reality. From those fixtures, `bun tools/src/buckle.gen-engine-config.ts`
-generates the litellm engine configs (`deploy/engine/*.litellm.yaml`,
+generates the litellm engine configs (`test/deploy/engine/*.litellm.yaml`,
 gitignored): every catalog row becomes a deployment under its REAL id —
 engine and catalog can never drift, and the generator runs in the
 playwright global-setup, so the stack always boots consistent.
@@ -50,7 +50,7 @@ behind the server today, skipped).
 the demo matrix curls as spec: grants per principal per buckle, denial
 paths 403 problem+json, federation tree depth-2 summaries, load waves.
 
-## Stage 0 — the standing first-stage demo (`deploy/compose.stage0.yaml`)
+## Stage 0 — the standing first-stage demo (`test/deploy/compose.stage0.yaml`)
 
 The stack's first smoke moment, kept forever: stubs + the three buckles
 + sidecars, NO engines. The minimal buckle ANSWERS (`/healthz` — label
@@ -59,12 +59,12 @@ NOT fail works); a chat round trip is honestly red — 503
 `application/problem+json` (the smoke that should fail, fails).
 Host ports 49xx; runs beside the full 47xx stack in one pass.
 
-## Rolling deploy (`deploy/compose.rolling.yaml` + `deploy/front/`)
+## Rolling deploy (`test/deploy/compose.rolling.yaml` + `deploy/front/`)
 
 The architecture that makes a new buckle version swappable with zero
 downtime: a per-unit FRONT (tiny reverse proxy) — the active upstream
 is a STATE FILE, read per request. The switch is a same-inode write
-into the mounted `deploy/roll/` directory (a host-side rename replaces
+into the mounted `test/deploy/roll/` directory (a host-side rename replaces
 the inode and VirtioFS never shows it; the front's last-known-good
 makes a torn read harmless — it serves the previous version until a
 clean read lands).

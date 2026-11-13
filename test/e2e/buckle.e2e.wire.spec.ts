@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 // is MINTED (0600, gitignored) by globalSetup before the stack boots
 const ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const CAROL_KEY = readFileSync(
-  join(ROOT, "deploy/keys/.gen/principal.carol@fleet.key"),
+  join(ROOT, "test/deploy/keys/.gen/principal.carol@fleet.key"),
   "utf8",
 ).trim();
 const AUTH = { authorization: `Bearer ${CAROL_KEY}` };
@@ -23,7 +23,7 @@ const AUTH = { authorization: `Bearer ${CAROL_KEY}` };
 const fixtureIds = (provider: string): string[] =>
   (
     JSON.parse(
-      readFileSync(join(ROOT, "deploy/fixtures", `${provider}.models.json`), "utf8"),
+      readFileSync(join(ROOT, "test/deploy/fixtures", `${provider}.models.json`), "utf8"),
     ) as { data: { id: string }[] }
   ).data.map((m) => m.id);
 

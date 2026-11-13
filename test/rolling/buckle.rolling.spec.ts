@@ -16,9 +16,9 @@ const ROOT = new URL("../..", import.meta.url).pathname;
 const FRONT = "http://127.0.0.1:4811";
 const V1 = "http://buckle1v1:4111";
 const V2 = "http://buckle1v2:4111";
-const STATE = `${ROOT}/deploy/roll/b1.active.json`; // inside the mounted dir
+const STATE = `${ROOT}/test/deploy/roll/b1.active.json`; // inside the mounted dir
 
-const FILE = "deploy/compose.rolling.yaml";
+const FILE = "test/deploy/compose.rolling.yaml";
 const compose = (...args: string[]) => composeOn(FILE, PROJECT, ...args);
 
 /** the flip — SAME-INODE write: a host-side rename replaces the inode
@@ -57,7 +57,7 @@ async function healthzThroughFront(): Promise<BuckleHealthz> {
 
 test.describe.serial("rolling deploy — unit b1 v1 → v2, no downtime", () => {
   test.beforeAll(async () => {
-    carol = (await Bun.file(`${ROOT}/deploy/keys/.gen/principal.carol@fleet.key`).text()).trim();
+    carol = (await Bun.file(`${ROOT}/test/deploy/keys/.gen/principal.carol@fleet.key`).text()).trim();
     flip(V1); // the roll starts from v1
     compose("up", "-d", "--build");
   });

@@ -5,7 +5,7 @@ import { execFileSync, execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-export const COMPOSE_FILE = `${ROOT}/deploy/compose.test.yaml`;
+export const COMPOSE_FILE = `${ROOT}/test/deploy/compose.test.yaml`;
 export const PROJECT = "fleet-buckle-test";
 
 export function compose(args: string): string {

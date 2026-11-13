@@ -54,7 +54,7 @@ for (const f of files.filter(
 }
 
 // 3. no AUTHORED yaml outside compose wiring (docker-compose is wiring
-//    only). deploy/engine/*.litellm.yaml is GENERATED from the captured
+//    only). test/deploy/engine/*.litellm.yaml is GENERATED from the captured
 //    fixtures (buckle.gen-engine-config.ts, gitignored) — litellm only
 //    reads yaml configs, so generated-and-never-edited is the sanctioned
 //    exception.

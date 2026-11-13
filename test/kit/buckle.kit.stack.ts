@@ -7,7 +7,7 @@ import { genEngineConfigs } from "../../tools/src/buckle.gen-engine-config.ts";
 
 /** the demo keys are MINTED and the engine configs GENERATED before
  * the stack boots: keys are never typed (per-principal 0600 files into
- * deploy/keys/.gen, mounted at /etc/buckle/keys), and the litellm
+ * test/deploy/keys/.gen, mounted at /etc/buckle/keys), and the litellm
  * deployments come from the REAL captured catalogs so engine ids and
  * catalog ids can never drift. */
 export async function stackUp(): Promise<void> {

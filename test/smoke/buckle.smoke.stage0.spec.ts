@@ -10,7 +10,7 @@ import { face, verdict } from "../kit/buckle.kit.health.ts";
 import { composeOn } from "../kit/buckle.kit.compose.ts";
 
 const PROJECT = "fleet-buckle-stage0";
-const FILE = "deploy/compose.stage0.yaml";
+const FILE = "test/deploy/compose.stage0.yaml";
 const compose = (...args: string[]) => composeOn(FILE, PROJECT, ...args);
 const ROOT = new URL("../..", import.meta.url).pathname;
 let carol = "";
@@ -18,7 +18,7 @@ let carol = "";
 test.describe.serial("stage 0 — stubs + 3 buckles up, engines not yet", () => {
   test.beforeAll(async () => {
     carol = (
-      await Bun.file(`${ROOT}/deploy/keys/.gen/principal.carol@fleet.key`).text()
+      await Bun.file(`${ROOT}/test/deploy/keys/.gen/principal.carol@fleet.key`).text()
     ).trim();
   });
 

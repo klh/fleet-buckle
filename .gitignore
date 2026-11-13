@@ -10,5 +10,5 @@ node_modules/
 .qlty/out/
 .qlty/plugin_cachedir/
 .qlty/sources/
-deploy/keys/.gen/*
-deploy/engine/
+test/deploy/keys/.gen/*
+test/deploy/engine/

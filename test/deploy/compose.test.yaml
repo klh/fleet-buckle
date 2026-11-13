@@ -27,15 +27,15 @@ services:
 
   # ── stub providers (fixtures ride mounts; the kit serves model rows) ──
   openrouter-stub:
-    build: ../test/kit/stub
+    build: ../kit/stub
     volumes:
       - ../deploy/fixtures/openrouter.models.json:/etc/stub/models.json:ro
   mscopilot-stub:
-    build: ../test/kit/stub
+    build: ../kit/stub
     volumes:
       - ../deploy/fixtures/mscopilot.models.json:/etc/stub/models.json:ro
   zai-stub:
-    build: ../test/kit/stub
+    build: ../kit/stub
     volumes:
       - ../deploy/fixtures/zai.models.json:/etc/stub/models.json:ro
 
@@ -61,15 +61,15 @@ services:
       - "4712:4112"
     depends_on: [buckle1, jaeger]
   buckle1:
-    build: ..
+    build: ../..
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
       BUCKLE_ENGINE_URL: http://litellm1:4000
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
     volumes:
-      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
-      - ./settings/b1.settings.json5:/etc/buckle/settings.json:ro
+      - ../../deploy/settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ../../deploy/settings/b1.settings.json5:/etc/buckle/settings.json:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:
       - "4711:4111"
@@ -92,14 +92,14 @@ services:
       - "4722:4212"
     depends_on: [buckle2, jaeger]
   buckle2:
-    build: ..
+    build: ../..
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
       BUCKLE_ENGINE_URL: http://litellm2:4000
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
     volumes:
-      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ../../deploy/settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
       - ./settings/b2.settings.json5:/etc/buckle/settings.json:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:
@@ -123,14 +123,14 @@ services:
       - "4732:4312"
     depends_on: [buckle3, jaeger]
   buckle3:
-    build: ..
+    build: ../..
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
       BUCKLE_ENGINE_URL: http://litellm3:4000
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
     volumes:
-      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ../../deploy/settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
       - ./settings/b3.settings.json5:/etc/buckle/settings.json:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:

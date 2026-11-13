@@ -65,7 +65,7 @@ function keepRow(m: Row, filter: Filter): boolean {
   return m.model_picker_enabled === true && m.preview !== true;
 }
 
-const OUT = new URL("../../deploy/fixtures/", import.meta.url).pathname;
+const OUT = new URL("../../../test/deploy/fixtures/", import.meta.url).pathname;
 
 const CaptureSchema = z.object({
   url: z.string(),

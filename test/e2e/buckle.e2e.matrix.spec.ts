@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const KEY = (p: string) =>
-  readFileSync(join(ROOT, `deploy/keys/.gen/${p}`), "utf8").trim();
+  readFileSync(join(ROOT, `test/deploy/keys/.gen/${p}`), "utf8").trim();
 const alice = KEY("principal.alice@fleet.key");
 const bob = KEY("principal.bob@fleet.key");
 const carol = KEY("principal.carol@fleet.key");
@@ -38,7 +38,7 @@ const cat = (provider: string): string[] =>
   (
     JSON.parse(
       readFileSync(
-        join(ROOT, "deploy/fixtures", `${provider}.models.json`),
+        join(ROOT, "test/deploy/fixtures", `${provider}.models.json`),
         "utf8",
       ),
     ) as { data: { id: string }[] }

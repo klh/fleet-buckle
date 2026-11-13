@@ -12,48 +12,48 @@
 services:
   # ── stub providers (the buckles' upstreams, already real) ──
   openrouter-stub:
-    build: ../test/kit/stub
+    build: ../kit/stub
     volumes:
       - ../deploy/fixtures/openrouter.models.json:/etc/stub/models.json:ro
   mscopilot-stub:
-    build: ../test/kit/stub
+    build: ../kit/stub
     volumes:
       - ../deploy/fixtures/mscopilot.models.json:/etc/stub/models.json:ro
   zai-stub:
-    build: ../test/kit/stub
+    build: ../kit/stub
     volumes:
       - ../deploy/fixtures/zai.models.json:/etc/stub/models.json:ro
 
   # ── the three buckles — up, not done ──
   buckle1:
-    build: ..
+    build: ../..
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
     volumes:
-      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
-      - ./settings/b1.settings.json5:/etc/buckle/settings.json:ro
+      - ../../deploy/settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ../../deploy/settings/b1.settings.json5:/etc/buckle/settings.json:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:
       - "4911:4111"
   buckle2:
-    build: ..
+    build: ../..
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
     volumes:
-      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ../../deploy/settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
       - ./settings/b2.settings.json5:/etc/buckle/settings.json:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:
       - "4921:4111"
   buckle3:
-    build: ..
+    build: ../..
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
     volumes:
-      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ../../deploy/settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
       - ./settings/b3.settings.json5:/etc/buckle/settings.json:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:

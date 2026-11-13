@@ -1,5 +1,5 @@
 // buckle.gen-engine-config.ts — generate the litellm engine configs
-// FROM the real captured catalogs (deploy/fixtures/*.models.json):
+// FROM the real captured catalogs (test/deploy/fixtures/*.models.json):
 // every catalog row becomes a deployment under its REAL id, mapped to
 // an openai-compatible leg at the stub base. The engine therefore
 // serves exactly the ids the stub catalog advertises — catalog and
@@ -26,13 +26,13 @@ const UNITS = {
 } as const;
 
 const ROOT = new URL("../..", import.meta.url).pathname;
-const OUT = join(ROOT, "deploy", "engine");
+const OUT = join(ROOT, "test", "deploy", "engine");
 
 function deploymentsOf(provider: keyof typeof UNITS): string {
   const fixture: Fixture = FixtureSchema.parse(
     JSON.parse(
       readFileSync(
-        join(ROOT, "deploy", "fixtures", `${provider}.models.json`),
+        join(ROOT, "test", "deploy", "fixtures", `${provider}.models.json`),
         "utf8",
       ),
     ),
@@ -64,7 +64,7 @@ export function genEngineConfigs(): void {
       join(OUT, `${provider}.litellm.yaml`),
       deploymentsOf(provider),
     );
-    console.log(`deploy/engine/${provider}.litellm.yaml written`);
+    console.log(`test/deploy/engine/${provider}.litellm.yaml written`);
   }
 }
 

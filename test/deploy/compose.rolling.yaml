@@ -13,7 +13,7 @@
 
 services:
   openrouter-stub:
-    build: ../test/kit/stub
+    build: ../kit/stub
     volumes:
       - ../deploy/fixtures/openrouter.models.json:/etc/stub/models.json:ro
 
@@ -25,21 +25,21 @@ services:
 
   # ── the current version ──
   buckle1v1:
-    build: ..
+    build: ../..
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
       BUCKLE_ENGINE_URL: http://litellm1:4000
     volumes:
-      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
-      - ./settings/b1.settings.json5:/etc/buckle/settings.json:ro
+      - ../../deploy/settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ../../deploy/settings/b1.settings.json5:/etc/buckle/settings.json:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:
       - "4821:4111"
 
   # ── the new version — up FIRST, traffic LATER ──
   buckle1v2:
-    build: ..
+    build: ../..
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
@@ -47,7 +47,7 @@ services:
     volumes:
       # v2 = default ⊕ b1 ⊕ {version}: the unit inherits b1's label,
       # provider and registry wholesale — only the version stamps new
-      - ./settings/b1.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ../../deploy/settings/b1.settings.json5:/etc/buckle/default.settings.json5:ro
       - ./settings/b1.rolling-v2.json5:/etc/buckle/settings.json:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:
@@ -55,7 +55,7 @@ services:
 
   # ── the front — the switch is its state file ──
   front1:
-    build: ./front
+    build: ../../deploy/front
     environment:
       # the DIRECTORY is mounted (a single-file bind pins the inode —
       # an atomic rename on the host would never reach the container);
