@@ -93,3 +93,31 @@ test("alice@b1 (peers []): even a REAL peer model is 404 — own-only view", asy
   const problem = (await r.json()) as { kind: string };
   expect(problem.kind).toBe("not-found");
 });
+
+test("the federated catalog is a SET — a machine may sit under several hubs, the view never duplicates ids", async () => {
+  // carol holds keys at every hub: b1 (own openrouter + peer b3) and
+  // b2 (own mscopilot + peer b3). Each view lists each model id ONCE —
+  // configuring more hubs never multiplies rows (the set law).
+  const view = async (base: string, key: string): Promise<string[]> => {
+    const r = await fetch(`${base}/v1/models`, {
+      headers: { authorization: `Bearer ${key}` },
+    });
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { models: { id: string }[] };
+    return body.models.map((m) => m.id);
+  };
+  const atB1 = await view(B1, keyOf("carol@fleet"));
+  const atB2 = await view(B2, keyOf("carol@fleet"));
+  for (const [label, ids] of [
+    ["b1", atB1],
+    ["b2", atB2],
+  ] as const) {
+    expect(new Set(ids).size, `${label}: duplicate ids in federated view`).toBe(
+      ids.length,
+    );
+  }
+  // derived from the fixture stores: glm-5.3 is zai-only — it rides
+  // BOTH views exactly once (b1→b3, b2→b3), never twice
+  expect(atB1.filter((id) => id === "glm-5.3")).toHaveLength(1);
+  expect(atB2.filter((id) => id === "glm-5.3")).toHaveLength(1);
+});

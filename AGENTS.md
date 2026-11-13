@@ -52,6 +52,14 @@ engine already has.
   guarded anyway). A 429 at the hop RELAYS with `Retry-After`; any
   other peer refusal surfaces as an `unavailable` problem NAMING the
   peer — hop authz is operator-facing, never the client's fault.
+- **The federated catalog is a SET.** One row per model id, no matter
+  how many hubs serve it: a machine configuring b1+b2+b3 as available
+  hubs never grows duplicate or triplicate rows. Precedence is
+  deterministic — own provider rows win (never hop for what we serve),
+  then peers in `hubs`-declaration order. Transit copies never re-enter:
+  a hub pulls only the peer's DIRECT provider rows (`origin kind=
+  provider`), so a chain (b1→b2→b3) plus a direct edge (b1→b3) still
+  counts b3's models once.
   A peer model outside the requesting grant's `peers` is
   indistinguishable from an unknown model (404 — no topology leak).
 - Identity is **Entra-mappable, not Entra**: principals

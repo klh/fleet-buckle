@@ -96,6 +96,18 @@ export async function buildFederatedCatalog(
   // the empty list = own rows only) rides exactly those labels
   const allowed =
     grant.peers ?? configured.map(([label]) => label);
+  // the federated catalog is a SET of ids: a machine configuring b1+b2+b3
+  // as peers never grows duplicate or triplicate rows — one row per model
+  // id, no matter how many hubs serve it. Precedence is deterministic:
+  // own rows win over peers (never hop for what we serve), and among peers
+  // the hubs-declaration order wins. A dead peer simply contributes nothing.
+  const seen = new Set<string>();
+  const unique: BuckleModelWire[] = [];
+  for (const row of own.models) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    unique.push(row);
+  }
   const rows: BuckleModelWire[] = [];
   for (const [label, peer] of configured) {
     if (!allowed.includes(label)) continue;
@@ -126,11 +138,14 @@ export async function buildFederatedCatalog(
           id: typeof raw.id === "string" ? raw.id : undefined,
           origin: { kind: "buckle", label, url: peer.url },
         });
-        if (parsed.success) rows.push(parsed.data);
+        if (!parsed.success) continue;
+        if (seen.has(parsed.data.id)) continue; // set law: first origin wins
+        seen.add(parsed.data.id);
+        rows.push(parsed.data);
       }
     } catch {
       // dead peer: no rows from it
     }
   }
-  return { hub: settings.hub.label, models: [...own.models, ...rows] };
+  return { hub: settings.hub.label, models: [...unique, ...rows] };
 }
