@@ -1,0 +1,1419 @@
+{
+ "entries": {
+  "src/adapters/types.ts": {
+   "status": "read",
+   "role": "the ChatAdapter contract (W134 §1, port of LiteLLM BaseConfig reshaped pass-through-first) + AdapterFamily enum + bearerHeaders/upstreamUrlOf/staticHeaders/usageField helpers",
+   "summary": "Six wire families (openai-compat, anthropic, azure-openai, bedrock, vertex, openai-responses); families NOT providers — tier-3 long tail is data rows. ChatAdapter = {family, dialect, buildCall(dep,req,body)->WireCall, parseResponse (identity for pass-through), normalizeError, usageOf, caps{countTokens,tools,streamOptions}}. deriveAdapter: absent adapter: derives from dialect. bearerHeaders: api_key_env is an env NAME read at request time; staticHeaders from adapter_config.headers (authorization + content-type never overridable, non-string dropped). upstreamUrlOf (W935): adapter_config.path_rewrite maps ingress path -> upstream path exact-match, absolute paths only, invalid rows dropped fail-closed to verbatim — Copilot serves /chat/completions WITHOUT /v1 (W2780: /v1/responses serves as-is).",
+   "flags": [
+    "core"
+   ],
+   "notes": "Imports router (UpstreamRequest), upstreams, usage, errors — the adapter seam's type law. Port early."
+  },
+  "src/adapters/egress.ts": {
+   "status": "read",
+   "role": "outbound URL law (SSRF/credential hygiene): token hosts allowlisted https, upstream base https-or-loopback-http, OpenRouter structurally refused, W235 peer-endpoint allowlist",
+   "summary": "tokenOrigin: token endpoints (client secrets/signed JWTs) = https + allowlist (Entra hosts incl. gov/china, oauth2.googleapis.com; BUCKLE_TOKEN_HOSTS extends; BUCKLE_TOKEN_HOST_LOOPBACK=on for test mocks); bare host only, no userinfo/path. validateUpstreamUrl (startup-fatal): no credentials in URL, https OR plain http to loopback OR BUCKLE_HTTP_UPSTREAM_HOSTS-listed host; openrouter.ai refused outright (must ride LiteLLM). validateDeploymentEgress checks family token_hosts at load. W235: validatePeerEndpoint for overlay/peer endpoints — https-only (loopback http), no userinfo, host must sit in BUCKLE_EGRESS_ALLOW CSV — enforced at overlay load, fail-closed (a dropped peer file never gains egress by default).",
+   "flags": [
+    "core"
+   ],
+   "notes": "Leaf (no internal imports). TOKEN_FETCH_TIMEOUT_MS 10s caps credential fetches. Port whole."
+  },
+  "src/adapters/index.ts": {
+   "status": "read",
+   "role": "adapter REGISTRY (W134 §2: dispatch is a registry not an if/elif chain) + resolveAdapter (W150 resolution order)",
+   "summary": "REGISTRY maps the six family names to their adapter instances; getAdapter throws on unknown (never silent passthrough). resolveAdapter: explicit adapter: field wins; absent = deriveAdapter(dialect); the field may name a CATALOG provider (row's family), unknown name + explicit adapter_config = openai-compat catch-all, otherwise fail closed.",
+   "flags": [
+    "core"
+   ],
+   "notes": "Used by upstreams (resolution), bridge, router-attempt, wire, proxy family, server."
+  },
+  "src/adapters/anthropic.ts": {
+   "status": "read",
+   "role": "Messages-API family (tier 1): pass-through, count_tokens-capable, cache-token usage kinds",
+   "summary": "buildCall = model alias patch + stripRemovedSampling (W1142: anthropic-version 2026-10-21 or strip_sampling_params strips temperature/top_p/top_k) + stripBodyFields (W2594: per-row deny list — Copilot claude rows 400 thinking/anthropic_beta/parallel_tool_calls/mcp_servers/reasoning_effort/effort) + bearerHeaders; NO stream_options (anthropic usage rides message_start + cumulative message_delta natively). parseResponse identity. caps.countTokens=true (the one family with the real endpoint).",
+   "flags": [
+    "core"
+   ],
+   "notes": "55 lines — the pass-through ideal the W139 law names."
+  },
+  "src/adapters/openai-compat.ts": {
+   "status": "read",
+   "role": "the generic openai-wire family (tier 1): OpenAI, z.ai, vLLM, LM Studio, one-api shims, MLX/Ollama — ONE adapter",
+   "summary": "buildCall = model alias patch + stream_options.include_usage injection on /v1/chat/completions ONLY (include_usage is a chat knob; Responses wire reports usage on response.completed unconditionally and strict endpoints 400 unknown params). Byte-for-byte the pre-adapter wire.ts behavior — the 37-test regression net pins the bytes. parseResponse identity; caps.streamOptions=true, countTokens=false (router honest-estimate fallback).",
+   "flags": [
+    "core"
+   ],
+   "notes": "The adapter the standalone fixtures ride (stub speaks openai wire)."
+  },
+  "src/adapters/responses.ts": {
+   "status": "read",
+   "role": "Responses-wire family (W2583): providers serving ONLY the OpenAI Responses wire (Copilot gpt/grok/mai rows — no /v1/messages, no chat completions)",
+   "summary": "buildCall pure pass-through: model alias patch, delete stream_options (chat knob the Responses wire refuses). Body translation owned by bridge.ts chatToResponses; response leg re-frames back in router-attempt via bridgeResponsesUpstream. normalizeError rides the openai-compat table (same error envelope). caps.tools=false, streamOptions=false, countTokens=false.",
+   "flags": [
+    "core"
+   ],
+   "notes": "47 lines."
+  },
+  "src/adapters/responses-translate.ts": {
+   "status": "read",
+   "role": "W2583 chat<->Responses body translation, reject-verbose",
+   "summary": "chatToResponses: system -> instructions; user/assistant text -> input rows (input_text/output_text); REJECTS tools/tool_choice, tool messages, non-text content, empty input (null = rung ineligible, walk falls to next rung — nothing mangled mid-wire). responsesToChatJson: Replies reply -> one-choice chat completion (finish length on incomplete, usage mapped input/output/total).",
+   "flags": [
+    "core"
+   ],
+   "notes": "Used by bridge.ts only."
+  },
+  "src/adapters/responses-sse.ts": {
+   "status": "read",
+   "role": "W2583 Responses SSE -> openai chat chunk SSE TransformStream",
+   "summary": "response.created latches id/model + role chunk; response.output_text.delta -> content chunks; response.completed/incomplete -> finish chunk + include_usage chunk (empty choices) + [DONE]. Text-only tier: non-text output items (tool calls, reasoning) ignored. Keepalive comments pass through. One decoder, one line parser.",
+   "flags": [
+    "core"
+   ],
+   "notes": "Used by bridge.ts."
+  },
+  "src/adapters/errors.ts": {
+   "status": "read",
+   "role": "RouterError taxonomy (W134 §1): seven normalized kinds, per-family signature/status tables, retry-after header-or-body, context-window subclass, peer typed-transport preservation, native envelope shapes",
+   "summary": "ErrorKind = rate_limited|overloaded|timeout|network|auth|bad_request|server; RETRYABLE table (auth/bad_request no). RouterError carries kind, status, family, retryAfterS (header both forms via cooldown.retryAfterS, then body error.metadata.retry_after), contextWindow flag (regex detector — the bad_request subclass the ladder shrink/shims), providerCode/providerType/traceId (bounded, allowlisted fields via error-detail — never raw payloads). normalizeUpstreamError precedence: 429->rate_limited, 401/403->auth, peer typed refusal (x-buckle-refusal on 5xx -> network/timeout), body signature (per-family tables incl. bedrock __type, vertex error.status, azure error.code), status fallback tables. routerErrorEnvelope: native SDK envelope preserving provider codes. networkFromThrow: AbortError/TimeoutError->timeout else network; caller aborts rethrow above.",
+   "flags": [
+    "core"
+   ],
+   "notes": "Imports @klh/telemetry safeRefusalCode (x-buckle-refusal header), error-detail, cooldown. Family exception types NEVER leak past this file. Port whole."
+  },
+  "src/adapters/catalog.ts": {
+   "status": "read",
+   "role": "provider catalog as DATA (W150): lookup/summary/resolveCatalogFamily over the generated table",
+   "summary": "BY_NAME map over CATALOG_TABLE; resolveCatalogFamily: known name -> row family; 'openrouter' throws (must ride LiteLLM); unknown + explicit adapter_config -> openai-compat catch-all; unknown bare -> throw (startup fails closed, never silent passthrough). catalogSummary: counts by tier/family. Auth shapes carry env var NAMES only; flashx structurally absent.",
+   "flags": [
+    "core"
+   ],
+   "notes": "66 lines."
+  },
+  "src/adapters/catalog-table.ts": {
+   "status": "read",
+   "role": "GENERATED data table (W150): one row per genuine LiteLLM 1.103.0 chat provider {name, family, tier 1|2|3, auth, env?, docs}",
+   "summary": "Derived at build time (2026-10-01) from the pinned LiteLLM registries (LlmProviders enum, llms/<provider>/chat dirs, openai_like/providers.json); excludes vector stores/speech/image/observability/frameworks/meta routes/route twins; OpenRouter intentionally excluded (belongs to LiteLLM behind Buckle); flashx structurally absent — never a row. 879 lines of pure data. Sample: openai(openai-compat,1,bearer), anthropic(anthropic,1), azure/azure_ai(azure-openai,2), bedrock/sagemaker/amazon_nova(bedrock,2,signed), vertex_ai/gemini(vertex,2), chatgpt(openai-compat,3)...",
+   "flags": [
+    "generated-data"
+   ],
+   "notes": "Remaining lines are data rows of the same shape — shape fully sampled; no more to ingest. MIT attribution NOTICE.md. Standalone: port as data or trim to the families actually served."
+  },
+  "src/adapters/azure-openai.ts": {
+   "status": "read",
+   "role": "azure family (tier 2): openai-compat pass-through + azure URL/auth profile (api-key header or Entra client-credentials)",
+   "summary": "adapter_config {api_version, deployment?, entra?{tenant_id, client_id, client_secret_env, token_host?}}. azureUrl rewrites path to /openai/deployments/<dep>/chat/completions (unless base already carries it) + api-version query. Entra token cache keyed tenant:client, 55min expiry w/ early skew, SINGLE-FLIGHT refresh (the vertex stampede lesson), token endpoint through tokenOrigin allowlist, 10s timeout, failures delete the cache entry and normalize to auth errors. api-key profile: headers['api-key'] from env.",
+   "flags": [
+    "defer-optional: tier-2 — standalone fixtures don't serve azure"
+   ],
+   "notes": "Composes OPENAI_COMPAT (W139: azure = openai + URL/auth profile)."
+  },
+  "src/adapters/vertex.ts": {
+   "status": "read",
+   "role": "vertex family (tier 2): openai-compat over Vertex AI's OpenAI-compatible endpoint; SA-JWT RS256 (WebCrypto) -> oauth2 jwt-bearer exchange, or api-key (AI Studio)",
+   "summary": "adapter_config {project?, region?, auth sa|api-key, service_account_json_env? (default GOOGLE_APPLICATION_CREDENTIALS), api_key_env? (default GEMINI_API_KEY), token_host?}. saJwt: RS256 via WebCrypto PKCS8; gcpToken cached account:host single-flight, failures delete + RouterError('auth') never crash the loop; URL path /v1beta1/projects/<p>/locations/<r>/endpoints/openapi/chat/completions. api-key profile = plain openai-compat buildCall.",
+   "flags": [
+    "defer-optional: tier-2"
+   ],
+   "notes": "Own SigV4/JWT implementations — vendoring declined (W134 §3.1), tested by independent-implementation agreement."
+  },
+  "src/adapters/bedrock.ts": {
+   "status": "read",
+   "role": "bedrock family (tier 2): openai-compat over Bedrock's OpenAI-compatible endpoint (/openai/v1/chat/completions) with own WebCrypto SigV4",
+   "summary": "adapter_config {region (or AWS_REGION), access_key_env?/secret_key_env?/session_token_env? (standard AWS names default), host? (test seam)}. SigV4: kSecret->kDate->kRegion->kService->kSigning HMAC chain, canonical request over host+x-amz-date(+security-token)+payload hash; payloadHash exposed as a test seam. Maps ingress /v1 prefix -> /openai/v1. Env NAMES only, read at request time; missing creds = RouterError('auth').",
+   "flags": [
+    "defer-optional: tier-2"
+   ],
+   "notes": "Auth is the real cost (W134 §3.1) — vendoring declined, own implementation."
+  },
+  "src/gov/budgets.ts": {
+   "status": "read",
+   "role": "W468 replica-safe per-key/per-team RPM+TPM budgets + W843 lifetime token-spend ceiling — the DB row IS the authority",
+   "summary": "check(): one BEGIN IMMEDIATE transaction upsert-ADDs (1 req, ceil(bodyBytes/4) tks) into budget_state + team_budget_state (+ spend_state for team:<id>), reads back post-reservation counts, enforces effectiveLimit=min(key,team ceiling); denial ROLLBACKs and returns retryAfterS=windowRemainder+U[0,1) jitter (LiteLLM retry-after pattern). Two processes sharing one DB serialize on SQLite's single-writer lock — the W141 in-process counter flush races are gone. addUsage(): settle-time real tokens + W457 cache_r/cache_c. Book errs high: reserved input + real usage = input counted twice. BudgetView carries post-reservation counts for the http-citizenship rate-limit trio.",
+   "flags": [
+    "core"
+   ],
+   "notes": "Standalone: needs a DB or the same reserve-then-settle discipline reimplemented in-process."
+  },
+  "src/gov/token-budgets.ts": {
+   "status": "read",
+   "role": "W2790 per-key MONTHLY token budgets, warn-then-cap; process-global engine (occupancy precedent) configured post-schema",
+   "summary": "Subjects = mint NAME (exact row, then longest prefix* row) or actor:<id>; root bearer = unlimited by construction. checkTokenBudget(): BEGIN IMMEDIATE reserve weighted estimate (ceil(bodyBytes/4) × per-model-group weight), strictly-over denies (429 via wire deny seam), rollback on deny, ≥80% warns (x-klh-budget header via wire-stamp). settleTokenBudget() adds real usage. Rows exist ONLY for budgeted subjects. Unconfigured engine = unlimited. Malformed weights JSON logs + degrades to weight-1 (throttle config never takes the gate down). Admin CRUD + listTokenBudgets joins month usage.",
+   "flags": [
+    "defer-optional: shared/employee deployments (Azure W2783)"
+   ]
+  },
+  "src/gov/slots.ts": {
+   "status": "read",
+   "role": "W468 bounded simultaneous generations: global pool + per-team share, per-holder rows in BEGIN IMMEDIATE; W1068 OPT-IN (default 0=off)",
+   "summary": "acquire() sweeps dead-holder rows (touched IS the absolute sweep deadline), inserts per-holder rows, counts, enforces caps; SlotLease = {renew (now+leaseMs), hold(deadline push, one per renewal), release (delete rows; released flips only after committed DELETE — failed tx retries at next settle path)} — W1118 fixes: aggregate-touched reset of live slots, heartbeat renew never throws into the timer (DB fault logs, keeps last committed deadline), quiet streams hold past leaseMs. slotsFromEnv BUCKLE_SLOTS_GLOBAL/PER_TEAM, both default 0 = disabled (never proactively throttle cloud-bound traffic — owner doctrine 2026-10-20).",
+   "flags": [
+    "defer-optional: opt-in corporate throttling"
+   ]
+  },
+  "src/gov/occupancy.ts": {
+   "status": "read",
+   "role": "W2618 hub admission caps (per-hub/per-user/per-model concurrent) + the occupancy report the belt board renders; totals TREE-DERIVED",
+   "summary": "BUCKLE_ADMISSION_CAPS env JSON (hubctl renders from stack.json hubs.<label>.admission_caps; HUB_ prefix inside container); absent/malformed = inert (logs, never startup-fatal). Exactness: rid-keyed acquire→real-settle release (wire-stamp seam), no evict/staleness. derivedTotal = sum of per-model caps; hub_total caps overall + is gauge denominator. 30s sparkline ring (288 samples ~2.4h). occupancySnapshot(): per-model cards = UNION of active + configured models (idle capped models still render 0/N — W2781), per-user rows, 1m/5m gauges; OccupancyReportSchema = W1238.4 zod face for GET /v1/admin/occupancy.",
+   "flags": [
+    "defer-optional"
+   ]
+  },
+  "src/gov/inflight.ts": {
+   "status": "read",
+   "role": "W1259 exact in-flight index: every request ingress→settle as ONE queryable row + CONNECT tunnels (W1260.2), process-global",
+   "summary": "States queued→held→streaming→settled/denied; hooks beginInflight (before body read — refusals settle too), markInflight (dispatch: model + selected upstream visible WHILE streaming), holdInflightStream/settleInflight (streaming holds until stream-finish seam), endInflight (every response crosses stamped()). EXACTNESS LAW (owner #67628): a still-open request NEVER leaves the active set — no evict-oldest; bounded by admission caps. Recent ring: 512 rows/5min TTL. Correlation: trace_id join + baggage hub ids; direct-to-provider traffic honestly labeled unobservable. Reads Ctx STRUCTURALLY (InflightSource) — never imports handlers. acceptConnectSnapshot() ingests connect-egress verbatim.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/gov/adaptation.ts": {
+   "status": "read",
+   "role": "W235 adaptation surface v2: FOUR typed hooks (authenticate/authorize/audit/budget) — deny/refine/attribute, NEVER bypass core floors",
+   "summary": "SSO principals get scopes ONLY from the pinned role→scope map (validated vs ALL_SCOPES fail-closed — a hook cannot self-grant; register-time throws, never degrade to solo). authenticate runs ONLY on auth_missing (presented-but-invalid never downgraded — W173); validDeny caps status 401/403/429 + code ^buckle\\.[a-z_]+$; validSsoIdentity shape-checks; principalFromSso = kind sso, keyId sso:<subject>. OVERLAY_PROTOCOL_VERSION=1 handshake constant.",
+   "flags": [
+    "core"
+   ],
+   "notes": "Standalone: port if SSO/enterprise seams are wanted; solo posture works without."
+  },
+  "src/gov/audit-chain.ts": {
+   "status": "read",
+   "role": "W703 tamper-evident append-only auth_events hash chain",
+   "summary": "appendAuthEvent: IMMEDIATE tx reads head row_hash, row_hash=sha256(prev\n canonical-json); editing breaks own hash, removing/reordering breaks the next prev_hash link. Evidence not prevention: expectHead pins the tail out-of-band (deleted TAIL invisible otherwise). verifyAuthChain: streams id order, legacy pre-chain rows counted, pruned prefix re-anchors (anchored=true, only interior breaks fail), expectHead mismatch = head mismatch. ensureChainColumns guarded ALTERs heal pre-chain DBs.",
+   "flags": [
+    "defer-optional: audit trails"
+   ]
+  },
+  "src/gov/jwt.ts": {
+   "status": "read",
+   "role": "W141 JWT VALIDATOR seam (minting lives in suspenders W149): RS256 via per-issuer JWKS, maps IdP claims → the SAME Principal shape API keys yield",
+   "summary": "JwksCache TTL 5min + W844 rollover: unknown kid forces ONE refetch before fixed-shape rejection; unreachable JWKS fails CLOSED as buckle.jwks_unavailable (never a throw into the gate). Claims: issuer allowlist, aud, exp/nbf ±30s skew, W372 requiredScope post-signature (scp string / roles array — Entra delegated vs app-only), roles[] as scope-shaped strings + RFC 8693 scope string both accepted; invalid entries dropped. Fixed-shape 401 codes throughout.",
+   "flags": [
+    "defer-optional: hub auth"
+   ],
+   "notes": "Any corporate IdP drops in by adding an issuer entry."
+  },
+  "src/gov/oidc-env.ts": {
+   "status": "read",
+   "role": "W372 the gate's JWT validator built from BUCKLE_OIDC_* env (stack.json auth.oidc → hubctl → compose)",
+   "summary": "Empty string counts as unset (W147 lesson). All-or-nothing trio issuer/jwks_uri/audience — partial env THROWS (auth config is load-bearing, fail closed). requiredScope optional. Programmatic opts.auth?.jwt wins; env is the deployment channel.",
+   "flags": [
+    "defer-optional"
+   ],
+   "notes": "32 lines."
+  },
+  "src/gov/residency.ts": {
+   "status": "read",
+   "role": "W235 locked residency floors: tighten-only policy, telemetry egress default OFF, structural candidate admission",
+   "summary": "RESIDENCY_FLOOR compiled-in (regions *, locality cloud+hub-local, telemetry off) = the LOOSEST posture; inputs may only TIGHTEN — a loosening attempt THROWS at boot (no clamping). residencyAllowsCandidate: loopback needs hub-local admitted; cloud needs cloud admitted + region:<v> tag inside the pin when regions pinned (unknown region = deny, fail closed). Candidates outside the policy never become healthy rows (data absence — the flashx precedent). Env: BUCKLE_RESIDENCY_REGIONS/LOCALITY/TELEMETRY.",
+   "flags": [
+    "defer-optional: enterprise residency"
+   ]
+  },
+  "src/gov/mcp-scopes.ts": {
+   "status": "read",
+   "role": "W2791 MCP method-level scope family: buckle:mcp:<server>:LIST_|CALL_|READ_ (+ CALL_:<tool-glob>), grammar + implication lattice",
+   "summary": "CALL_ ⊃ LIST_ (mirrors WRITE_⊃READ_); server-wide CALL_ ⊃ any glob'd need; glob'd holder NEVER satisfies a wider need (least-privilege structural). No server wildcards. Root principals bypass (open-ended family, never in ALL_SCOPES). Fails LOUD on near-misses (bare server, glob on LIST_/READ_, extra colons). NO LIVE FACE enforces yet — mint+storage+implication proven by test so the grammar cannot rot before first use.",
+   "flags": [
+    "unused-suspect: no enforcing face yet (by design — gated on a second human MCP surface)"
+   ]
+  },
+  "src/gov/overlay-loader.ts": {
+   "status": "read",
+   "role": "W235 signed/allowlisted overlay CODE loading: KLH_OVERLAY_DIR closed unless allowlisted+pinned+handshaken",
+   "summary": "Manifest {name, protocol, entry (relative only), sha256, endpoints?}; allowlist = root-owned default roots + KLH_OVERLAY_ALLOW colon list, realpath'd; protocol must === OVERLAY_PROTOCOL_VERSION; endpoints pass validatePeerEndpoint BEFORE anything loads; entry digest must match manifest sha256 AND optional operator pin (KLH_OVERLAY_SHA256); refusals FATAL at boot when dir set, unset = solo (not an error); every load logs name/protocol/digest. overlayModuleAdaptation → validateAdaptation; overlayModuleGovSeam → W688.3 hub-seam factories (each optional, present = function) — present-but-malformed throws.",
+   "flags": [
+    "enterprise-only seam"
+   ]
+  },
+  "src/gov/federation-signing.ts": {
+   "status": "read",
+   "role": "W193 manifest signatures: ManifestSigner (RS256 identity load-or-generate in BUCKLE_SECRETS_HOME, 0600) + detached-JWS sign/verify + JWKS",
+   "summary": "Signing keys NEVER leave the secrets home (hub-only, owner law). kid = bkfed-<sha256(modulus)[:12]> (stable across restarts, derived from material). Wire: compact detached JWS <b64(protected)>..<b64(sig)> over exact response bytes — authenticity never rests on transport auth. verifyJwsDetached: RS256 demanded, kid→JWKS lookup, never throws (malformed = refusal). Spokes fetch public half from /.well-known/jwks.json.",
+   "flags": [
+    "core"
+   ],
+   "notes": "THE seam the standalone federation port reimplements."
+  },
+  "src/gov/reconcile-route.ts": {
+   "status": "read",
+   "role": "W1124.31 POST /v1/admin/requests/reconcile: record the audited abandoned verdict on ONE provably-dead receipt",
+   "summary": "Ledger's proof gates decide (prior gate incarnation + elapsed transport bound); refusal = 409 with the ledger's stable code; success appends chained auth event (event=reconciled, jti=rid) — audit trail rides the W703 chain, never a raw-DB edit. Never a fabricated status.",
+   "flags": [
+    "defer-optional"
+   ],
+   "notes": "59 lines."
+  },
+  "src/gov/admin-schemas.ts": {
+   "status": "read",
+   "role": "W1238.4 zod v4 schemas for every /v1/admin/* POST body — admin.ts safeParses, never hand-casts",
+   "summary": "AdminDrainSchema {reason, grace_ms?}, AdminVerifySchema {key}, AdminIssueKeySchema {name, scopes[] default [], team?, rpm_limit?, tpm_limit?, expires_in_s?}, AdminEnrollSchema {spoke_id, ttl_s?}, AdminTeamSchema {team_id, name?, department?, rpm/tpm/spend_ceiling?}, AdminTokenBudgetSchema {subject, monthly_tokens, weights?}. A non-string scope entry REJECTS (400) where the old hand-parse silently dropped it — fail loud is the law.",
+   "flags": [
+    "core"
+   ],
+   "notes": "73 lines. First slice of stack-wide schema-first adoption."
+  },
+  "src/gov/identity-headers.ts": {
+   "status": "read",
+   "role": "W235 signed SSO identity headers: buckle trusts ONLY HMAC-signed x-klh-identity (+-sig) — an unsigned Remote-User is a string, not identity",
+   "summary": "signIdentityHeaders = reference signer (SSO service contract; domain-separation prefix buckle-sso-v1:). verifyIdentityHeaders: both headers, shape-checked claims, constant-time compare (timingSafeEqual), iat replay window 300s ±30s skew. identityHeaderAuthenticator = the ready-made adaptation authenticate hook.",
+   "flags": [
+    "enterprise-only seam"
+   ],
+   "notes": "113 lines."
+  },
+  "src/gov/store-auth.ts": {
+   "status": "read",
+   "role": "W764 hub model-store pull auth: bksk_ bearer → KeyStore verify → buckle:store:READ_ → per-KEY token bucket (fairness = per-key isolation)",
+   "summary": "TokenBucket: classic lazy per-key, fractional refill, retryAfterS (null when cost>capacity), sweep idle buckets. PullAuthorizer.authorize: scope check BEFORE the bucket (scope-less keys never touch fairness accounting); 401 unknown/revoked/expired/unknown-type · 403 store_scope · 429 store_rate_limited with retryAfter. One key authority (buckle ledger).",
+   "flags": [
+    "defer-optional: model-store face"
+   ]
+  },
+  "src/gov/reference-seam.ts": {
+   "status": "read",
+   "role": "W1114 REFERENCE gov-seam factories: the W233-inline hub federation providers restored byte-faithfully for tests/sim (manifest CR lifecycle + usage/aid rollup ingest)",
+   "summary": "createReferenceGovSeam() returns referenceManifestCr + referenceUsageIngest. Manifest: rules from LIVE policy (gateway knobs, ladder.<group> fallback tiers, tags.<group>, aids.<name>, federation.self_report per-team opt-in default OFF), content-addressed version fed-<sha256(rules)[:12]> (same rules → same version, spokes detect change by one string compare). CR lifecycle: declared→delivered→applied→verified→reported-up (+failed from live); declare requires origin {system, actor}; STRUCTURAL domain guard crPrivateDomainPath deep-walks payload+origin for data_domain:private (the CR channel NEVER carries private-domain content); verified requires a hub verification probe (policyRevisionProbe RE-READS routing-policy.json at verify time — a spoke's word alone never grants verified; read-both .json/.yaml names W1253); claimant-only reports. Usage ingest: strict-allowlist validate (exact key sets, MODEL_CLASSES flash/full/luna/local/other — mirror of suspenders GROUPS, cross-package contract) → per-team opt-in from live policy → private-domain guard on RAW body → idempotent upsert-per-row (resend = replace, never double-count); ≤168 hourly windows, ≤32 aids/window. DDL owned by the factories (federation_cr_queue, federation_usage_rollup, federation_aid_rollup).",
+   "flags": [
+    "core"
+   ],
+   "notes": "THE reference implementation for the standalone federation port — enterprise overlay is the production source, this serves explicit-wiring callers."
+  },
+  "src/gov/admin.ts": {
+   "status": "read",
+   "role": "the W141 governance API /v1/admin/*: key issue/list/verify/revoke, teams + ceilings, budgets readback, drain, audit verify, token-budgets CRUD, inflight, occupancy, requests inspection, traces, observations, spoke enrollment",
+   "summary": "All bodies through adminBody() safeParse (W1238.4) — shape drift = 400 with z.prettifyError. Raw key material appears exactly ONCE (issue response 201); verify answers valid/revoked/expired without echoing hashes. POST /v1/admin/drain (W1156): THE arming surface, first intent wins (second = 409 with the ACTIVE drain). GET audit/verify walks the W703 chain (?head= pins tail). GET requests: W824 capped filtered inspection, key NAME/team join from api_keys (never material), W925 keyset pagination (until+before_rid); POST requests/reconcile delegates. GET traces: 32-hex trace_id, ledger rows + attempts + belt trace + remote peers. GET observations: cursor/limit export. Spoke enroll/list: honest 501 buckle.no_federation in solo posture. Scope enforcement happened at the gate (admin READ_ GET / WRITE_ mutations). Known path wrong method → 405+Allow.",
+   "flags": [
+    "core"
+   ],
+   "notes": "Imports @klh/telemetry remote-traces + trace-log."
+  },
+  "src/adapters/tools.ts": {
+   "status": "read",
+   "role": "THE cross-dialect tool transform (W134 §5) — the only module allowed to know both vocabularies; request/response transforms + two stateful stream mappers + stripRemovedSampling/stripBodyFields",
+   "summary": "Request direction (anthropic ingress -> openai): tool_result -> role:tool messages (block order first); thinking/top_k/service_tier/metadata honest-degrade dropped+warned; reasoning_effort CLAMPED to zai-verified set (medium->low, xhigh->high, W884); unknown fields ride VERBATIM + warning (W1080 proxy law: echo the wire, upstreams own the objection). Response direction: tool_calls arguments parse-fail degrades to raw-string text block + warning (in-flight responses cannot 400 — surfaced never mangled); usage zeros are wire-schema minimum (ledger honesty via the tee). Reverse direction (openai ingress -> anthropic): system role -> top-level system; history tool_calls parse-fail = reject-verbose 400 (requests CAN be 400'd); parallel_tool_calls dropped+warned; OPENAI_DEGRADE set dropped+warned. Streaming: OpenAIToAnthropicStream (blocks strictly sequential, parallel calls ordered by first-seen index, closed-block fragments reopen as new blocks + warn, message_delta/message_stop ONLY on observed [DONE] (W1106.2) and never after in-band failure (W1124.4), empty-stream guard swaps typed error for fabricated success, ping frames zero-state) and AnthropicToOpenAIStream (mirror: message_start input + cumulative message_delta output, tool_use -> sequential openai indexes, error poisons terminal, sawStop licenses [DONE]).",
+   "flags": [
+    "core"
+   ],
+   "notes": "1113 lines — biggest adapters file; also exports stripRemovedSampling (W1142 anthropic 2026-10-21 wire) + stripBodyFields (W2594 Copilot deny list) used by the anthropic adapter buildCall."
+  },
+  "src/agents.ts": {
+   "status": "read",
+   "role": "the /v1/agents surface: agent-wire dialect entry (W1 lane attribution context, agents CRUD-ish rides the named-base routes)",
+   "summary": "Agents-facing ingress helpers riding the W1265 named bases. Imported by ingress-routes.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/wire-routes.ts": {
+   "status": "read",
+   "role": "THE imperative route table: method+path dispatch for every LLM ingress route (openai + anthropic dialects, /v1/models, /w/<lane> prefixes)",
+   "summary": "12 route literals (routeIndex): /v1/chat/completions, /v1/messages, /v1/models, /v1/messages/count_tokens, /v1/responses, /v1/embeddings + /w/<lane>/ prefixed twins. Imperative `method === X && path === Y` checks (not a framework router). Dispatches to proxy-ingress / models-route handlers; the one place ingress paths are matched.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/citizenship.ts": {
+   "status": "read",
+   "role": "http citizenship helpers: problem() RFC7807 application/problem+json builder, rate-limit trio stamping (x-ratelimit-*, retry-after), allowOf/methodNotAllowed 405+Allow",
+   "summary": "problem({status, code, why, instance}) — the ONE error envelope vocabulary (buckle.* codes). rateLimitHeaders from BudgetView. Used by 13 modules.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/ingress-routes.ts": {
+   "status": "read",
+   "role": "route-level entry: maps matched routes to handlers with body read + governance wiring; owns the LLM ingress seams agents.ts feeds",
+   "summary": "Bridges wire-routes matches to proxy-execute/models-route with request-context. W1265 named bases: /{w/<lane>/}?(zai/)?(anthropic|openai)/... — the lane attribution prefix over LLM ingress + /v1/models only.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/proxy-ingress.ts": {
+   "status": "read",
+   "role": "the LLM proxy ingress handler: dialect detection, body read, budget admission, slots/occupancy acquire, dispatch to router, response stamp",
+   "summary": "Orchestrates one proxy request end-to-end through the governance stages; releases admission at the real settle (wire-stamp seam).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/models-route.ts": {
+   "status": "read",
+   "role": "GET /v1/models: the served-models catalog from the candidate table",
+   "summary": "Renders the models list from background-refreshed candidates; candidate IDs never expose raw URLs.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/wire-schemas.ts": {
+   "status": "read",
+   "role": "zod wire schemas for ingress bodies (chat.completions, messages, count_tokens, responses)",
+   "summary": "W1238.4 schema law on the ingress face; schema validates only, write VERBATIM source rows.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/wire.ts": {
+   "status": "partial",
+   "role": "the wire call helper: one outbound request to ONE upstream with hop-contract stamping + outbound guard",
+   "summary": "The single fetch seam adapters/bridge use to reach an upstream: stamps hop headers (hop-deadline), rides pool-warm, enforces outbound-guard, classifies adapter errors, traces. PARTIAL: remainder not yet ingested — finish before porting.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/wire-stamp.ts": {
+   "status": "read",
+   "role": "response stamping seam: citizenship headers, rate-limit trio, x-klh-budget warn header, settle hooks (inflight/slots/occupancy/budgets)",
+   "summary": "The ONE place every response is stamped — success, refusal, denial. Drives endInflight + releaseOccupancy + budgets.addUsage at the real settle; W2790 x-klh-budget warn header.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/wire-deny.ts": {
+   "status": "read",
+   "role": "the wire deny() seam: keyed admission-denial shapes (W2618) — zero outbound, problem+json with retry-after",
+   "summary": "One deny vocabulary: auth_missing/invalid_key/rate_limited(budget_exceeded)/slots/occupancy caps — each a fixed-shape problem the ingress answers without touching an upstream.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/app-deps.ts": {
+   "status": "read",
+   "role": "createApp dependency composition: wires router, cooldowns, cold marks, admission, budgets, slots, ledger, governance into the AppDeps the handlers receive (W1297)",
+   "summary": "Composes 23 modules; the single seam server.ts builds. Replaced the old god-file handlers.ts.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/request-context.ts": {
+   "status": "read",
+   "role": "Ctx: the per-request context (rid, trace, principal, lane, dialect, hop, trafficKind) threaded through every stage",
+   "summary": "The one request identity object; inflight reads it structurally.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/proxy-execute.ts": {
+   "status": "read",
+   "role": "executes a routed proxy request: adapter buildCall -> wire fetch -> response/bridge/SSE orchestration",
+   "summary": "Consumes RouteSelection, rides proxy-stream for SSE, settles via wire-stamp.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/proxy-body.ts": {
+   "status": "read",
+   "role": "proxy body handling: model alias patch, dialect transforms (tools.ts), body bytes for budgets estimate",
+   "summary": "Where the ingress body becomes the upstream body (chatToResponses, requestAnthropicToOpenAI etc. live in adapters/tools + bridge).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/ingress-body.ts": {
+   "status": "read",
+   "role": "readBoundedJson: bounded body read with timeout + size cap — the ONE body reader",
+   "summary": "Returns {ok, body} or the fixed-shape 4xx; every admin/ingress body read goes through it.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/hints.ts": {
+   "status": "read",
+   "role": "client hint surfaces (stream options, usage reporting hints) + deg helpers",
+   "summary": "Small helpers for include_usage semantics and honest degrade warnings.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/decide.ts": {
+   "status": "read",
+   "role": "THE pure routing decision: model group -> ordered candidate tiers (memory-only, <1ms, no I/O)",
+   "summary": "decide(group, table, policy) -> RouteSelection (tier ladder + hop budget). Telemetry never changes routing (doctrine). Zero sleeps — the outermost client owns the only retry layer (owner correction 2026-10-29).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/candidates.ts": {
+   "status": "read",
+   "role": "CandidateTable: background-refreshed upstream candidate rows (id, kind, host, port, model, tier, tags) + kindOfHost",
+   "summary": "kindOfHost local|cloud used by residency; candidate ids never raw URLs; healthy rows are the admission surface (flashx structurally absent).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/router.ts": {
+   "status": "read",
+   "role": "the router ladder walk driver: same-tier once-each failover, hop contracts, W426 bridge pass-through-first",
+   "summary": "Pure memory decision over the refreshed table; wires router-walk/attempt/receipt; A->B->A cycle detection via hop contracts; budgets clamped per hop.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/router-walk.ts": {
+   "status": "read",
+   "role": "the candidate walk: iterates decide's ladder, one attempt per candidate per tier",
+   "summary": "No in-gateway sleep; rate pressure = short cold (cold-marks), quota wall = long cold + dispatch stop.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/router-groups.ts": {
+   "status": "read",
+   "role": "model group resolution: requested model -> group -> tier ladder rows",
+   "summary": "Group tags carry residency claims (region:<v>, locality:<v>).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/router-attempt.ts": {
+   "status": "read",
+   "role": "ONE attempt execution: adapter call, wire fetch, error normalization, benching (cooldowns/stream-breaker), receipt",
+   "summary": "Rides SseSniffer classification for bindProviderLease release at body EOF; responses-wire re-framing (bridgeResponsesUpstream) lands here.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/router-receipt.ts": {
+   "status": "read",
+   "role": "AttemptReceipt: per-attempt ledger row (candidate, status, latency, tokens, refusal) for the usage ledger + admin requests view",
+   "summary": "The audit shape W824 inspection reads; never carries authz material.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/router-types.ts": {
+   "status": "read",
+   "role": "router type surface: RouteSelection, UpstreamRequest, shared routing types (z.output discipline)",
+   "summary": "Imports resilience types for the hop budget; the seam between decide and execute.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/upstreams.ts": {
+   "status": "read",
+   "role": "Deployment rows: url, group, model, tier, api_key_env (env NAME), adapter, adapter_config, path_rewrite",
+   "summary": "resolveAdapter runs here (adapters/index); validateDeploymentEgress checks family token hosts at load (startup-fatal); secrets only as env NAMES.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/policy.ts": {
+   "status": "read",
+   "role": "GatewayPolicy: routing policy load (fallbacks ladder, tags, aids, num_retries/allowed_fails/cooldown_time, federation.self_report)",
+   "summary": "BUCKLE_POLICY/BELT_POLICY chain, JSON (W1253) with read-both legacy yaml name honored only while already-JSON; reference-seam buildRules reads this shape.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/proxy-stream.ts": {
+   "status": "read",
+   "role": "SSE streaming orchestration for the proxy: tee-branch byte-identical pass-through, sseReframer for anthropic canonical, keepalive",
+   "summary": "Byte-identical tee (W912 pass-through law); stream-finish seam fires the real settle (inflight/occupancy/slots); awaited segments across a config flip (Bun fetch law).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/hop-deadline.ts": {
+   "status": "read",
+   "role": "hop contract deadline math: propagate + clamp per-hop budgets, detect A->B->A cycles",
+   "summary": "Hop contracts carry correlation+budget only, never authz.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/bridge.ts": {
+   "status": "read",
+   "role": "the dialect bridge: chat<->Responses translation orchestration (chatToResponses via responses-translate, responses SSE re-frame via responses-sse)",
+   "summary": "W2583: Responses-only providers (Copilot gpt/grok/mai) ride chat ingress by body translation + response re-framing; reject-verbose (nothing mangled mid-wire).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/gov/federation.ts": {
+   "status": "read",
+   "role": "hub-side federation surface: signed manifest serve (+x-buckle-manifest-signature detached JWS), JWKS /.well-known/jwks.json, spoke pull endpoints, enrollment redeem/touch TTL 900s",
+   "summary": "Spokes pull authenticated; manifest content-addressed version; private overlay owns the enterprise factories, solo = honest 501 buckle.no_federation.",
+   "flags": [
+    "core"
+   ],
+   "notes": "THE port source for standalone federation alongside hub-seam + reference-seam + federation-signing."
+  },
+  "src/gov/middleware.ts": {
+   "status": "read",
+   "role": "THE governance middleware seam (startServer): bearer -> auth (keys/jwt/sso) -> scope -> budget -> inner; denied audits route_audit; PUBLIC /health /status /metrics",
+   "summary": "One seam, no per-route authz scatter. Principal shape {kind root|api_key|sso, keyId, name, team, actor, scopes, jti, rpm, tpm}. Governance object carries db, keys, budgets, slots, ledger, providerPools, federation?, metrics.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/gov/scopes.ts": {
+   "status": "read",
+   "role": "scope grammar + implication: buckle:<resource>:(READ_|WRITE_|QUERY_|CONSULT_), WRITE_ superset READ_; ALL_SCOPES enumeration",
+   "summary": "parseScope/hasScope/scopesFromStorage — the one authority; resources proxy/admin/spoke/store/knowledge/dataplane/runner.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/gov/hub-seam.ts": {
+   "status": "read",
+   "role": "hub-seam CONTRACT types: ManifestCrFactory, UsageIngestFactory, HubEntitlementsFactory, SpokeEnrollmentFactory (CrRow/CrVerdict/CrProbe/FedManifest/FedUsageReport)",
+   "summary": "The private enterprise overlay implements these; reference-seam.ts is the test/sim implementation. Structural contracts only — no I/O.",
+   "flags": [
+    "core"
+   ],
+   "notes": "THE seam contract types for the standalone federation port."
+  },
+  "src/gov/keys.ts": {
+   "status": "read",
+   "role": "KeyStore: bksk_ virtual keys — mint (name, scopes, team, limits, expiry), verify (sha256-hex at rest, key_id 12-char trunc), revoke, list, teams with ceilings, auth events",
+   "summary": "Raw material exists exactly once (issue response); recordAuthEvent feeds the W703 chain. scopesFromStorage for storage join.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/gov/schema.ts": {
+   "status": "read",
+   "role": "applyGovernanceSchema: the gate's SQLite DDL (api_keys, teams, budget_state, team_budget_state, spend_state, token_budgets(+state), auth_events, admission_slot_holders, ledger tables, federation tables)",
+   "summary": "Idempotent guarded ALTERs (audit-chain ensureChainColumns pattern); constructor binds budgets/slots/token-budgets engines after schema.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/cooldown.ts": {
+   "status": "read",
+   "role": "two ported LiteLLM primitives: retryDelayS (utils.py::_calculate_retry_after — max(provider floor capped at floorCapS/retry_after_cap_s, capped exponential 2**attempt) + U[0,1) jitter) + Cooldowns (passive outlier ejection allowed_fails->bench cooldown_time, success resets, W1257 banks ProviderRateLimitDetail in the provider's own words, benchFor() shared surface W2266); owns ONE ColdMarks instance",
+   "summary": "W695.6.1 quota-wall days-long retry-after never parks the walk; final 429+retry-after relays to client.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/cold-marks.ts": {
+   "status": "read",
+   "role": "ONE cold mark per upstream ACCOUNT (anti-stampede owner correction 2026-10-29: N callers -> 1 knock), keys on provider_pool else group|url; half-open SINGLE-FLIGHT probe",
+   "summary": "VerdictGate kind placeholder|probe, probe_stale_s lapsed-ride semantics; ColdState none|cold|probe-free|probe-busy; rate pressure (Z.ai 1302/1305, plain 429) = SHORT cold (clamped 30s), declared quota-wall codes (default 1113) = LONG cold (clamped 3600s) + dispatch stop; coldKeyOf ^[\\w.-]{1,64}$; NOTHING sleeps.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/provider-admission-core.ts": {
+   "status": "read",
+   "role": "per-account-pool PQueue pacing: intervalCap counts STARTS (long streams don't eat RPM), W1273 gap escalation ceiling min(30s, queueWait/4, baseGap*16) — the 24s-serialized-pool incident fix; AIMD window; W1267 in-band failures pace ONLY when provider NAMED rate/overload (Z.ai 1302/1305), typed business refusals (1113 balance, 1311 entitlement) never pace; W2543 queue-wait demand credit erased by any 429; W2617 priority 1 interactive > 0 lane (refused NOW with honest pause remainder); bindProviderLease releases at body EOF (same SseSniffer classifier)",
+   "summary": "ProviderPoolPolicy = exactly 5 positive limits + bounded recovery, concurrencyErrorCodes explicit never inferred. 619 lines of incident law.",
+   "flags": [
+    "core",
+    "defer-candidate: stub upstream has no real rate limits"
+   ]
+  },
+  "src/resilience-config.ts": {
+   "status": "read",
+   "role": "gateway.resilience zod block (Schema law W1238.4), fail-closed defaults: rate_cooldown_s 5, rate_cooldown_max_s 30, quota_cooldown_s 900, quota_cooldown_max_s 3600, quota_wall_codes [1113], cooldown_jitter_ratio 0.2, probe_stale_s, max_failover_hops 0-4 default 1, failover_budget, max_queue_wait_ms 5000, admission_ride_ms 1500, rate_concurrency_decrease_percent 50, min_concurrency, lanes{share 0.75, interactive_cold_wait_ms 2000}; trafficClassOf ^(auto|review|ramp)",
+   "summary": "States the no-sleep doctrine in-header: the outermost client owns the ONE retry layer.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/resilience.ts": {
+   "status": "read",
+   "role": "W1303.3 CLIENT kit for the OUTERMOST client (dormant in-gateway: imported only by router-types + router): deadline-bounded AbortSignals, RETRYABLE 408/429/502/503/504 + safe-method/idempotency-keyed POST rule, backoffMs full-jitter, clampRetryAfterMs, RetryBudget ~10% windowed, Breakers closed->open->half-open single probe, resilientCall NEVER sleeps (pacing gate REFUSES), maxHops budget, ONE immediate replay for transport reset only; serveFromFallbacks fresh->stale-marked->degraded->unavailable",
+   "summary": "FAIL-FAST doctrine in header. Dup-suspects vs cooldown.retryDelayS, ColdMarks/Cooldowns, failover_budget — standalone picks ONE seam each.",
+   "flags": [
+    "core",
+    "dup-suspect"
+   ]
+  },
+  "src/stream-breaker.ts": {
+   "status": "read",
+   "role": "W2266 from the live 2026-10-29 ZAI incident: HTTP 200 then stream_failed:timeout / stream_truncated after 188 bytes banked success=false but never benched the row; rides the SAME Cooldowns benchFor with own counter+window (stream_allowed_fails 3 / stream_cooldown_time_s 30); onChange rebuilds the candidate table so the NEXT decision reads fresh health",
+   "summary": "Upstream-attributed terminals only — downstream_cancel/drain_cut never count. Healthy = !benched, zero new health surfaces.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/handlers.ts": {
+   "status": "read",
+   "role": "BARREL ONLY (W1297): 3 re-exports (AppDeps, trafficKindOf, createApp)",
+   "summary": "Port wire-routes instead.",
+   "flags": [
+    "unused-suspect: barrel"
+   ]
+  },
+  "src/sse.ts": {
+   "status": "read",
+   "role": "SseSniffer (tee-branch-only WHATWG parser; LiteLLM 1.103.0 streaming_handler.py usage semantics; W1106 terminals/in-band failure/empty-stream guard + BUN_IDLE_TIMEOUT=0; W1267 failureKind vs inBandCode; W2260 framesSeen) + sseReframer (W616.1 anthropic canonical re-framing, 16KiB held-terminal cap) + SSE_KEEPALIVE",
+   "summary": "The ONE SSE parser everything shares (proxy-stream, router-attempt, provider-admission lease classifier, usage sniffing W129).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/server.ts": {
+   "status": "read",
+   "role": "THE composition root: Bun.serve on 127.0.0.1:4101 (shadow-mode only) — health/status/metrics/public routes, governance middleware, adapter resolveValidation, upstreams load, candidates + router background refresh, ledger, store routes",
+   "summary": "Binds everything app-deps composes; PUBLIC health probes never cross governance; /w/<slug> lane attribution (W1265) inbound; graceful shutdown drains in-flight. 900+ lines but a pure composition surface.",
+   "flags": [
+    "core"
+   ],
+   "notes": "Port the composition shape, not the line count — standalone fleet-buckle has its own server face."
+  },
+  "src/ledger.ts": {
+   "status": "read",
+   "role": "THE usage ledger: hour-bucket router_usage upserts + per-request route_audit decision/outcome rows + route_attempt hop receipts + stream_settle rows — all through bounded pending rings flushed in ONE transaction",
+   "summary": "W143 fire-and-forget: rings (usage + audit ops) flush on 5s timer / 256-row threshold / deferred timeout, never on the request stack; W450 ring caps (4096 entries / 4MiB per ring, byte estimates at push, shed OLDEST, counted drops via onDrop -> servicemon); failed flush requeues batch AHEAD of newer rows (tries+1 < maxFlushAttempts=5), survivors land, rest counted. W136 §6 decision row: rid-keyed INSERT then outcome UPDATE — order IS the join; COALESCE so a denial row updated by a real outcome keeps attempts. W1086 settle: buildSettleFact validates/bounds everything (caller hands raw timings); INSERT OR REPLACE = final settle stands. W1132 write-time pricing: pricer(model, usage) at enqueue, NULL cost = unsupported — never zero-faked; rate_version stamped per row; upsert merges cost with NULL-preserving CASE. W824 requestsRead: capped 500, filters key/lane/trace_id/model/inference/errors/since/until(+beforeRid keyset W925), err/why truncated at read (200 cap — never re-serves bodies), attempt provenance join (refusal origin/code/retry-after from failed attempts only when response failed), selected_target_exact/attempted receipt-derived truth (W1124.42.1). traceRead/traceAttempts: one trace's rows+attempts+settle bounded 500. throughput(): settled-inference rows -> @klh/telemetry ThroughputStore observe + capacity notes, returns throughputMetrics — the W129 capacity feed. tokenFromHeaders: Bearer then x-api-key (W422.17.2 copilot anthropic SDK); keyIdFromToken = sha256[:12]; token material NEVER in the ledger.",
+   "flags": [
+    "core"
+   ],
+   "notes": "Imports @klh/telemetry (http-trace, throughput, throughput-store, transport-evidence), cost, reconcile, stream-correlation, served-identity, throughput-metrics, usage. THE port-priority file for the standalone stats/ledger face."
+  },
+  "src/ledger-schema.ts": {
+   "status": "read",
+   "role": "the route_audit/router_usage/route_attempt/stream_settle DDL + the idempotent pragma-checked heal ladder (W2256 extraction from ledger.ts — statements byte-identical)",
+   "summary": "Law in-header: every new column heals onto existing DBs via pragma_table_info-checked ALTER — opening a pre-column database never loses a row; NULL = predates the column (honest unknown). Covers W1 lane, W457 cache cols, W706 hop, W824 attempts/tokens, W921 traffic_kind, W1106 stream_receipt, W1124.31 reconciled, W1132 cost cols, W1257 refusal_origin, W1265.1 repo_hash/account_tier/key_name, W2191 layer, transport_json. Indexes: route_attempt(trace_id,ts), stream_settle(trace_id,ts), route_audit(settled_at), route_audit(trace_id,ts).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/servicemon.ts": {
+   "status": "read",
+   "role": "the ONE observability wrapper (port of suspenders W125): tiny counter/histogram registry + /status JSON snapshot + /metrics Prometheus text — sm.fetch(routes) / sm.wrapped(serveOptions) two-line wiring",
+   "summary": "Prometheus text v0.0.4: counters (inc + set for authoritative-source recompute), histograms (default buckets .005..10, cumulative at exposition), tokens_total{kind} only where the service sees usage (honest omission, no fake zeros). /status: TTL cache STATUS_REFRESH_S (default 5s, 0=fresh), strong ETag sha256 + If-None-Match 304, health verdict NEVER cached (counters cache, verdict fresh), healthy() throw = unhealthy + noteError. routeOf collapses numeric/hex/uuid segments to :id (bounded label cardinality). scrub() strips /Users/<name> paths from observability payloads. http-citizenship on /status+/metrics: GET/HEAD/OPTIONS/405+Allow. Inner throw -> 500 problem + last_error (synthetic note never overwrites a real exception message).",
+   "flags": [
+    "core"
+   ],
+   "notes": "THE metrics/status face to port — standalone fleet-buckle server should ride this same shape (or its own equivalent)."
+  },
+  "src/systemone.ts": {
+   "status": "read",
+   "role": "W1120 typed SystemOne ingress (POST /v1/systemone): kev-class choice questions -> operator-configured upstream (gateway.systemone in routing-policy.json), fail-closed, fully traced",
+   "summary": "Owner ruling single-buckle-inference: kev decisions ride Buckle like any inference hop — authenticated, admitted (shared in-flight bound tryAcquire, 429 + retry-after refusal), W1086 hop receipt ordinal 1, deadline-aware (AbortSignal.any(caller signal, timeout 10s default)), 499 on client abort. Missing url/api_key_env/unset key env = typed 503 systemone_unconfigured, ZERO outbound. Semantic validation: EVERY question must be answered with a choice from its OWN criteria — partial/out-of-set = 502 systemone_malformed, never relayed as success. Upstream 429 relays with retry-after. zod schema law throughout (SystemOneRequestSchema 1..16 questions x 1..16 criteria, drift = 400 prettified). settle(): route_audit decision row + buckle_systemone_decisions_total counter — 'did the systemone hop work' answerable in the ledger.",
+   "flags": [
+    "defer-optional: kev-class deployments"
+   ]
+  },
+  "src/http-kit.ts": {
+   "status": "read",
+   "role": "W1303.2 the ONE HTTP contract kit for fleet services: RouteTable (URLPattern, structural 404 vs 405+Allow, HEAD->GET, auto-OPTIONS), semantic ProblemKind status matrix, HttpProblem->problem+json, Idempotency-Key replay w/ body-hash binding, Retry-After CLAMP, ETag/If-Match, 202+status, TokenBucket/CallerBuckets/ShedQueue, x-request-deadline",
+   "summary": "Load-bearing distinctions: rate_limited 429 (caller sent too much) vs overloaded 503 (WE struggle) vs precondition_failed 412 vs precondition_required 428 vs validation 422 (field errors). ProblemInitSchema zod-first (W2173.7 type derived); codes stable 'service.slug' convention never renamed; why = curated strings, internals never leak (problemFrom strips non-HttpProblem messages). clampRetryAfter: BUCKLE_RETRY_AFTER_MAX_S (default 300s) — the quota-wall-days fix; retryAfterHeaders {} when null. etagOf: stableStringify(sorted keys) -> sha256[:16] quoted; ifMatchState absent/* = ok. IdempotencyStore: bounded 1024/24h TTL, lazy eviction, store-clock createdAt; idempotentRespond re-wraps the body (handler sees intact Request), same key different body = 422, replay carries idempotency-replayed: true, only <500 stored. ShedQueue: health admits unconditionally NEVER buckets (a health probe must never see the shed), reserved capacity for it, 429 vs 503 IS the matrix. RouteTable.serve returns null on unknown path (honest fall-through), known-path wrong-method = 405 problem + canonical Allow (GET implies HEAD, OPTIONS always).",
+   "flags": [
+    "core"
+   ],
+   "notes": "Adopted per route family incrementally (aids + board prompt-settings first); cross-package adoption rides @klh/buckle. Standalone fleet-buckle should port the problem+json matrix + clamp + RouteTable shape."
+  },
+  "src/route-ladder-validator.ts": {
+   "status": "read",
+   "role": "W1094 static config-derived route-ladder validator: builds the fleet-wide graph (buckles + litellm engines + belts + terminals) and finds cycles, repeat_origin re-ingress, model_family_mismatch, missing_fallback/unroutable_group, unmapped_local_target, deadline_budget, missing/unknown proxy_kind+engine models, unverified_* honest-report findings",
+   "summary": "Pure analysis over RouteLadderInputs (no I/O). familyOf/assertedFamily: first non-provider-prefix alpha token of a name, checked only against KNOWN families (gpt/glm/claude/qwen/llama/gemini/deepseek/mistral/kimi/grok/phi) — role names derive nothing; PRIMARY rung must serve the group's asserted family (pinned gpt-6-sol never silently rides zai-glm, #55799), fallback rungs may cross. repeat_origin: one bounded walk re-entering an origin it left (the double-429 walk #55796); consecutive hops on one service = one visit. Engine-kind preflight: rows into a litellm origin must declare adapter_config.proxy_kind=litellm (else the front's num-retries/stream-timeout headers are inert), wire model (dep.model ?? group) must exist in the engine model_list; kind on a non-engine row = invalid. Terminals are PER-POOL/per-engine declared leaves (a hub's own ollama/swarm rows) — never a global pass (review #55637); remoteHost judges only operator-declared terminals. Belt escalation must target a configured Buckle gate; laneSelections (execPick) each need a configured route. Unverified engines (no config proof on this device) = reported unverified, never silently green, non-gating. first_byte_budget_s must cover request_timeout_s; worst-case bound vs client deadline.",
+   "flags": [
+    "core"
+   ],
+   "notes": "This is the config-audit brain behind route preflight — standalone fleet-buckle's generated engine configs can be validated by the same checks."
+  },
+  "src/connect-egress.ts": {
+   "status": "read",
+   "role": "W1260.2 the authenticated CONNECT egress: loopback-only (127.0.0.1 STRUCTURALLY — no bind knob exists) raw-TCP forward proxy for Sing app outbounds; bytes never decrypted, TLS stays end-to-end, tunnel METADATA only (host/port/bytes/app)",
+   "summary": "Fail-closed existence: endpoint never starts unless gateway.connect.enabled + BUCKLE_CONNECT_TOKEN + non-empty allow; port 4100 (belt) and serve-face collisions THROW at boot. Basic auth user IS the app (claude|chatgpt|vscode|codex|buckle=unknown, C114); password compared timing-safe on sha256 digests. Destination law: allowed port -> allowlisted host (suffix with boundary — evil-chatgpt.com never matches chatgpt.com) -> SSRF guard on RESOLVED addresses (full v4+v6 range tables incl. cloud metadata 169.254 + sing TUN 198.18, v4-mapped v6, mixed DNS answer denies = rebinding guard); unparseable denies. Denies 407/403/503/431 carry problem+json + fleet_trace + CONNECT_EGRESS_UA over the tunnel head. Bounded splices both ways (8MiB unflushed window -> abort, never unbounded buffering); idle timer unref'd; head cap 8KiB. Bounded dial ladder (2 attempts, clampRetryAfter-bounded backoff, x-request-deadline tightens the budget end-to-end, AbortSignal-owned race). zod-first request-line/authority/proxy-authorization schemas. ConnectRegistry: held rows verbatim into W1259 inflight via acceptConnectSnapshot + deny counters. W1260.2.",
+   "flags": [
+    "defer-optional: Sing outbounds"
+   ],
+   "notes": "851 lines. SSRF guard tables + hostMatchesAllow are independently reusable."
+  },
+  "src/account-policy.ts": {
+   "status": "read",
+   "role": "W1265.1/W1265.2 repo-identity + account-tier boundary at ingress: authenticated key NAME -> class (tier + provider/group/deny globs), x-klh-repo claim VERIFIED against the binding (never trusted alone), all failures typed 403 BEFORE any outbound; scopeSelection confines the walked ladder so cross-boundary fallback is structurally impossible",
+   "summary": "Class lookup: first keys-glob hit; W1265.2 unnamed principal NEVER resolves (catch-all must declare keys:[*] and still only matches named keys). Lane binding: /w/<sid> requires sid === key name. Repo-bound class without general flag demands the claim; claim must match class repos (forged in-glob repo proves membership only — binding-derived repoHash(class+keyGlob), caller can never move it). Tier entitlement: group globs checked pre-decide. scopeSelection: filter ordered to entitled rows (pin + allowedHosts provider-or-adapter axis + deniedHosts W1265.2 deny axis + groups), scoped-to-zero = 503 tier_no_upstream ZERO outbound; accountScoped flag keeps ladder rungs inside too; preferAfterScope refreshes the audit head so it never advertises a forbidden candidate (must= preserved structurally). discoveryFilter: same contract minus group entitlement for /v1/models. defaultAccountPolicy (W1265.2): NO silent inert — absent config = general class, keys:[*], providers [zai, openrouter] ONLY (enterprise denied); 'off' env = the one explicit disable; configured-but-missing = startup fatal (W1123 posture).",
+   "flags": [
+    "core",
+    "erroneous-suspect: uses Bun YAML.parse for repo-tier-policy.yaml — W1253 law says JSON.parse is the one fleet-config parser (yaml dependency purged); the runtime policy file name/parse likely needs the .json migration or a disposition row"
+   ],
+   "notes": "575 lines. globMatch is a clean two-pointer anchored glob (no regex)."
+  },
+  "src/topology-read-model.ts": {
+   "status": "read",
+   "role": "versioned observation-backed topology graph (schemaVersion 2): hubs/targets/edges/traces over a 15min window from the projection request_edges + local-origin ledger route_audit; a trace counts ONCE across hubs; missing trace/usage stays explicit coverage",
+   "summary": "Edges: peer-marker edges (evidence trace|peer) + ledger local->target edges (evidence ledger, hop='origin' rows only); per-edge 60s drilldown series on the 100 most-recently-active edges only (past cap = honest null, never downsampled); lanes/activeLanes distinct counts; inputTokens/outputTokens only over usage-bearing requests else null. Trace identity: W3C id from traceparent (all-zero rejected) else untraced:<hub>:<rid>; orderHops links by PEER MARKERS (causal order even with skewed clocks — never clock order), incomplete chains marked. Pre-peer-marker recovery: only the provable 2-row case (one local origin + one remote row + local ledger outbound for that exact trace), direction from the ledger origin, trace stays incomplete. Coverage block: projectionAvailable/truncated (10k row cap), ledgerAvailable, observedHops/tracedHops, ledgerOnlyRequests, tokensScope local-origin-ledger|unavailable (never describe local usage as estate-wide). Both dbs absent = ok:false reason.",
+   "flags": [
+    "defer-optional: hub dashboards"
+   ],
+   "notes": "511 lines. Pure read model — SQLite readonly opens."
+  },
+  "src/network-read-model.ts": {
+   "status": "read",
+   "role": "W858.10.3 the Network overview read model: per-hub request state (projection request_edges by source), recent successful routes, token throughput (hour buckets + 15m window + per-interface 60s/15m rows), 15m audit window, observation freshness, lifecycle join",
+   "summary": "Honest-null law throughout: SUM over no rows stays SQL NULL (never fabricated 0), unsettled rows (ok IS NULL) counted separately never settled either way, unattributedFailed split out. resolveNetworkDbPaths config-over-code chain: BUCKLE_DB -> ~/.claude/local-llm/buckle.db; KLH_LANE_ROUTES_DB -> BUCKLE_OBSERVATIONS_DB -> BUCKLE_OBSERVATIONS_PATH.db -> ~/.claude/local-llm/buckle-obs.db. Ledger missing = ok:false; missing projection db DEGRADES hubs/hops/observations sections but keeps ledger sections. auditWindow: attempts/succeeded/failed/unsettled + failures grouped by target kind/host/port. interfaceRows: GROUP BY measured target (rate window 60s / workload window 15m, null = no settled usage). usageBuckets: 24 hour buckets, missing buckets render measured 0 (COUNT semantics). Freshness: lastEventAt + lastSeq per source from obs_events/observer_state. Embeds lifecycleSnapshot (W1312).",
+   "flags": [
+    "defer-optional: hub dashboards"
+   ]
+  },
+  "src/flow-read-model.ts": {
+   "status": "read",
+   "role": "W2673.1 the gateway FLOW feed read model: windowed (60/300/600s) sender (lane/actor) LEFT - gateway CENTER (req/s + 30s series) - target (model|upstream) RIGHT + attention signals, zero new instrumentation",
+   "summary": "Senders + gateway series + active from projection request_edges; targets + failure signatures from ledger route_audit (name = COALESCE(target_model, target_host, 'unattributed'), kind model vs upstream). Caps: 64 sender/target rows with truncated counts reported, 16 failure signatures, 40x30s series buckets (0-request window = measured 0 series not null; absent db = null). Attention: error-spike per failure signature, error-rate >= 20% with >= 5 attempts (denominator guard), guardrail-blocks (denied + degraded outcomes), unsettled-climb (ok IS NULL rows). Empty-window guard: req/s 0 measured, never nulls. Either db alone degrades honestly; both absent = ok:false.",
+   "flags": [
+    "defer-optional: dashboards"
+   ]
+  },
+  "src/lifecycle-read-model.ts": {
+   "status": "read",
+   "role": "W1312 the joined lane-lifecycle query: projection (admit/start/end per request, unsampled) ATTACH + LEFT JOIN ledger route_audit on rid — projection-only = never reached routing, ledger-only = pre-W461 legacy; plus per-observer durable gap/drop counters",
+   "summary": "ATTACH ledger READONLY (path escaped ''); ledger is the optional half — attach failure degrades to projection-only rows. attemptsAgree honesty flag: both sides present AND counts equal. queueWaitMs via MAX(route_attempt.queue_wait_ms) subquery. Loss counters: observer_state.last_seq (emitted) vs DISTINCT projected ids (observed), gaps = emitted - observed >= 0 — rotation/overflow/crash loss, never inferred away; absent db = no rows (an unwired observer is not a lossy one). Filters: source/lane/errorOnly/ledgerMatch matched|unmatched, cap 200.",
+   "flags": [
+    "defer-optional: dashboards"
+   ]
+  },
+  "src/projection.ts": {
+   "status": "read",
+   "role": "W461 stage 3 LaneProjection + OutboxTailer: the observation->read-model projection — obs_events (CloudEvents source+id dedup), request_edges (PK source+rid, per-request admit/start/end), observer_state (per-boot sequence); gap detection + crash reconciliation; keyset-paginated scoped snapshots",
+   "summary": "Ingest = ONE transaction: closeStale (ACTIVE_TTL 30min: ended_at IS NULL older than TTL closes outcome 'unknown' — silence is NOT an outcome); PRE-BATCH gap detection (event id > last_seq+1 = observer rotated/crashed -> that source's still-active edges close unknown BEFORE projecting new); INSERT OR IGNORE dedup; admitted inserts edge (origin/peer W706 hop columns, healed onto pre-W706 dbs via pragma_table_info); started/ended guarded updates (never overwrite an ended edge — idempotent replay safe). upsertSeq takes MAX (regression-tolerant). snapshot: groups per source (immediate-downstream grouping), distinct-lane totals (group counts not additive), keyset cursor '<admitted_at>:<rid>' with resync flag when cursor predates retention, limit 1..1000, filters source/origin/since/until/errorOnly. OutboxTailer: byte-offset tail, only COMPLETE lines consumed (torn crash tail waits in file — offset-only law W717: never carry a partial, it combines with the append), rotation (size < offset) restarts from head.",
+   "flags": [
+    "defer-optional: hub observability"
+   ],
+   "notes": "Schema heals origin/peer columns idempotently per open. WAL + busy_timeout 5000."
+  },
+  "src/observe.ts": {
+   "status": "read",
+   "role": "W461 stage 2 ObservationOutbox: minimal UNSAMPLED lane observations (admitted/started/ended per proxied request, independent of trace sampling); CloudEvents 1.0.2 envelope, source = buckle://<hub>/<boot-epoch> so a restart = new epoch without changing lane identity; durable bounded NDJSON outbox FIRST (broker only on measured need)",
+   "summary": "id = per-boot monotonic sequence (gap-detecting + dedup-stable). Bounded queue 1024 drop-oldest COUNTED (never silent). Rotation: one prior generation kept (.1), then gone — outbox is NOT durable beyond its failure domain. W1309: write-then-shift (head stays queued until its append lands -> failed writes RETRY not lose), writeFailures counted separately from overflow drops, first failure of an episode warns once, 1s unref'd retry timer + re-flush on next emit, bytes cache re-stat on failure (bytes = -1). read(): prior generation then current, specversion check, torn tail lines skipped never thrown. Usage/accounting deliberately EXCLUDED from payload (billing rides the ledger, doc §5).",
+   "flags": [
+    "defer-optional: hub observability"
+   ]
+  },
+  "src/preseed.ts": {
+   "status": "read",
+   "role": "W142 knowledge-aids preseed pipeline (/aids/preseed, W137 §3a): knowledge-API search -> verified-only trust filter -> doc-covered skip (70% rule) -> byte-stable render -> 3KB cap -> packet cache; pointer-only verified-only cards",
+   "summary": "verifiedRows: kind=knowledge AND state=active AND trust=verified with numeric id + fact/snippet (retired/graveyard/unverified NEVER enter a packet — mechanical poisoning guard). W2779.1: the precedence clause rides the /search seam (preamble field, ONE home in the knowledge substrate) — a response with NO preamble = honest outage skip, never a bare packet. Byte-stability: header has counts+packet id only (no timestamps), cards sorted by row id, fact capped 240 chars/2 lines — deterministic input = deterministic bytes (W120 prefix-kill guard for provider KV cache reuse). capPacket drops highest ids first. Cache key = (domain, sorted focus, repo fp, TTL window default 300s) + membersFresh re-verifies member source hashes before cache serve (drift rebuilds). Policy gate: allowlist per domain or default:on. Skip reasons: policy|no-verified-rows|doc-covered|outage|invalid — every outcome returned for metering (an aid that cannot log does not fire).",
+   "flags": [
+    "defer-optional: aids"
+   ],
+   "notes": "Deps: policy.ts AidsPolicy, doc-skip.ts loadDocs/substitutionCheck."
+  },
+  "src/reconcile.ts": {
+   "status": "read",
+   "role": "W1124.31 proof-gated abandoned-receipt reconcile: a status-NULL route_audit row predating this gate incarnation (ts < boot epoch) and older than the max live-transport bound records an audited abandoned verdict — status/ok stay NULL FOREVER (no invented HTTP code, no retrospective provider blame); fail-closed, immutable",
+   "summary": "Proof chain: exact-row guards (rid, exact lane, optional exact trace_id/ts), settled rows refuse, reconciled rows refuse (immutable), only inference receipts (target_model present). Age proofs: tsMs >= bootOrigin refuses (buckle.receipt_live_incarnation — it may be in flight HERE); age <= maxStreamMs refuses (transport bound). Write re-checks terminality (WHERE status IS NULL AND reconciled IS NULL, changes must equal 1 else buckle.receipt_race). Stable machine-readable refusal codes: no_such_receipt|receipt_lane_mismatch|receipt_mismatch|receipt_settled|receipt_reconciled|receipt_not_inference|receipt_ts_unparseable|receipt_live_incarnation|receipt_transport_bound|receipt_race. AbandonedReceipt JSON: verdict/at/actor(hashed key id)/reason(cap 200)/age_ms/boot_origin. parseAbandonedReceipt: corrupt/legacy reads as never-reconciled (fail-closed bias, never kills the read surface).",
+   "flags": [
+    "core",
+    "port-priority: the abandoned-inference seam the standalone ledger needs"
+   ]
+  },
+  "src/aids.ts": {
+   "status": "read",
+   "role": "W142 aids metering core: parseAids stanza grammar (lane briefs declare 'aids: preseed=gaps cache-align'), AidsLedger (buckle-local WAL sqlite, same db file as the usage ledger W133), govdb-shaped hourly rollup",
+   "summary": "STANDING LAW: est_tok_saved stays NULL at event time — savings are A/B facts applied at dashboard time, never fabricated per-request; an aid that cannot log does not fire. AidKey set: preseed|cache-align|compress|expand|condense-in|prune|off (unknown keys forward-compatible ignored via stanza.unknown). parseAids: 'off' wins over everything; bare preseed without =domain is malformed->unknown. repoFp = sha256 of repo PATH (never stored raw). event_id = sha256 of decision tuple -> idempotent record (duplicate -> null). rollup: recompute COMPLETE hour buckets SET-semantics, model_group = COALESCE(served_model,'all') — W4 expand carries the REAL serving model so a rollup never claims a model the aid didn't serve; caller-served aids join by (sid->actor, hour) never model. served_model column healed via ALTER TABLE try/catch (pre-W4 dbs). eventsSince = harvest pull seam.",
+   "flags": [
+    "defer-optional: aids"
+   ]
+  },
+  "src/aids-routes.ts": {
+   "status": "read",
+   "role": "W142 aid endpoints on :4101 + the WIRE aids path: POST /aids/preseed (belt at dispatch), POST /aids/expand (orchestrate-enhance W288 retarget to local direct tier), GET /aids/status|/aids/rollup?hours|/aids/events?since; applyWireAids runs x-belt-aids stanza per proxied request; gateCacheAlign W768 gate-side emission",
+   "summary": "meter(): ledger row + servicemon counters (buckle_aids_decisions_total by aid+decision+reason, buckle_aids_tokens_injected_total) — the counters are the live face of the law. Pass-through doctrine: no header = ZERO touch; stanza.off = early return. applyPrune (W207): DEFAULT-OFF policy, no-gain skip when events empty, pruned body rides OUT, elided raw into DietStore keyed rid. expand (W4): expander.expandBody pre-routing; missing expander = honest 501/policy skip (garnish law — optional deps in AidsDeps skip, not fail). compress: wired but not implemented — always skip metered policy/invalid. cache-align: anthropic dialect only (alignBody); condense-in flag returned for the sideband (W5) handler — applyWireAids itself never touches served bytes for condense. gateCacheAlign (W768): gate aligns for upstreams that honor cache_control WITHOUT client declaration (anthropic-native rows; openai-compat never gets markers — ZAI prefix-implicit; bridged hops strip in rebuild); aids.cache-align.default off = operator kill. W1303.2: family dispatch rides kit RouteTable (URLPattern, WeakMap<AidsDeps> compiled-once) but keeps the ok:true json grammar; unknown /aids/* falls through to main 404.",
+   "flags": [
+    "defer-optional: aids"
+   ]
+  },
+  "src/doc-skip.ts": {
+   "status": "read",
+   "role": "the doc-covered substitution test (W103 mechanics ported from suspenders hooks/lib/knowledge/knowledge.ts, self-contained): drops preseed rows the lane repo's own docs already teach (W94 — the agent would pay hub AND files)",
+   "summary": "distinctTerms: lowercase split, leading/trailing .- stripped (sentence punctuation would glue), >2 chars, STOP closed-class set excluded. substitutionCheck: thin facts (<4 terms) = no signal; coverage = share of fact terms in ONE doc's term set; covered >= 0.75 (COVERED_MIN); residue = sentences with own coverage < 0.55 vs best doc (what the docs DON'T teach). loadDocs: docs/ recursive .md/.markdown + root README/AGENTS/CLAUDE/NOTICE; caps MAX_DOCS 300 corpus, MAX_DOC_BYTES 262144 (a huge repo cannot stall ingest).",
+   "flags": [
+    "defer-optional: aids"
+   ]
+  },
+  "src/diet.ts": {
+   "status": "read",
+   "role": "W207 loop-level trajectory pruning (AgentDiet analog arXiv:2509.23586, W121 lever #5, old tool results = 63% of trajectory tokens): gateway rewrites stale tool results past keep-window into one-line tombstones pre-routing; GATEWAY-ENFORCED by design (agents under-call erase tools — self-managed cleanup fails)",
+   "summary": "Pure pass pruneTrajectory: deterministic, copy-on-write (unchanged = SAME reference, callers === to detect touch); doomed = tool results past keepTurns (default 3) AND >= minResultBytes (2048); sub-minimum + recent survive verbatim; non-tool text NEVER touched. Bilingual walk: anthropic tool_use id->name map + tool_result blocks in user messages (mi+bi addressing); openai tool_calls map + role:tool carriers (bi -1). Tombstone text names tool+KB+age. DIET_VERSION engine stamp per row (condense_version law). DietStore: rid-keyed sidestore, raw stays one GET away, capped 200 rids newest-win, maxStoreBytes 65536 truncation flagged. pruneOptsOf maps routing-policy aids.prune block. dietRoutes: GET /diet (list) + /diet/<rid> (raw replay); bare deps 404 honestly (AppDeps contract). Policy DEFAULT-OFF (W137 economics: prefix rewrite costs KV-cache re-reads — prove ROI first).",
+   "flags": [
+    "defer-optional: aids"
+   ]
+  },
+  "src/expand.ts": {
+   "status": "read",
+   "role": "W4 intent expansion on the pipeline OUT: orchestrate-enhance goal -> architectural-wants digest (fleet laws + repo conventions) via the LOCAL DIRECT tier — W288 structural retarget law: ONE healthy local candidate, no ladder walk, NEVER a cloud row whatever prefs say; opt-in DEFAULT-OFF; garnish law (every failure = honest metered skip)",
+   "summary": "goalFromMessages: goal = LAST non-empty user message (string or text blocks), capped max_goal_chars 4000. contextOf: system text (anthropic system field + openai system messages) = belt brief preamble. expansionBody: deterministic openai-wire (temperature 0, non-stream, max_tokens 400). pickLocalDirect: candidates filtered group local-swarm + kind local + healthy, compareCandidates sort, first. directCall: one POST to candidate dep url /chat/completions, Bearer from dep.api_key_env, AbortSignal.timeout (default 3000ms); non-ok/unparseable throws -> caller meters outage. injectDigest: openai = leading system message; anthropic = prepend to system (deterministic — served_model METERED never injected, stable bytes ride KV caches). capBytes: 0.9-shrink loop. Skip reasons: policy|invalid|no-local|outage. ExpandOutcome returned for the CALLER to meter (preseed pattern: one metering site per call site).",
+   "flags": [
+    "defer-optional: aids"
+   ]
+  },
+  "src/pipeline.ts": {
+   "status": "read",
+   "role": "W5 prompt pipeline IN: inbound compression SIDE-BAND — condensed variant for lane results shown to the owner, served bytes stay byte-identical (wire contract never mutated), raw stays one GET away by rid; W304.3 delegates the ruleset to the blam canonical engine tier 'politeness' (one engine everywhere, audience split)",
+   "summary": "condenseText = condenseTier('politeness') with rules prefixed 'blam:' (engine audit names filler:*/tidy:* differ from the retired inline drop:/prefix: families; courtesy-closer drops are NOT in the politeness table and survive — sanctioned by the one-engine law). extractText: anthropic content text blocks / openai choices[0].message.content; anything unextractable -> null (metered skip). CondenseStore: rid-keyed sidestore in shared buckle db (own WAL connection, AidsLedger precedent), raw+condensed both stored, bounded 500 newest-win, condense_version column healed via ALTER TABLE try/catch (write-time honest engine stamp, pre-engine rows read null). pipelineRoutes: GET /pipeline/in?limit + /pipeline/in/<rid>; bare deps 404 honestly. Imports @klh/blam condense tiers + CONDENSE_VERSION (import law: @klh/* package name).",
+   "flags": [
+    "defer-optional: aids"
+   ]
+  },
+  "src/align.ts": {
+   "status": "read",
+   "role": "W142/W237/W768 cache-align: anthropic prompt-cache alignment — LAYOUT LAW system -> packet -> volatile: the preseed packet block relocates to the head of the message sequence so the cache_control breakpoint after it covers a byte-stable shared prefix; declared (x-belt-aids cache-align) + gate-side emission for cache_control-honoring upstreams",
+   "summary": "Why: a rotating card inside the cached prefix makes every request a 1.25x cache WRITE instead of a 0.1x read. PACKET_MARKER '[fleet preseed'. packetBlockOf finds the first content block carrying it. splitPacketPrefix: a client-composed 'preamble+packet' text block splits so pre-bytes sit BEFORE the packet (pure packet bytes inside the prefix). relocateToPrefix: msg 0 block 0 position; emptied message dropped (anthropic 400s content:[]); string head content normalized to blocks. systemBlocks: exactly ONE breakpoint on last system block, strips pre-existing misplaced ones; already aligned -> null (idempotent). hasClientCacheControl: deliberate CLIENT placement respected byte-for-byte — gate never rewrites on top (anthropic caps 4 breakpoints; gate-added markers over four client markers would 400). alignForUpstream: belt packet present -> W237 layout always; no packet + client markers -> null (untouched); else system-only align. anthropic dialect ONLY (ZAI prefix-implicit, copilot unknown).",
+   "flags": [
+    "defer-optional: aids"
+   ]
+  },
+  "src/error-trace.ts": {
+   "status": "read",
+   "role": "the fleet error-trace presentation at the Buckle HTTP boundary: every non-success response gets a correlation header + in-body trace (CLI clients print bodies, discard headers); bounded provider-neutral fleet_trace chains across hub hops; SSE in-band failure annotation without changing the dialect envelope",
+   "summary": "FleetErrorTraceSchema (zod): id 32hex, hops 1..4, every string field length-capped + SECRET_PREFIX (sk-/bksk_/ghp_/AKIA/Bearer) rejected — secrets never ride traces. Peer admission: only TRUSTED peers whose stamped x-buckle-trace-id AND bounded body agree with the request's trace id — providers NEVER author fleet hop chains (max 3 prior hops carried). currentHop: target from x-buckle-route header (host:port), provider_target = CONFIG identity only with origin_kind provider_response|litellm_translation (never inferred from error text — a litellm hop carries the provider it was configured for). SSE errors ride HTTP 200 — hop status stays 200. 'belt: <hub>.<service>.<code> — ' origin prefix (idempotent: prior markers/origins stripped before re-prefix, PROBLEM_SLUGS fallback). trace_url set ONLY when base configured (W2268 — no fabricated links). smallJson caps 64KiB on a clone; original body cancelled (tee retains under backpressure). fallbackBody: anthropic / openai / problem+json envelopes for non-JSON errors. content-length/encoding deleted before re-serialization.",
+   "flags": [
+    "core",
+    "port-priority: standalone problem/error face grammar"
+   ],
+   "notes": "Deps: @klh/telemetry http-trace safe* validators, citizenship PROBLEM_SLUGS, trace-url."
+  },
+  "src/eval/types.ts": {
+   "status": "read",
+   "role": "W424 model-swap eval harness shared shapes: Task (id/shape/system/prompt/key/check/meta), Arm (openai-compat base + model + key + prices), TaskResult",
+   "summary": "Law: a task's answer key is COMPUTED at generation time from the generator's own inputs — NEVER typed by hand; check grades normalized answers against it. Two arms run the identical seed-pinned task list (paired diffs). Shape = code|menial|reasoning|danish.",
+   "flags": [
+    "defer-optional: eval harness"
+   ]
+  },
+  "src/eval/tasks.ts": {
+   "status": "read",
+   "role": "task registry: per-shape generators behind makeTasks(shape, n, seed) — the seed pins the list so both arms run THE SAME tasks",
+   "summary": "GENERATORS record maps shape -> make*Tasks. 19 lines, pure dispatch.",
+   "flags": [
+    "defer-optional: eval harness"
+   ]
+  },
+  "src/eval/rng.ts": {
+   "status": "read",
+   "role": "seeded RNG (mulberry32): seed pins the task list so re-runs stay comparable",
+   "summary": "float/int/pick/shuffle interface; standard mulberry32 constants (0x6d2b79f5, imul mixing). 38 lines.",
+   "flags": [
+    "defer-optional: eval harness"
+   ]
+  },
+  "src/eval/graders.ts": {
+   "status": "read",
+   "role": "answer normalizers + check builders shared by every task family: prompts pin a strict answer format, graders apply light normalization then compare against the computed key",
+   "summary": "stripFences (``` fences off), norm (fences/lowercase/whitespace-collapse/trailing punct/quotes), numFrom (first number, commas/spaces tolerated). Checks: exactCheck (norm equal), numCheck, containsCheck, jsonCheck (parse + deep key-equal jsonEq), valueCheck (string keys norm-equal, structured keys JSON-equal — code predict-output), canon (canonical string for JS value). metaOf builds the family record. meta.code carries the raw snippet (tests verify every snippet under node:vm so a mirror drift fails loudly).",
+   "flags": [
+    "defer-optional: eval harness"
+   ]
+  },
+  "src/eval/runner.ts": {
+   "status": "read",
+   "role": "runs a seed-pinned task list against one openai-compat endpoint (swarm specialists, the buckle front, any /v1); errors land as honest incorrect rows with error text — never dropped",
+   "summary": "askOne: chat/completions, temperature 0, non-stream, AbortSignal.timeout; !res.ok or throw -> fail row (error field, ok false, tokens 0). runArm: bounded-concurrency worker pool over tasks x repeats, onRow streaming callback. ping: /models probe then 1-token chat fallback (5s/10s timeouts).",
+   "flags": [
+    "defer-optional: eval harness"
+   ]
+  },
+  "src/eval/stats.ts": {
+   "status": "read",
+   "role": "the power + decision layer (lesson.eval-power-discipline): Wilson 95% intervals, exact McNemar on paired discordants, and the owner ABSTAIN RULE",
+   "summary": "wilson(k,n) score interval; binomTwoSidedP exact two-sided under p=0.5 (log-space pmf, no overflow); POWER_N 130 minimum tasks/shape for +-7pt bars (beri.net law); armShape aggregates per-task MAJORITY verdicts (k*2 > repeats, strict tie->incorrect) + latency p50 + token sums; shapeStats: n01/n10 discordants, mcnemar_p, overlap = Wilson intervals intersect, powered = n >= POWER_N. decideShape owner abstain rule: NO overlap -> higher accuracy wins by quality; overlap -> cost per resolved task decides; tie + no prices -> honest abstain (rerun with prices).",
+   "flags": [
+    "defer-optional: eval harness"
+   ]
+  },
+  "src/eval/report.ts": {
+   "status": "read",
+   "role": "per-shape aggregation for the report: paired majority verdicts -> ShapeStats -> Wilson bounds + cost per resolved -> owner abstain rule; renderTable = human table",
+   "summary": "majority per task across repeats (strict). costPerResolved: (tokens*prices)/1e6 / resolved — undefined without prices (honest). aggregateShape joins arms, computes pairs, ShapeStats, verdict, pct rounding (1 decimal as percent). renderTable: fixed-width pipes — shape/n/acc bands [wilson95]/tie|sep/verdict/by/$-per-resolved.",
+   "flags": [
+    "defer-optional: eval harness"
+   ]
+  },
+  "src/eval/tasks-code.ts": {
+   "status": "read",
+   "role": "code shape bucket: JavaScript output prediction over templated snippets — keys COMPUTED by mirrored TS ops (never hand-typed); tests verify every snippet under node:vm so a mirror drift fails loudly",
+   "summary": "5 families: arrayChain (map*filter>reduce+), stringOps (slice/toUpperCase/length/concat variants), logicTernary (comparison + ternary variants), sortPick (comparator + index), templateLit (interpolated arithmetic). System prompt pins exact-value-only replies, arrays in JSON syntax. valueCheck grading; meta.code carries the snippet for vm verification. Round-robin families by index.",
+   "flags": [
+    "defer-optional: eval harness"
+   ]
+  },
+  "src/eval/tasks-menial.ts": {
+   "status": "read",
+   "role": "menial shape bucket: extraction, shaping, counting over generated payloads — keys computed from the generated data",
+   "summary": "5 families: jsonExtract (flat JSON -> one field's JSON value), csvSum (qty column sum), dedupeSort (dedupe + ascending JSON array), countInList (word occurrences), templateFill (record -> exact line). Graders: jsonCheck/numCheck/exactCheck. Round-robin by index.",
+   "flags": [
+    "defer-optional: eval harness"
+   ]
+  },
+  "src/eval/tasks-reasoning.ts": {
+   "status": "read",
+   "role": "reasoning shape bucket: multi-step word problems with keys computed from the generated operands",
+   "summary": "5 families: wordProblem (two-step crates), sequenceNext (arithmetic/geometric/alternating period-2), compareChain (4 products -> letter A-D with regex letter extractor), travelTime (m = h*speed keeps integrality), discount (price multiples keep integral). Answer format pinned: single number or letter.",
+   "flags": [
+    "defer-optional: eval harness"
+   ]
+  },
+  "src/eval/danish.ts": {
+   "status": "read",
+   "role": "danish shape bucket: number words, slot extraction, translation, weekdays — all keys COMPUTED (danishNumber formatter shared by digit->word and word->digit; lexicon anchors pinned once as corpus input, never per-task)",
+   "summary": "danishNumber: full 0-99 vigesimal rules (halvtreds/tres/halvfjerds/firs/halvfems, unit-first compounds 'enogtyve'). 5 families: word2digit, digit2word (whitespace-stripped norm compare), slotExtract (count/noun/city over a generated Danish sentence), translate (da->en, count accepted as word OR digit), nextWeekday (fixed day order).",
+   "flags": [
+    "defer-optional: eval harness"
+   ]
+  },
+  "src/eval/replay.ts": {
+   "status": "read",
+   "role": "W1200 ledger-driven policy counterfactuals: replays route_attempt chains (per-rid per-attempt outcomes from the LIVE ledger, readonly) through candidate routing-policy knobs (num_retries, allowed_fails, cooldown_time) scoring the cost-fallback objective",
+   "summary": "simulateRequest: per-row attempt budget num_retries+1, passive outlier ejection (benched row walked past — shared breaker state rides ts order), consecutive-fail breaker opens at allowed_fails -> cooldown, walk waits retry_after or exponential min(2^min(8,runs),8)s. Objective: success floor first, then cost = 429-burn + failed-request token waste (fails priced at TRAIN mean tokens/success), then latency (p50/p95). loadLedger: decision='policy' requests with attempts NOT NULL + EXISTS route_attempt rows. splitWindows: TRAIN older 2/3 / TEST recent 1/3 at ts boundary. Declared assumptions: logged outcomes are valid counterfactual samples (no second-order interference); streaming not distinguishable per row so timeout knobs OUT of scope; only the 3 retry/cooldown knobs carry ledger-visible signal.",
+   "flags": [
+    "defer-optional: eval harness"
+   ]
+  },
+  "src/eval/hillclimb.ts": {
+   "status": "read",
+   "role": "W1200 hillclimb driver over replay: TRAIN/TEST split, fixed one-knob AGENDA, paired bootstrap CIs (LCG-seeded, reproducible), keep/revert verdicts under the cost-fallback objective; read-only over the ledger",
+   "summary": "Keep rule (conservative): success floors hold on BOTH windows (delta >= -0.005) AND cost CI95 entirely below zero on BOTH train+test — anything else REVERTs (revert-first on noise-level gains). Determinism guard: baseline replayed twice, JSON-identical (determinismPass). Validity: logged-truth vs simulated agreement on train. Fixed AGENDA: num_retries 0, allowed_fails 2, cooldown 60/120, retries 2, fails 4. meanSuccessTokens = failed-request token price. import.meta.main CLI: bun src/eval/hillclimb.ts <ledger.db>.",
+   "flags": [
+    "defer-optional: eval harness"
+   ]
+  },
+  "src/repo-policy.ts": {
+   "status": "read",
+   "role": "W7 repo-policy gate engine: policy CHECKS on the repo in view as DATA rows {id, repoClass, detect, check, missingQuestion, policySource} in repo-policy.json (operators edit JSON, never code; rows additive without code changes); silent when satisfied, one actionable missing-question per gap",
+   "summary": "Condition grammar v1: exists/existsAny/grep/grepAny (bounded reads, first MiB cap — a pattern past that is a row-design bug) + httpGet live probe (needs caller base; unreachable = HONEST SKIP, a down service is not a policy violation; expect status or <500 default; 2s timeout). detect = ALL must hold (empty = applies everywhere); check = first failure is one gap, unrunnable = skip; rows in declaration order. IKEA law: policySource 'fact:finding.ikea-*' pointers resolve ONLY on the local owner-report path (bin/repo-policy.ts --resolve-facts, Bun.spawn ARG ARRAYS never a shell string, fact text capped 8KiB, never fed to a model, never on the wire). validateRow throws NAMING the row (silent inertness is the forbidden posture). loadRepoPolicies chain: explicit -> BUCKLE_REPO_POLICY -> ~/.claude/local-llm/repo-policy.{json,yaml} -> committed default (JSON.parse — yaml name honored only while content is JSON, per the W1253 transition note). W539 org-scope fields serviceId/policyId/orgId ride rows (bounded optional strings).",
+   "flags": [
+    "defer-optional: hub session aids"
+   ]
+  },
+  "src/repo-policy-routes.ts": {
+   "status": "read",
+   "role": "W7 repo-policy gate on :4101: POST /repo-policy/check {repo_root, base_url?, sid?} (belt calls at dispatch — the hub sees the repo only as the SESSION-supplied path) + GET /repo-policy/manifest (rows + sha256, no-store)",
+   "summary": "parseBody validates repo_root IS a directory (statSync). meter: one servicemon counter buckle_repo_policy_checks_total {row, outcome} — presence in metrics implies the row actually applied (inert rows silent). policySource travels VERBATIM on the wire (fact:* pointers resolve only on the local owner-report path). readBoundedJson + problem() citizenship errors.",
+   "flags": [
+    "defer-optional: hub session aids"
+   ]
+  },
+  "src/throughput-metrics.ts": {
+   "status": "read",
+   "role": "Prometheus text render of the @klh/telemetry ThroughputStore: cohort rows (latest bucket per node+key) with baseline/incident/comparable fields, node-local rollups per dimension (requested_group/model/provider), incident gauges, capacity-signal refusals",
+   "summary": "Cohort honesty: cohorts are NODE-LOCAL and comparable — never sum hop rates to claim fleet throughput; unknown usage OMITS the rate (null) never a fabricated zero. bucketValues: requests/attempts per second over the real elapsed window, service vs end-to-end token rates (knownServiceMs vs matchedTotalMs), queue_wait_mean, window_closed. rollupThroughput over each node's LATEST bucket only. Incidents: active gauge + started/recovered ms. capacitySignals: collection_capacity_refusals. All lines prefixed buckle_throughput_.",
+   "flags": [
+    "defer-optional: metrics"
+   ],
+   "notes": "Depends on @klh/telemetry throughput-store/rollup."
+  },
+  "src/metrics-connector.ts": {
+   "status": "read",
+   "role": "ONE private metrics read combining Buckle servicemon + native LiteLLM Prometheus — never proxies prompts, follows redirects (redirect: error), or puts key material in responses/labels",
+   "summary": "validatedMetricsUrl: https OR http-loopback-only (127.0.0.1/[::1]/localhost/host.docker.internal — the containerized hub reaches host-published LiteLLM through the docker gateway name, operator-declared in 0600 stack config), no userinfo/search/hash, pathname /metrics only. readPrivateKey: absolute path, mode EXACTLY 0600, owner uid match, 1..4096 bytes, no newlines. Config law: url xor keyFile/keyEnv — keyFile and keyEnv mutually exclusive, env name must match /^[A-Z_][A-Z0-9_]*$/; not_configured when all absent. Bounded read: content-length pre-check + streamed cap 2MiB -> too_large. Content-type must be text/plain or openmetrics. expose(): source_up gauges (buckle always 1, litellm 1 iff ok) + combined body; status rides x-buckle-litellm-metrics-status header + optional source-id (stable engine identity — shared scrapes are not additive) + http status. Statuses: ok|not_configured|invalid_config|key_unavailable|http_error|timeout|unavailable|too_large|wrong_content_type|empty.",
+   "flags": [
+    "defer-optional: metrics"
+   ]
+  },
+  "src/stream-semantics.ts": {
+   "status": "read",
+   "role": "W1106 body-free semantic outcome classifier: a protocol terminal (anthropic message_stop / openai [DONE]) alone is NOT proof of a completed turn — the empty-stream incident shipped protocol-perfect turns with no usable output (exact 483-byte envelope: message_start + usage-only terminal + message_stop)",
+   "summary": "Three booleans accumulated while a stream flows, reduced to ONE typed failure kind at the terminal: empty_response (no usable text/tool/refusal ever) | reasoning_only (only thinking deltas) | output_token_limit (ended on max_tokens/length with no output). Usage counters deliberately NOT evidence (out_tok 0 is the symptom not the proof — the 483B envelope carried usage 33341/0). No text ever stored — booleans only. Bilingual: anthropic delta/block text + tool_use NAME is the commitment (args stream later) + thinking/redacted_thinking + stop_reason max_tokens; openai delta content/refusal + reasoning_content + finish_reason length + named tool_calls; Responses wire (W912) output_item/message output_text/refusal/output_audio + named function_call + response.completed snapshot walked item by item. W2579 live outputEvidence() {outputFrames, roleFrames} — counts the frame that FIRST flipped each boolean, read by the receipt's role-only classification at an idle-deadline kill BEFORE any terminal reduction. emptyStreamError() typed error body shared by both bridge directions.",
+   "flags": [
+    "core",
+    "port-priority: standalone stream QA"
+   ]
+  },
+  "src/stream-terminal.ts": {
+   "status": "read",
+   "role": "stream finalization helpers extracted from handlers.ts (W1265 cap pay-down): the W1106 audit terminal classifier, sniff-branch sink, once-guard, mid-stream error events, scrubbed error-text face — leaf module (imports only adapters/errors + sse + error-trace prefix, never handlers)",
+   "summary": "terminalOf precedence: downstream_cancel > gateway_restarting (drained) > in_band_error:<code> (an in-band failure body outranks a terminal marker #55446) > upstream_eof_truncated (#55420 EOF without protocol terminal) / upstream_eof > timeout: upstream_deadline vs upstream_deadline_role_only (W2579 C235 role-only shape) > upstream_error:<kind>. scrubText: /Users/<name> -> ~ before any error leaves. blackHole: sniff-branch sink (bytes in, usage extraction + progress counters out). writeErrorEvent: mid-stream upstream death appends dialect-correct error event with trace stamp (fleet_trace hops entry, 502/stream_failed) then closes; RouterError reuses routerErrorEnvelope.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/stream-correlation.ts": {
+   "status": "read",
+   "role": "W2260 provider-neutral hop/trace correlation for streaming responses — bounded transport metadata ONLY (upstream_request_id, litellm_call_id, activity class), never prompt or key content",
+   "summary": "Four-way activity split answering the W2260 incident question (HTTP 200, 188 bytes, 60s idle, provider-side close?) without payload: semantic (>=1 non-keepalive data frame) | role_only (W2579: frames arrived but NONE carried usable output or reasoning — the C235 role-frame-then-silence shape, distinct from mid-content stalls which stay semantic) | ping_only (only keepalives) | none (true no-byte stall). StreamReceipt: terminal + bytes_in/chunks_in + last_chunk_ms + activity + retry_eligible (failed/truncated with zero client-visible semantic output could retry without duplicating) + upstream_request_id/litellm_call_id (safeCorrelationId junk-filtered, null = honest unknown). hopCorrelationOf reads x-buckle-upstream-request-id/x-request-id/x-litellm-call-id from SUCCESS-stream headers (failure path already classified them in router-attempt).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/sse-heartbeat.ts": {
+   "status": "read",
+   "role": "final-established SSE egress heartbeat: injects a comment keepalive when the wire has been quiet >= 25s so client proxies do not time out — comments never enter upstream guards, sniffers, usage, or model-progress counters",
+   "summary": "withSseHeartbeats wraps the FINAL established stream only. Byte-level boundary tracker (CRLF-aware) maintains lineHasBytes/commentLine/eventOpen so a comment is NEVER injected mid-event or mid-line — only at clean quiet boundaries when desiredSize>0 and lastBytesAt is stale. Backpressure law: one queued comment + at most ONE borrowed upstream chunk retained under downstream pressure (pending slot); pump gated on desiredSize. AbortSignal honored once (controller.error + source cancel); reader.closed watched for source-finished (disarm timer). HeartbeatClock seam (now/schedule, unref'd timer) for deterministic tests — not an operator knob. SSE_QUIET_HEARTBEAT_MS = 25s.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/latency-report.ts": {
+   "status": "read",
+   "role": "W2247/W2247.1 diagnostic: request size vs transport latency over route_attempt transport evidence; headersMs and firstBodyByteMs reported SEPARATELY and never conflated — headersMs is time-to-headers (non-streaming includes the WHOLE generation: the 2026-10-29 trace 912KB body, headersMs 76562, 4106 out-tokens ~18.6ms/token ≈ 76s), so the historical size-vs-latency finding is a HEADERS finding",
+   "summary": "firstBodyByteMs aggregated from OBSERVED values only — rows without one excluded, never backfilled from headersMs (null when no observation, NaN Pearson -> null, never fabricated). LatencyRow = (transport_json, stream_receipt?, queue_wait_ms?) pulled by the caller (module pure, testable against scratch db). Buckets <10k/10-100k/100-500k/500k+; per-bucket hdr p50/p90/max + fb p50/p90/max/n + reqKB avg + queueWait p50. Pearson requestBytes x headersMs and requestBytes x firstBodyByteMs. Streaming vs non-streaming headersMs p50 split. renderReport: fixed-width table, '—' for unknown.",
+   "flags": [
+    "defer-optional: diagnostics"
+   ]
+  },
+  "src/otlp-export.ts": {
+   "status": "read",
+   "role": "W2788 out-of-band per-request trace export: every proxied request settles one buckle.proxy span (wire-stamp settle) and, when usage observed, one buckle.usage child span (OTel GenAI keys); spans queue in a BOUNDED ring (drop-oldest, counted) and flush batched as OTLP/HTTP JSON to ${endpoint}/v1/traces",
+   "summary": "Env-off by default: no BUCKLE_OTLP_ENDPOINT = no ring, no timer, no I/O. Malformed knobs FAIL LOUD at boot (OtlpConfigSchema zod, prettified). Knobs: SAMPLE (default 1), RING 1024, BATCH 64, FLUSH_MS 2000, hub id from BUCKLE_HUB_ID. Sampling is PER TRACE (low 32 bits of trace id / 2^32 < rate) — a request's spans travel together. Export never blocks or fails a request; a collector miss drops the batch (failed count). Flush singleflight (inflight promise chained). toOtlpSpan: kind 2 SERVER, BigInt nanos, attrs typed bool/int/double/string, null/undefined attrs omitted. setOtlpExporterForTest seam. KNOB_REGISTRY: these are BUCKLE_* not SUSPENDERS_* knobs.",
+   "flags": [
+    "defer-optional: observability"
+   ]
+  },
+  "src/otlp-request-spans.ts": {
+   "status": "read",
+   "role": "W2788 the two buckle settle points mapped onto OTLP spans: buckle.proxy at wire-stamp settle (verdict/hop/model_group/lane/key NAME — key material never rides, only the trusted mint name); buckle.usage at the usage record, parenting on the proxy span; inert when the exporter is off",
+   "summary": "proxySpanId minted on first touch via WeakMap<Ctx> — non-streaming bodies record usage BEFORE the stamp settles, streams after; either order parents correctly. Proxy attrs: rid, hop (relay|ingress by peer), model_group, gen_ai.request.model + gen_ai.response.model (served), gen_ai.provider.name, lane, key_name, verdict, refusal, error_code, attempts, streaming, dialect, http.response.status_code; error = status >= 500. Usage span: honest-null law — null usage = no span (never zero-faked); gen_ai.usage input/output + cache_read/cache_creation tokens.",
+   "flags": [
+    "defer-optional: observability"
+   ]
+  },
+  "src/observation-export.ts": {
+   "status": "read",
+   "role": "bounded read-only export of the hub's projected CloudEvents (obs_events) — admin gate authenticates callers; cursor = local SQLite rowid order while source+id remains the durable cross-hub dedup key",
+   "summary": "MAX_EVENTS 64, MAX_RESPONSE_BYTES 256KiB (byte-weighted sum incl. source/id + 128 overhead; exceeding THROWS — page shrinks, never truncates). generation = first retained event's source/id/time — identifies the projection generation after a reset. Cursor rewind law: cursor > maxCursor (projection recreated) restarts at 0; the receiver dedups by source+id when it sees the rewind. limit+1 fetch row gives hasMore. readonly DB, throw on unavailable projection.",
+   "flags": [
+    "defer-optional: observability"
+   ]
+  },
+  "src/cache-boundary.ts": {
+   "status": "read",
+   "role": "W458.4 cache-boundary honesty + per-lane cache telemetry: a cache boundary is (provider, tenant, region, model); matching requests reuse provider cache ONLY inside one boundary; presence of a matching entry never guarantees a hit (routing + expiry decide)",
+   "summary": "Tenant comes from the CREDENTIAL's identity (api_key_env NAME never the value; keyless fleet-local falls back to URL origin), never from request text. Cache keys are routing/accounting aids, NEVER authorization: boundary data may downgrade a reuse EXPECTATION (hitExpectation: possible | impossible-boundary | impossible-model — model mismatch is its own impossibility even within one tenant) but never grants/relaxes/collapses a tenant (mayShareCachePopulation = sameBoundary ONLY). rideGateKeyOf (the cache-motivated steering gate): account+region+family+model — URL origin deliberately ABSENT (same-account fleet worker steering is routing, not tenant collapse). LaneTelemetryLog: append-only NDJSON (survives restart, failover reads same attribution back), corrupt lines skipped never fatal, hitShare = cacheRead / (inTok+cacheRead+cacheWrite). W926 prefix_fp (keyed digest of delivered prefix) + miss_cause (changed-prefix | provider-eviction | null unknown) per row. boundaryOfDeployment keeps the module leaf-pure (narrow BoundaryDep, no upstreams.ts import).",
+   "flags": [
+    "defer-optional: cache telemetry"
+   ]
+  },
+  "src/outbound-guard.ts": {
+   "status": "read",
+   "role": "W1257.1 configurable outbound egress guard: a deployment declares outbound URL PATH prefixes its credential must never fetch (adapter_config.blocked_outbound, config-over-code — the Z.ai Coding Plan seat blocks the general /api/paas/v4 inference endpoint while a general key keeps it, never a hardcoded all-keys ban)",
+   "summary": "Runs in defaultFetch AFTER the adapter-built URL (post path_rewrite) BEFORE fetch — throws OutboundBlockedError (RouterError kind bad_request 400, NON-retryable: the ladder benches the rung and walks on) before any network side effect. Wire naming: the ingress POST path decides the wire (/v1/messages anthropic, /v1/responses responses, /v1/chat/completions openai; default openai) — never request headers; corrections are per-wire FULL URLs so the error URL always matches the actual wire; message names the Coding Plan destination + other wires. Path-prefix match: exact | trailing-slash prefix | prefix + '/'. validateOutboundGuardConfig at pool load: startup-fatal on malformed rows (absolute paths, corrections keyed by known wire with absolute http(s) URL), like the egress law before it.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/drain.ts": {
+   "status": "read",
+   "role": "the ONE gateway drain state (W1156): a planned redeploy is positively known ONLY from beginDrain via EXPLICIT deploy intent (root ruling 2026-10-22: a bare SIGTERM is never proof — an unexpected shutdown keeps its real cause, no gateway_restarting terminal); every other break keeps its real cause — the drain never labels a break it did not observe",
+   "summary": "beginDrain idempotent (first reason wins; second signal null no-op), arms an unref'd force-exit backstop at the grace deadline (a drain can never outlive its grace), notifies listeners once (failing observer never blocks). onDrain: a listener registered WHILE draining fires immediately (a stream born mid-drain gets its terminal at once). drainTerminalFrame: dialect-correct SSE terminal (anthropic event:error {type:'error'} vs openai bare data server_error), code gateway_restarting + request_id + retry guidance; trace stamps regex-validated (32-hex id, sane hub) with fleet_trace hops entry status 200. writeDrainTerminal (W1156): enqueue + ctl.terminate() — the ONLY termination TransformStreamDefaultController has in Bun (typeof close === 'undefined'; probe 2026-10-22); a drain racing a closed/errored stream throws, delivers nothing, receipt keeps the real cause. resetDrainForTest seam clears the backstop timer (a leaked timer would kill the test run).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/cost.ts": {
+   "status": "read",
+   "role": "W1132 per-request cost: versioned model price table + pure per-row computation the ledger applies at write time (Helicone pattern: every priced row stamps the rate version, historical repricing possible); rates are OPERATOR CONFIG (routing-policy.json cost block), never code, never guessed",
+   "summary": "Never-silently-zero law: a model without a rate row is cost-UNSUPPORTED (CostOf null — ledger stores NULL, every reader treats as unknown spend); a declared $0 rate is a legitimate stamped zero; an undeclared cache discount bills cache tokens at FULL input rate (no savings claimed until the operator measures one — ZAI prefix caching stays unpriced-as-savings). in_tok_includes_cache switch: true = OpenAI shape (in_tok INCLUDES cached subset — cached bills at multiplier, remainder at full rate, clamped), false/absent = Anthropic ADDITIVE shape. Multipliers bounded [0,10] (multOf default 1 = conservative no-savings). buildCostPolicy fail-CLOSED like provider_pools: malformed table refuses startup loudly (version REQUIRED — a table without a version prices NOTHING: cannot stamp, will not guess); validRates is the read-time backstop.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/budgets.ts": {
+   "status": "read",
+   "role": "O(1) in-process budget books (W143 speed §3): rpm/tpm as 60-slot per-second rings with incrementally-maintained rolling sums, token budget as one integer per key — a check is field loads + compare, no allocation beyond the verdict, no scan, no I/O",
+   "summary": "Limits from policy budgets: block (key '*' = default book, named key = sha-prefix ledger id overrides). advance() slides the ring zeroing evicted slots keeping sums exact (gap >= 60 = fill(0) fast path). check() verdicts: rate_rpm | rate_tpm | budget_spent; spendRequest/spendTokens after a passing check (tokens also decrement lifetime remaining). Enforcement wiring is W141's surface — this module is the constant-time engine. NOTE: distinct from src/gov/budgets.ts (enterprise token-budgets ledger) — duplication-suspect pair with different jobs (in-process rings vs durable org budgets).",
+   "flags": [
+    "defer-optional",
+    "dup-suspect: vs gov/budgets.ts (different jobs — in-process rings vs durable org token budgets)"
+   ]
+  },
+  "src/cache-fingerprint.ts": {
+   "status": "read",
+   "role": "W926 privacy-safe prefix fingerprints classifying per-lane cache misses: W914/W915 saw misses land 17-20s after hits on the same model — indistinguishable from tokens alone; a keyed digest of the EFFECTIVE prefix (post-alignment system/tools/packet/breakpoint bytes as delivered upstream) separates provider-eviction from changed-prefix",
+   "summary": "Classification: same digest + miss = provider-eviction/expiry (dropped an entry we re-verified byte-stable); different digest + miss = changed-prefix; no prior reference / unobserved usage / no reported cache write = null (never guessed). Privacy: HMAC-SHA256 keyed with process-random key (BUCKLE_FINGERPRINT_KEY env pin across restarts), truncated 16 hex = 64 bits — prompt bytes never logged, digest equality the only signal leaving the process. Prefix bounds: deepest explicit cache_control marker (its exact POSITION rides the digest — moving a marker moves the effective prefix even with identical bytes); no marker = implicit openai-family prefix = whole message sequence. stable(): key-order-stable canonical serialization (arrays keep order — message order is semantic). PrefixLedger: single-slot per (boundary, lane) — banked on hits and confirmed writes (observe), miss classified against it (cause); LRU-bounded 4096 like the affinity memo.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/usage-record.ts": {
+   "status": "read",
+   "role": "one completed proxied request -> ledger row + servicemon token counters + per-lane cache telemetry (honest unknown everywhere); the single settle seam joining audit row (W457 cache_r/cache_c), OTLP usage span (W2788), lane cache boundary row (W458.4), W926 miss classification, and the W2790 token-budget settle",
+   "summary": "usage null = honest unknown: requests column still increments, token columns contribute NOTHING, servicemon gets explicit buckle_usage_unknown_total counter — never estimated, never faked as real zeros. W926 miss classification: a miss WITH a reported cache write (cache_r===0 && cache_c>0) is comparable — provider just wrote this exact prefix, banked reference equal = provider-eviction, differing = changed-prefix; hits and confirmed writes re-bank the reference. Lane row rides boundaryOfDeployment(head.dep) — the boundary actually ridden. W2790: real usage joins the monthly book at settle; the ingress reservation already holds the weighted input estimate so the book errs HIGH (never under); usage null settles nothing. ctx.model names the model so the ledger prices at enqueue (W1132).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/hop.ts": {
+   "status": "read",
+   "role": "W706 hop attribution: verified origin hub vs immediate peer so a RELAYED request bills once; baggage header is the carrier (fleet allowlist in trace.ts gates keys); the hub seeing NO peer marker is the origin = designated billing source, every downstream hop marks its audit row forwarded",
+   "summary": "Baggage keys: fleet.origin.hub.id / fleet.peer.hub.id / fleet.lane.id (lane = telemetry only, same slug as /w/<lane>, bounded 128 + validated charset). hopBaggageOf: origin passes through (self when none received), peer seat CLAIMED (self), other allowlisted entries preserved — fleet-internal legs only (buckle-marked deployments, authenticated); baggage never rides external-provider egress. HopKind origin|forwarded rides route_audit.hop — 'origin' rows billable, 'forwarded' rows per-hop evidence never billed again. W3C list parse: value = segment before ';', length-bounded 128.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/admission.ts": {
+   "status": "read",
+   "role": "W450 bounded RPC admission for the proxy path: every in-flight upstream RPC (headers through FULL body drain) holds one slot — the pass-through socket lives as long as the client keeps reading, so the bound covers the whole stream not just the walk",
+   "summary": "Past cap: 429 + Retry-After (belt router-shim precedent — the router never queues blindly; client retries or its ladder falls through). DEFAULT_MAX_INFLIGHT 256, RETRY_AFTER_S 2. BUCKLE_GROUP_CAPS 'group:4,...' parse (malformed entries DROPPED never fatal, cap regex [\\w.-]+:\\d{1,4}). W1118 #55680: per-group cap AND global max BOTH bind — a group cap above max never multiplies the global bound (MAX_INFLIGHT=1 admits one across ALL groups). tryAcquire returns a release fn (idempotent) or null; counts map deletes empty group keys.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/usage.ts": {
+   "status": "read",
+   "role": "usage extraction from response payloads, both dialects; absent usage = honest unknown (callers record requests without token columns rather than estimating)",
+   "summary": "OpenAI shape: usage.{prompt_tokens|input_tokens, completion_tokens|output_tokens, prompt_tokens_details|input_tokens_details.cached_tokens} — cache_c always 0 (no write field). Anthropic shape: {input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens}; SSE sniffer unwraps (message_start .message vs message_delta flat .usage) and feeds the FLAT object here. hasTokens gate: all-zero usage returns null. cacheUsageReported: cache support observed ONLY via an explicit field — a zero count without it is NOT a cache miss. cacheWriteReported: anthropic-only (cache_creation field); a cache READ field does not imply writes are reported.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/count-tokens.ts": {
+   "status": "read",
+   "role": "local EXPLICITLY approximate count for configured models whose upstream dialect has no native Anthropic count_tokens endpoint — never calls an unsupported provider path, never records the estimate as billed usage",
+   "summary": "CountTokensBodySchema zod passthrough (model + messages). inputTokens = max(1, tokensEstimate(bytes/4 of the whole body)). Full audit decision row: decision 'local_estimate', latency_class 'unproven', allow_cloud false, why names the approximation; auditOutcome 200 ok. Response header x-klh-token-count-method: estimated-bytes-v1 — the honest marker. stamped() wire stamp with attempts 0.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/served-identity.ts": {
+   "status": "read",
+   "role": "the served-model/provider identity trust rule: ONLY an explicitly configured, authenticated Buckle peer (dep.buckle) is authoritative for its delivered route via x-klh-served-* response headers; client headers and wire dialect NEVER name a provider",
+   "summary": "servedIdentity: peer headers (bounded regex, model charset allows ./:@+ up to 256) ?? configured deployment fields; evidence = peer | configured | unknown. stampServedIdentity sets/deletes the three headers (null deletes). requestedEffort: output_config.effort ?? body.reasoning_effort, whitelisted to the 8-level enum (none..ultra).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/worker-inventory.ts": {
+   "status": "read",
+   "role": "relay to the desktop runner's /v1/workers inventory listener — LOOPBACK ONLY (http + 127.0.0.1/[::1] literal origin, no userinfo/search/hash, pathname '/'): the listener shares the gateway host, so the caller bearer never leaves the host",
+   "summary": "resolveWorkerInventoryOrigin: explicit inventoryPort wins (validated 1..65535, must differ from Buckle's own port — throws); else desktopOrigin only if loopback http. workerInventoryRelay: re-validates literal loopback at construction; forwards the caller's authorization VERBATIM (bearer stays on loopback), redirect: error, 1.5s timeout, response body passed through with json/no-store; 401 problem without bearer, 503 problem on listener miss.",
+   "flags": [
+    "defer-optional: desktop runner"
+   ]
+  },
+  "src/lane-wrap.ts": {
+   "status": "read",
+   "role": "W2 caveman adopt 2: ephemeral config-file injection for codex-class lanes — buildWrap() is a pure plan, materializeWrap() writes the temp config home (dir 0700, file 0600) the recipe's configHomeEnv points at",
+   "summary": "The user's real config is NEVER read or mutated by the lane path — self-contained configs by design (deep-merging user TOML needs a parser dep; deliberate non-goal). Rendered configs reference secrets by ENV NAME only (env_key = 'LITELLM_KEY'), never values — codex reads the env itself. Null plan for recipes without an ephemeral block (pure-env recipes like claude/copilot don't wrap). materializeWrap: mkdtemp + chmod 0700, write 0600 + chmod again (umask can mask the write mode); fails closed — any error propagates, a lane never launches half-injected. Persistent enable stays the explicit onboard step (bin/onboard.ts configEdit); temp home cleaned by the launcher (bin/lane-wrap.ts --run wires cleanup to child exit).",
+   "flags": [
+    "defer-optional: lane tooling"
+   ]
+  },
+  "src/log.ts": {
+   "status": "read",
+   "role": "W2173.7 the ONE leveled-logger seam for the fleet (a single module both packages ride); levels filtered by BUCKLE_LOG_LEVEL (default info), one line per event '<prefix> <LEVEL> <message>'",
+   "summary": "warn/error ride stderr, debug/info stdout — a boot log and a failure log must never share a pipe. LEVEL_ORDER ascending; filter = at-or-above configured level; unknown/absent env keeps default. createLogger(scope) binds prefix 'buckle:<scope>'; LogSink seam for tests.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/trace-url.ts": {
+   "status": "read",
+   "role": "W2268 clickable error traces: the bounded trace_id/error-hop contract gains ONE client affordance — a details URL the Fleet console serves; operator config (BUCKLE_TRACE_URL_BASE), provider-neutral, HTTPS anywhere or plain-HTTP-loopback-only, never a provider URL, never a fabricated page",
+   "summary": "Inert by default (no base = null — like the other provider-neutral knobs). Base validation: <=512 bytes, no userinfo/search/hash, acceptableOrigin https|http-loopback (console perimeter guards the page). traceUrl(): trace id charset-checked 32-hex FIRST, fixed pathname /console/trace, id as the only query param, both produced by the URL API's own encoding — deterministic, no hand-built concatenation, no client steering of path/query.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/copilot-hub-routes.ts": {
+   "status": "read",
+   "role": "Mac/hub split routing: keep Copilot model names on the Mac but send their first hop through the Docker IKEA Buckle — the hub owns the provider credential and model catalog",
+   "summary": "preferCopilotHub(local, hubGroups, hubUrl): every hub group gains a PEER deployment row FIRST ({url: hubUrl, buckle: true, dialect/adapter by claude- prefix (anthropic vs openai-compat), model: <group>, api_key_env: IKEA_HUB_KEY}), with existing hubUrl/api.githubcopilot.com rows filtered out; local fallback rows stay after. Throws when the hub has no groups or Mac upstreams are missing hub group names (fail-closed sync).",
+   "flags": [
+    "enterprise-only: IKEA hub split",
+    "defer-optional"
+   ]
+  },
+  "src/provider-admission-metrics.ts": {
+   "status": "read",
+   "role": "Prometheus text render of provider-admission-core pool snapshots — configured account-pool IDs are the ONLY label: never requests or keys",
+   "summary": "13 fields (active/queued/outstanding, base+adaptive gap ms, adaptive concurrency + ceiling, concurrency_limited/recovery totals, rate_limited/recovery totals, feedback epoch); _total suffix = counter else gauge; label value escaped (backslash, newline, quote); non-finite/negative values skipped (honest omission).",
+   "flags": [
+    "defer-optional: metrics"
+   ]
+  },
+  "src/stack-config.ts": {
+   "status": "read",
+   "role": "W230 buckle's zero-dep window into the ONE stack config (~/.config/klh/stack.json, mode 600, never committed; KLH_STACK overrides path; W1253 Amendment A: fleet config is JSON — legacy stack.yaml name parses when content is JSON)",
+   "summary": "loadExecutors reads only the executors rows (per-executor anthropic_base/openai_base + model pin) the onboard + lane-wrap surfaces consume; env and CLI flags stay the override layer. Missing/malformed/oversized (>1MiB) config degrades to {} — a bad config NEVER blocks onboarding.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/provider-pressure.ts": {
+   "status": "read",
+   "role": "W1257 provider-pressure classification: a configured concurrency code ALONE cannot prove concurrency — Z.ai's 1302 says 'Rate limit reached for requests' and collapsed the live spoke pool to 1/50",
+   "summary": "providerPressureOf: 'concurrency' ONLY when the code is in policy concurrencyErrorCodes AND the provider's own message carries explicit evidence (/\\bconcurr(?:ent|ency|ing)\\b/i); else 'rate'. assertProviderConcurrencyErrorCodes: startup-fatal validation — at most 16 UNIQUE bounded tokens (charset [A-Za-z0-9_.:-], 1-64).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/error-response.ts": {
+   "status": "read",
+   "role": "the buckle-GENERATED error body + scrub rule (W1259 extraction from handlers.ts — the file sat one line under the 1500-line hard limit, so the error face moved to its own module)",
+   "summary": "errorResponse: problem+json with stable code in `code` (http-citizenship); default code buckle.<slug by status>; provider-suffixed belt relay line when a provider code rides ('belt: <provider>.<code> — <why>'). scrubText: /Users/<name> paths -> ~ (key material never leaves through an error). Two DOCUMENTED exceptions stay documented: upstream pass-through errors ride the upstream body verbatim (client-error), mid-stream failures speak SSE (status already sent).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/copilot-pat.ts": {
+   "status": "read",
+   "role": "W2868 the Copilot PAT resolver, extracted from bin/copilot-seat-proof.ts so every pinned-relay probe shares one source",
+   "summary": "Resolution order: explicit env GITHUB_COPILOT_PAT, then the CENTRAL provider profile bound to the same name (stack.json providers via @klh/speedy provider-config). The secret stays inside the calling process and is never printed (W1124.8.4 law). COPILOT_PAT_MISSING_MSG names both remedies.",
+   "flags": [
+    "defer-optional: copilot seat tooling"
+   ]
+  },
+  "src/forced-failover-drill.ts": {
+   "status": "read",
+   "role": "bounded disposable routing drill: uses the PRODUCTION Router over the operator's configured group ladder but replaces every network call with deterministic failures/success — no provider or live lane touched",
+   "summary": "Validates the plan fail-closed first: groups exist in pool, fallback is IN the configured ladder, maxAttempts >= 2 covers the fallback walk ((retries+1)*firstRungs), maxWallMs positive. Router seams fully deterministic: now() advances by simulated wait, rng()=0, probe()=null, sleepMs accumulates and throws past the wall budget, fetchImpl returns synthetic 429/503 (+retry-after) for the primary group and an ok response for the fallback (dialect-correct body). Wire attempts = receipts filtered hop!=='local-admission' paired with attemptedGroups. ok = delivered on the fallback tier without abort.",
+   "flags": [
+    "defer-optional: drills"
+   ]
+  },
+  "src/shadow-week.ts": {
+   "status": "read",
+   "role": "the W144 shadow-week monitor's importable logic: bench-row parsing, scenario-keyed day diff, bounded 7-day log window (the operator face is bin/shadow-week.ts)",
+   "summary": "parseBenchRows: NDJSON, torn final line tolerated (crash mid-write). diffDay flags: gate-fail, gate-budget (p50>=5ms || p95>=15ms — wait, budgets are 5/15 in the GATE_BUDGET const), byte-identity<100 (except failover-mid-stream), tolerance p50/p95 >2x-prior, litellm up->down / down->up, missing-scenario; HARD flags (gate + byte-identity + budget) vs soft. First day (no prior) recorded never flagged. boundKeep: 7-day window, torn/foreign lines dropped.",
+   "flags": [
+    "defer-optional: shadow monitoring"
+   ]
+  },
+  "src/affinity.ts": {
+   "status": "read",
+   "role": "W237 prefix-affinity dispatch: lanes sharing a packet prefix ride the same provider identity within a TTL window so the provider's KV cache is hit instead of rebuilt; key = sha256-12 of the packet block's bytes (byte-stable packets — the preseed render law — hash equal when the window serves the same bytes)",
+   "summary": "applyAffinity ONLY reorders the W140 selection (never injects a candidate), never touches a `must` hint (law 2), skips a bound target that left the selection or benched (unhealthy), and preserves the SAME selection object when nothing applied (identity for skip accounting). W458.4 anti-collapse: reordering may never change the rideGateKeyOf boundary (account, region, family, model) — cross-credential/region steering refused, same-account (fleet workers, pool replicas) passes. PrefixAffinity memo: LRU-bounded 4096, TTL default 300s (= preseed TTL), bind refreshes recency, expired entries dropped on probe. No packet block = no key = zero touch (pass-through doctrine). BUCKLE_AFFINITY=off kill switch, BUCKLE_AFFINITY_TTL_S override.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/complexity.ts": {
+   "status": "read",
+   "role": "belt's 7-dimension complexity scorer, ported VERBATIM from bin/router-shim.ts (zero LLM: regexps + arithmetic only, W136 §5.1) — weights/thresholds and the code-presence clamp unchanged; input = flattened user-message text capped at first 8000 chars",
+   "summary": "Tiers: SIMPLE <0.15 <= MEDIUM <0.35 <= COMPLEX <0.6 <= VERY_COMPLEX. Dimensions x weights: tokenCount (words/200) .15, codePresence .8x .25, reasoningMarkers (count x .25) .25, technicalTerms (.2 each) .1, simpleIndicators NEGATIVE -.3 x .1 (clamped to >= 0 after), multiStep .3 x .05, questionComplexity .4 x .1; clamped 0..1 before the weighted sum. Code clamp LAST: codePresence > 0.5 -> MEDIUM floor (code tasks always reach the coder). Deterministic, microseconds.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/pool-warm.ts": {
+   "status": "read",
+   "role": "the warm-rate gate (W143 speed §2): Bun fetch already pools keep-alive sockets per origin (64-slot idle pool, oven-sh/bun#42608); buckle adds the observation seam + boot pre-warm",
+   "summary": "Cold is a HEURISTIC (Bun exposes no pool events): first use since boot/rebind or after an origin re-appears; the speed doc blesses exactly this (§6 idle-eviction timing unverified — shadow data will size it). observe(origin) counts the cold transition exactly once per origin then stays silent (returns cold at the transition); pool_refill event via sink (servicemon or bench collector). warmRate = 1 - refills/observes (null with no observations — honest). prewarm: one GET /v1/models per deployment origin, concurrent, never throws; ANY response (even 401/404) establishes the socket and marks warm WITHOUT a refill; network-error origins stay cold and their first real request pays (and counts) honestly. reset() bench seam.",
+   "flags": [
+    "defer-optional: perf"
+   ]
+  },
+  "src/chatgpt-bridge.ts": {
+   "status": "read",
+   "role": "native ChatGPT Responses fallback: LiteLLM's converter extracts only a contiguous LEADING string SYSTEM run into instructions — developer messages retain their role and END that extraction prefix; later/non-string system stays a system input item which the backend refuses",
+   "summary": "chatgptInstructionPlan: passthrough | normalize (pure text blocks flattened, role+order retained, flattened count) | refuse (typed reason: mid-turn-instruction | non-text-instruction-content | system-after-developer | system-only-input). Never folds, demotes, or drops instructions. chatgptSafeBody: null on refuse = the hop is INELIGIBLE (skip-not-fail; the ladder falls to the next rung verbatim — the untouched request). isChatgptGroupModel: 'chatgpt/' prefix = the native provider route (mode responses; group name == wire id or dep.model carries it).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/error-detail.ts": {
+   "status": "read",
+   "role": "upstream error DETAIL extraction: walks nested error/cause chains (max 5) collecting records root-first, plus LiteLLM's embedded provider-error JSON (the provider's structured error serialized into its message before '. Received Model Group=' context) — parses that bounded JSON, never guesses codes from prose",
+   "summary": "clean(): 4096-slice, /Users/<name> -> ~, sk-/bksk_/ghp_ tokens + Bearer values redacted, final 1024 slice. pick walks records (root-first) over message/detail/why/title, type, code (string or finite number), trace_id. type sanitized: generic values (error, response.failed, response.incomplete) and URLs demote to api_error.",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/trace.ts": {
+   "status": "read",
+   "role": "W3C Trace Context helpers (W461 stage 1): traceparent parse/build + the Fleet baggage allowlist — correlation ONLY, a trace id is never identity, authz, or a credential",
+   "summary": "parseTraceparent: canonical lowercase, all-zero ids rejected, version ff rejected, malformed input NEVER propagates. childSpanOf: same trace id, FRESH span id per hop/per-outbound-attempt (OTel HTTP resend ordinals); invalid parent roots a fresh trace. FLEET_BAGGAGE_ALLOWLIST = exactly 5 keys (lane/project/hub/origin-hub/peer-hub) — the only baggage that may ride a TRUSTED hop; unparseable values dropped whole. stripPrivateTrace deletes baggage at external-provider egress BY CONSTRUCTION in wire.ts (providers see traceparent only).",
+   "flags": [
+    "core"
+   ]
+  },
+  "src/pipeline-wire.ts": {
+   "status": "read",
+   "role": "W5 prompt pipeline IN — the wire seam: response-side sideband called after the usage row lands on NON-STREAMING proxied responses; NEVER mutates the served bytes (the byte-identity law outranks the pipeline)",
+   "summary": "condenseInbound: never-declared = ZERO TOUCH not metered; every skip has a NAMED reason (unavailable | policy | no_text | too_large 256KiB default | no_gain). One metered aid event per declared request (condense-in injected/skipped) + servicemon counter buckle_pipeline_condense_total {outcome, reason}. Stores via CondenseStore.put (rid-keyed raw one GET away); DEFAULT-OFF via aidsPolicy['condense-in'].default.",
+   "flags": [
+    "defer-optional: aids"
+   ]
+  },
+  "bin/capacity-ramp.ts": {
+   "status": "read",
+   "role": "W1266 reusable opt-in capacity benchmark: never runs without KLH_CODING_PLAN_E2E=1; ramps concurrent requests per configured leg (preset coding-plan = the three official Z.ai Coding Plan endpoints; --legs name=protocol@base adds others); buckle legs ride a minted scoped key revoked at the end (fail-closed: a stranded key exits 3)",
+   "summary": "Keys from --key-env or raw --key-file (default ~/.claude/local-llm/zai.key), printed ONLY as sha256-10 fingerprint. Honest counters (#69069): 2xx without a protocol terminal is NEVER success; terminal verdict from SSE events beats status (Responses refusals ride HTTP 200 inside response.failed); terminal scan over the FULL body (terminal frames ride the stream TAIL — a 64KB head clip read terminal=null on every row); Z.ai anthropic-compat drops message_stop on thinking-only max_tokens truncations -> stop:<reason> is itself a terminal. peakProducing (#69068) = peak DISTINCT requests producing parsed model deltas in one ABSOLUTE wall-clock second (per-request-relative buckets cannot establish global overlap and bucket-fill counts stalled streams). endpointOf retains the base pathname prefix (new URL '/v1/messages' discards /api/anthropic — every direct request 404s, live 2026-10-24); hop=true adds /v1 for buckle legs. Truly-concurrent sockets: Node Agent keepAlive=false maxSockets=level. Double timeout: req.setTimeout = socket INACTIVITY (continuous SSE never trips) + --timeout-ms TOTAL wall deadline (timed-out rows errCode=request_timeout counted apart, never a provider limit). Long-work prompts: synthetic exercises, MARKER-<seq> on first line (survives sample truncation), validated in text OR reasoning samples. Admin slots before/after each level per hop, each hop carries its OWN credential env name (url@ENV). mintedOf parses key_id (live 2026-10-24: parsing 'id' left revoke URL invalid, scoped key stayed ACTIVE). Rows + summaries as NDJSON evidence; markdown report table on stdout.",
+   "flags": [
+    "defer-optional: live benchmark tool"
+   ]
+  },
+  "bin/bench.ts": {
+   "status": "read",
+   "role": "the W143 8-scenario speed bench (speed §5): buckle under test in-process against deterministic mock upstreams, an interleaved DIRECT-to-mock control per iteration — router-added latency = through-buckle − direct (full proxy path; mock time cancels); byte identity sha256(received) vs mock bytes; gate p50<5ms p95<15ms",
+   "summary": "Scenarios: stream-short, non-stream-short, concurrent-50 (4-parallel mixed 128/256/512-token batches paired vs control), tool-call, must-503 (law 2: must with no fit = machine ERROR 503 no_healthy_fit, absolute latency no control), failover-pre-byte (primary 502 → ladder → fallback, deltas vs direct healthy fallback), failover-mid-stream (mock aborts after first byte — ECONNRESET at the client IS the failure mode; ship check <50ms not gate), 429-walk (retry-after + U[0,1) jitter real sleeps, small n, semantics are law — record only), cold-vs-warm (dedicated instance, boot prewarm settles, poolWarm.reset() makes the next dispatch pay + count the cold connect, then 100 warm t1s + warm_rate_pct from poolWarm.stats), flush-lag (full stream then poll the ledger db until the usage row lands — async flush 5s/256-row window supersedes the doc's 1s target), budget-check (20k BudgetBooks.check over 200 live books — O(1) µs/check <5), litellm baseline (record-only, availability-aware). BUCKLE_AUTH=off (governance is W141's surface, not what the speed bench measures). Conf fixtures JSON per W1253. JSON lines on stdout (one per scenario) + human table stderr + --out NDJSON append.",
+   "flags": [
+    "defer-optional: benchmark tool"
+   ]
+  },
+  "bin/onboard.ts": {
+   "status": "read",
+   "role": "W227-A3 zero-dep interactive onboarding: detects coding agents known to src/agents.ts, raw-mode numbered checkbox picker, plan summary, typed 'yes' confirm gate — only then writes",
+   "summary": "Probes NEVER hit a paid endpoint: --verify refuses non-local base URLs outright (127.0.0.1/localhost/::1 only); anthropic-dialect probe = 1-token POST /v1/messages, else GET models; any answer <400 or 401/403 = gateway alive (auth required, reported not fatal); 404/410 = no such route. Bounded reads everywhere (streams law): CLI probe 64KiB cap cancels the stream, configs >1MiB refused. Config edits land with sibling .bak; non-empty file refused without --force (anchor already present = left as-is); empty file written directly. ~/.zshrc only via an explicit ask ('e' everywhere mode): marker-wrapped (# >>> buckle reroute) idempotent block, existing marker = skip. --dry-run prints the plan for ALL recipes writing nothing. Exit 1 on refusals, 130 on Ctrl-C ('nothing written' messages are literal).",
+   "flags": [
+    "defer-optional: onboarding tool"
+   ]
+  },
+  "bin/preflight.ts": {
+   "status": "read",
+   "role": "W1094 release preflight: validate the LIVE routing ladder config (upstream pool + gateway policy + LiteLLM engine config) through route-ladder-validator before a deploy/activation — exit 0 clean · 1 findings · 2 live config unresolvable",
+   "summary": "Live-config resolution (review #55582): DEFAULT reads the machine runtime upstreams (~/.claude/local-llm/upstreams.json — the file the spoke actually serves) with BUCKLE_UPSTREAMS merging over it, exactly the server's chain; a missing live file is FAILURE exit 2, never a silent fallback to the loopback-only committed rows (--upstreams or --allow-committed for dev posture). Hubs from the ONE stack config: every configured hub registers as a buckle service; the belt swarm's pinned specialist ports (8901-8913) are THIS device's terminals only — hub inventories never vouch for another device's ports (trace b73f8a2d, review #55637); a hub's terminals are only the loopback leaves its own inventory declares. Hub policy = committed routing-policy.json with hub.buckle_gateway shallow-spread (renderHubPolicy's merge, mirrored). Engine honesty (W1253 A): JSON engine config validated in full; the YAML-rendered litellm.yaml (deploy contract) registers the engine UNVERIFIED; hub-side engines (zai_litellm_url) are never credited this snapshot's config. unverified_* findings are REPORTED never silently green but non-gating (the proof lives on another device). Findings name groups, origins and codes — never key material.",
+   "flags": [
+    "core"
+   ]
+  },
+  "bin/gen-openapi.ts": {
+   "status": "read",
+   "role": "W1303.4: emit the buckle OpenAPI document from the wire schemas (zod is THE definition via z.toJSONSchema target openapi-3.0; this tool renders it, never the reverse) — generated file docs/openapi.json",
+   "summary": "Three modes: bare write docs/openapi.json; --check push-gate mode (exit 1 + STALE message on drift vs committed file, exit 0 current); --stdout print write nothing. Document covers the dual-dialect proxy faces (/v1/messages + count_tokens, /v1/chat/completions, /v1/responses path-forwarded verbatim), /v1/models, and the /v1/admin governance API (keys issue/list/verify/revoke with key_id pattern ^[0-9a-f]{12}$, teams, drain with 409 already_draining). Errors are problem+json with the buckle codes named per status.",
+   "flags": [
+    "core"
+   ]
+  },
+  "bin/copilot-seat-proof.ts": {
+   "status": "read",
+   "role": "W695.6.2 live proof: a lane-shaped /v1/messages request WITH tools rides an in-process buckle onto the REAL GitHub Copilot seat (claude-* groups in machine upstreams.json); PASS = a tool_use block comes back through the full stack",
+   "summary": "PAT resolves via src/copilot-pat.ts (W1124.8.4/W2868 single shared resolver: env then the CENTRAL provider profile bound to GITHUB_COPILOT_PAT; implicit copilot.key file read retired); the secret never leaves the process nor is printed. Fresh bkroot_ root key in-process; lane key minted (buckle:proxy:WRITE_) and revoked at the end. Legs: must-cloud (x-belt-hint 'must cloud') and --pinned hintless pinned explicit-model leg (W2868 / NEED_DECISION #48672 evidence): under the W209 escalation gate the hintless pinned all-cloud group refuses at attempts=0 — GATE_REFUSAL is captured AS the evidence (a tool_use there means the gate is open/bypassed). Bounded client timeout 240s (W695.6.1 uncapped retry-after floor hazard). Verdicts PASS/QUOTA/GATE_REFUSAL/FAIL; exit 0 only on the expected shape. NOTE: duplicate `lane key minted` console.log + mint parses id|key_id and key|token|secret — small redundancy, harmless.",
+   "flags": [
+    "defer-optional: live proof tool"
+   ]
+  },
+  "bin/eval-models.ts": {
+   "status": "read",
+   "role": "W424 powered model-swap eval CLI: paired A/B on shared seed-pinned tasks (n>=130/shape -> ±7pt, POWER_N default), computed answer keys, per-shape Wilson 95% + exact McNemar, owner abstain rule (overlapping arm intervals = tie -> cost per resolved task decides, lesson.eval-power-discipline)",
+   "summary": "Feeds buckle prefs + dispatch model picks — the YAML/prefs stay operator-owned: this tool produces the EVIDENCE, never writes config. Arms pinged first (unreachable = exit 1). Shapes code,menial,reasoning,danish over the shared eval/ kit (makeTasks computed keys, runArm temp-0 non-stream, aggregateShape). --quick = n 8 repeats 1. One JSON report line stdout (ts/seed/n/repeats/arms/shapes), human table stderr, --out per-task NDJSON sink (sink failures never kill the run), --report writes the same JSON to a file.",
+   "flags": [
+    "defer-optional: eval CLI"
+   ]
+  },
+  "bin/shadow-week.ts": {
+   "status": "read",
+   "role": "the W144 shadow-week monitor (launchd-friendly, StartInterval daily): runs the W143 bench (n=600), diffs the day's bench JSONL against the prior day's (scenario-name keyed, tolerance flags on gate metrics), appends a bounded 7-day shadow-week log",
+   "summary": "LiteLLM baseline recorded honestly — a down fallback is a recorded state, never a faked baseline (litellm_available in the day row). Library logic (parseBenchRows torn-line tolerant, diffDay gate-budget 5/15ms, dayKey, boundKeep 7-day) lives in src/shadow-week.ts; this bin is the launcher/orchestrator. Bench rm-first so re-runs are idempotent; bench failure recorded honestly on stderr. One authoritative day row per date — later runs REPLACE the earlier. Hard flags (gate regression, byte identity <100, bench failure) exit 1 so a launcher notices; soft flags (tolerance drift, availability change, shadow /status probe) report but exit 0. First day = no prior-day diff, baseline begins today. Human summary on stderr, stdout stays clean for launchd.",
+   "flags": [
+    "defer-optional: monitor tool"
+   ]
+  },
+  "bin/lane-wrap.ts": {
+   "status": "read",
+   "role": "W2: launch a coding-agent lane with an ephemeral config home (caveman adopt 2) — the agent's real config is never touched; the temp home (dir 0700, file 0600) carries only env-name secret references, never values",
+   "summary": "Plan/execute split over src/lane-wrap.ts (buildWrap + materializeWrap). No ephemeral config for the agent (pure env reroute) = exit 1 printing the exports instead. Without --run the plan materializes and eval-able exports print (cleanup is yours: rm -rf <home>); --dry-run writes nothing; --run spawns the child with recipe env + wrap env merged, inherits stdio, and removes the temp home when the child exits. Model chain: --model flag > stack.json executors row (W230 one stack config; --base-url flag wins, file skipped entirely) > DEFAULT_MODEL. Persistent enable stays bin/onboard.ts's explicit step.",
+   "flags": [
+    "defer-optional: lane tool"
+   ]
+  },
+  "bin/acceptance.ts": {
+   "status": "read",
+   "role": "live acceptance gate: proxied e2e against the local swarm (:8902) — read-only calls only (a small completion + one streaming completion; never restarts, never touches :4100 or LiteLLM)",
+   "summary": "Never-trust-the-configured-port rule: discovers the swarm's REAL model id via GET /v1/models at startup and builds a temp upstreams config for it (JSON per W1253); no models = exit 1. Three gates: (1) non-streaming /v1/chat/completions with content in choices[0].message + usage reported; (2) streaming — byte-plausible SSE (>=2 data: chunks, [DONE] sentinel, content deltas); (3) servicemon surface /status + /metrics. In-memory ledger db; server stopped at the end; PASS or exit 1 naming the leg.",
+   "flags": [
+    "defer-optional: acceptance gate"
+   ]
+  },
+  "bin/route-copilot-via-ikea.ts": {
+   "status": "read",
+   "role": "machine-local, idempotent Copilot cutover: the IKEA hub keeps the Copilot seat while the Mac keeps its existing non-Copilot fallback rungs — preferCopilotHub (src/copilot-hub-routes.ts) installs the peer-first ladder",
+   "summary": "W1253 Amendment A read-both chain: .json law name first, legacy .yaml NAME second (content must already be JSON; real yaml needs the install migrate step — the error names it). Writes are atomic 0600 JSON upserts (tmp file + renameSync + chmod, tmp cleaned on error) to ~/.claude/local-llm/upstreams.json; the backup keeps the ORIGINAL name the file was found under (.json or .yaml) as upstreams.json.pre-ikea-hub, 0600, made once. Dry-run default (prints how many Copilot groups can route through the hub); --apply requires IKEA_HUB_KEY present in the Mac spoke env (regex-checked, never printed) and refuses without the full hub profile + model inventory in the stack config.",
+   "flags": [
+    "enterprise-only"
+   ]
+  },
+  "bin/repo-policy.ts": {
+   "status": "read",
+   "role": "W7 repo-policy gate CLI: run the rows against a repo in view from a terminal — silent when satisfied (one summary line); each found gap prints exactly ONE actionable missing-question",
+   "summary": "With --resolve-facts, fact:<name> policySources expand via the LOCAL coord — owner-report path only, never the wire, never a model context. Exit contract: 0 satisfied, 1 gaps, 2 usage/bad root. --json prints the full report object. Skips print with their named reason. No rows loaded = inert, exit 0 (the policy file is optional machinery).",
+   "flags": [
+    "defer-optional: gate CLI"
+   ]
+  },
+  "bin/latency-report.ts": {
+   "status": "read",
+   "role": "W2247/W2247.1 CLI face: renders the request-size vs headers/first-body latency report from a buckle ledger — read-only (readonly: true Database), never writes; default db rides defaultDbPath() (BUCKLE_DB or the runtime home)",
+   "summary": "Joins route_attempt.transport_json with route_audit.stream_receipt + queue_wait_ms and feeds the src/latency-report.ts analysis. The diagnosis this tool banks (2026-10-29): large request bodies are NOT the headers-time driver (HEADERS metric, r ≈ -0.06 over 132k attempts) — the tail is non-streaming generation time; firstBodyByteMs rendered separately from observed values only (headersMs vs firstBodyByteMs never conflated/backfilled).",
+   "flags": [
+    "defer-optional: report CLI"
+   ]
+  }
+ }
+}

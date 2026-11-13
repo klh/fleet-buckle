@@ -84,7 +84,7 @@ export function bootServer(input: { settings: BuckleSettings; port?: number }) {
               ),
             );
           return done(
-            await forwardChat(settings, metrics, live, principal, req, tp),
+            await forwardChat(settings, metrics, live, principal, req, tp, tokenOf),
           );
         }
       }

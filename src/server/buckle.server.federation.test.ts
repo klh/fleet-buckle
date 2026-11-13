@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { bootServer } from "./buckle.server.main.ts";
 import { loadSettings } from "./buckle.server.settings.ts";
 import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
+import { BuckleProblem } from "../schemas/buckle.problem.zod.ts";
 import { BuckleModelWire } from "../schemas/buckle.model.wire.zod.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));

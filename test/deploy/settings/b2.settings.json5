@@ -13,7 +13,10 @@
       },
       {
         principal: "federation@fleet",
-        scopes: ["models.list", "stats.read", "tree.read"],
+        // models.use: this buckle RECEIVES hop traffic (b1 forwards
+        // mscopilot-model chats here); models.use is checked per hop
+        // against OUR registry
+        scopes: ["models.list", "models.use", "stats.read", "tree.read"],
       },
     ],
   },

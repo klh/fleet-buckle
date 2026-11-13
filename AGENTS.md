@@ -41,7 +41,19 @@ engine already has.
   calls upstream; the graph is acyclic by construction.
 - **Per-hop grants.** A downstream peer's models appear only if the
   requesting principal holds a grant on that peer, checked against that
-  peer's own registry.
+  peer's own registry. The same law governs the HOP: a chat for a
+  peer-origin model forwards verbatim to that peer (`models.use`
+  re-checked THERE — the peer's registry decides, not the head's
+  belief). The peer token (its `token_file`) rides the hop; the W3C
+  trace continues; the serving chain rides `x-fleet-buckle-served-by`
+  (each buckle prepends its label — the client sees `b1,b3`); the
+  ridden hubs ride `x-fleet-buckle-hop-path`, and a hub already on it
+  refuses re-entry (the loop guard — downstream-only by construction,
+  guarded anyway). A 429 at the hop RELAYS with `Retry-After`; any
+  other peer refusal surfaces as an `unavailable` problem NAMING the
+  peer — hop authz is operator-facing, never the client's fault.
+  A peer model outside the requesting grant's `peers` is
+  indistinguishable from an unknown model (404 — no topology leak).
 - Identity is **Entra-mappable, not Entra**: principals
   (`human|developer|agent|service`), groups, per-kind tiers, per-user
   overrides.
