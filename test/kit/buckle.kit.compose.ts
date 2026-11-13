@@ -2,22 +2,11 @@
 // specs always hit the real Docker Desktop topology). One project name,
 // deterministic service set, json output for asserts.
 import { execFileSync, execSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const COMPOSE_FILE = `${ROOT}/deploy/compose.test.yaml`;
 export const PROJECT = "fleet-buckle-test";
-
-/** The stack fixture refuses to mystery-fail: the sidecar image builds
- *  from the fleet-health sibling checkout — point at it or clone it. */
-export function requireHealthSibling(): void {
-  const sibling = `${ROOT}/../fleet-health`;
-  if (!existsSync(`${sibling}/Dockerfile`))
-    throw new Error(
-      `fleet-health sibling missing at ${sibling} — git clone git@github.com:klh/fleet-health.git`,
-    );
-}
 
 export function compose(args: string): string {
   return execSync(
@@ -41,7 +30,6 @@ export function composeOn(
 }
 
 export async function stackUp(): Promise<void> {
-  requireHealthSibling();
   execSync(
     `docker compose -f ${COMPOSE_FILE} -p ${PROJECT} up -d --build`,
     { encoding: "utf8", stdio: "inherit" },

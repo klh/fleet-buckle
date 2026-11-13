@@ -11,8 +11,8 @@
 #   b2 (ms copilot) → peer  b3          carol(all)  sees everything
 #   b3 (zai)        → no peers          alice(b1)   sees openrouter only
 #
-# Requires the fleet-health sibling checkout (the sidecar image):
-#   git clone git@github.com:klh/fleet-health.git ../../fleet-health
+# The fleet-health sidecars build from the PINNED github tag (#v1.0.0)
+# — no local sibling checkout needed anywhere.
 
 services:
   # ── Jaeger: the tracing backend every unit exports to (OTLP) ──
@@ -51,7 +51,7 @@ services:
     volumes:
       - ./engine/openrouter.litellm.yaml:/etc/engine/openrouter.litellm.yaml:ro
   health1:
-    build: ../../fleet-health
+    build: https://github.com/klh/fleet-health.git#v1.0.0
     environment:
       HEALTH_SETTINGS: /etc/health/settings.json5
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
@@ -82,7 +82,7 @@ services:
     volumes:
       - ./engine/mscopilot.litellm.yaml:/etc/engine/mscopilot.litellm.yaml:ro
   health2:
-    build: ../../fleet-health
+    build: https://github.com/klh/fleet-health.git#v1.0.0
     environment:
       HEALTH_SETTINGS: /etc/health/settings.json5
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
@@ -113,7 +113,7 @@ services:
     volumes:
       - ./engine/zai.litellm.yaml:/etc/engine/zai.litellm.yaml:ro
   health3:
-    build: ../../fleet-health
+    build: https://github.com/klh/fleet-health.git#v1.0.0
     environment:
       HEALTH_SETTINGS: /etc/health/settings.json5
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
