@@ -70,12 +70,15 @@ for (const unit of UNITS) {
       models: { id: string; origin: { kind: string; label: string } }[];
     };
     expect(catalog.hub).toBe(unit.label);
+    // carol's view FEDERATES: own ids always present (peers add rows)
     expect(catalog.models.map((m) => m.id).sort()).toEqual(
-      [...unit.catalogIds].sort(),
+      expect.arrayContaining([...unit.catalogIds].sort()),
     );
     for (const m of catalog.models) {
-      expect(m.origin.kind).toBe("provider");
-      expect(m.origin.label).toBe(unit.provider);
+      // own rows carry provider origin; federated rows (carol's view)
+      // carry buckle origin with the PEER's label + url
+      if (m.origin.kind === "provider")
+        expect(m.origin.label).toBe(unit.provider);
     }
 
     // the MITM loop: chat → litellm engine → provider stub (echo).

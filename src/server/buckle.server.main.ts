@@ -11,7 +11,7 @@ import {
   traceIdOf,
 } from "./buckle.server.telemetry.ts";
 import { loadSettings, type SettingsPaths } from "./buckle.server.settings.ts";
-import { buildCatalog } from "./buckle.server.models.ts";
+import { buildFederatedCatalog } from "./buckle.server.models.ts";
 import { forwardChat, problemResponse } from "./buckle.server.forward.ts";
 import type { BuckleScope } from "../schemas/buckle.access.zod.ts";
 import { createMetrics } from "./buckle.server.metrics.ts";
@@ -77,11 +77,13 @@ export function bootServer(input: { settings: BuckleSettings; port?: number }) {
       if (pathname === "/v1/models") {
         const denied = guard("models.list");
         if (denied !== null) return done(denied);
-        return done(
-          Response.json(await buildCatalog(settings, tp), {
-            headers: { "cache-control": "no-store" },
-          }),
-        );
+        if (principal !== null)
+          return done(
+            Response.json(
+              await buildFederatedCatalog(settings, principal, tokenOf, tp),
+              { headers: { "cache-control": "no-store" } },
+            ),
+          );
       }
       if (pathname === "/v1/stats") {
         const denied = guard("stats.read");

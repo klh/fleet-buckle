@@ -32,6 +32,10 @@ export const BuckleGrant = z
   .object({
     principal: z.string().min(1),
     scopes: z.array(BuckleScope).min(1),
+    /** Peer labels whose rows ride this principal's catalog view
+     *  (downstream only). ABSENT = every configured peer; the explicit
+     *  empty list = own rows only (the matrix's alice). */
+    peers: z.array(z.string().min(1)).optional(),
     limits: z
       .object({
         max_concurrent: z.number().int().positive().optional(),

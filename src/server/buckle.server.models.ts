@@ -73,3 +73,64 @@ export async function buildCatalog(
   );
   return { hub: settings.hub.label, models: batches.flat() };
 }
+
+export type TokenReader = (file: string) => string | null;
+
+/** the per-principal VIEW: own rows + downstream peers' rows, filtered
+ *  by grant.peers (absent/empty-handled: default [] means ALL peers —
+ *  zod default; explicit [] in a grant means own only). Pulled with the
+ *  peer token (models.list is checked at EVERY hop). */
+export async function buildFederatedCatalog(
+  settings: BuckleSettings,
+  principal: string,
+  tokenOf: TokenReader,
+  traceparent: string,
+): Promise<BuckleModelsResponse> {
+  const own = await buildCatalog(settings, traceparent);
+  const grant = (settings.access?.grants ?? []).find(
+    (g) => g.principal === principal,
+  );
+  if (grant === undefined) return own;
+  const configured = Object.entries(settings.hubs ?? {});
+  // peers ABSENT = every configured peer; an explicit list (including
+  // the empty list = own rows only) rides exactly those labels
+  const allowed =
+    grant.peers ?? configured.map(([label]) => label);
+  const rows: BuckleModelWire[] = [];
+  for (const [label, peer] of configured) {
+    if (!allowed.includes(label)) continue;
+    try {
+      const headers: Record<string, string> = {
+        traceparent: continueTraceparent(traceparent),
+      };
+      if (peer.token_file !== undefined) {
+        const token = tokenOf(peer.token_file);
+        if (token !== null) headers["authorization"] = `Bearer ${token}`;
+      }
+      const r = await fetch(`${peer.url.replace(/\/$/, "")}/v1/models`, {
+        headers,
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!r.ok) continue; // hop denied/unreachable: that peer's rows stay out
+      // a peer buckle answers {hub, models:[BuckleModelWire]}. Only the
+      // peer's DIRECT rows (origin kind=provider) ride our catalog —
+      // transit copies would duplicate (the TREE shows the depth).
+      // Provenance becomes WHERE WE GOT IT: origin kind=buckle, label.
+      const body = (await r.json()) as {
+        models?: { id?: unknown; origin?: { kind?: unknown } }[];
+      };
+      if (!Array.isArray(body.models)) continue;
+      for (const raw of body.models) {
+        if (raw.origin?.kind !== "provider") continue;
+        const parsed = BuckleModelWire.safeParse({
+          id: typeof raw.id === "string" ? raw.id : undefined,
+          origin: { kind: "buckle", label, url: peer.url },
+        });
+        if (parsed.success) rows.push(parsed.data);
+      }
+    } catch {
+      // dead peer: no rows from it
+    }
+  }
+  return { hub: settings.hub.label, models: [...own.models, ...rows] };
+}

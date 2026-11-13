@@ -5,12 +5,24 @@
   access: {
     principals: [
       { id: "alice@fleet", kind: "human", groups: [] },
+      { id: "bob@fleet", kind: "human", groups: [] },
 
       { id: "carol@fleet", kind: "developer", groups: ["platform"] },
       { id: "federation@fleet", kind: "service", groups: [] },
     ],
     grants: [
-      { principal: "alice@fleet", scopes: ["models.list", "models.use"] },
+      // own rows ONLY — the empty peer list (federated views ride grants)
+      {
+        principal: "alice@fleet",
+        scopes: ["models.list", "models.use"],
+        peers: [],
+      },
+      // own + b3's zai rows — the matrix's openrouter+zai cell
+      {
+        principal: "bob@fleet",
+        scopes: ["models.list", "models.use"],
+        peers: ["b3"],
+      },
       {
         principal: "carol@fleet",
         scopes: ["models.list", "models.use", "stats.read", "tree.read"],
