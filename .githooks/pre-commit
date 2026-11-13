@@ -1,0 +1,3 @@
+#!/bin/sh
+# .githooks/pre-commit — one-line launcher; the law lives in TypeScript.
+exec bun "$(dirname "$0")/../tools/src/buckle.hook.pre-commit.ts" "$@"

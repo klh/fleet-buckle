@@ -1,0 +1,57 @@
+# compose.test.yaml — the DEMONSTRABLE federation topology on Docker
+# Desktop. Three buckles, three stub providers, wiring ONLY.
+#
+#   b1 (openrouter) → peers b2, b3      bob(b1+b3) sees openrouter+zai
+#   b2 (ms copilot) → peer  b3          carol(all)  sees everything
+#   b3 (zai)        → no peers          alice(b1)   sees openrouter only
+#
+# Providers/peers/grants live in settings/*.settings.json5 — NOT here.
+
+services:
+  # ── stub providers (the test kit serves model fixtures) ──
+  openrouter-stub:
+    build: ../test/kit/stub
+  mscopilot-stub:
+    build: ../test/kit/stub
+  zai-stub:
+    build: ../test/kit/stub
+
+  # ── the three buckles ──
+  buckle1:
+    build: ..
+    environment:
+      BUCKLE_SETTINGS: /etc/buckle/settings.json
+      BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+    volumes:
+      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ./settings/b1.settings.json5:/etc/buckle/settings.json:ro
+      - ./keys/.gen:/etc/buckle/keys:ro
+    ports:
+      - "4111:4111"
+    depends_on: [openrouter-stub]
+
+  buckle2:
+    build: ..
+    environment:
+      BUCKLE_SETTINGS: /etc/buckle/settings.json
+      BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+    volumes:
+      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ./settings/b2.settings.json5:/etc/buckle/settings.json:ro
+      - ./keys/.gen:/etc/buckle/keys:ro
+    ports:
+      - "4211:4111"
+    depends_on: [mscopilot-stub]
+
+  buckle3:
+    build: ..
+    environment:
+      BUCKLE_SETTINGS: /etc/buckle/settings.json
+      BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+    volumes:
+      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ./settings/b3.settings.json5:/etc/buckle/settings.json:ro
+      - ./keys/.gen:/etc/buckle/keys:ro
+    ports:
+      - "4311:4111"
+    depends_on: [zai-stub]

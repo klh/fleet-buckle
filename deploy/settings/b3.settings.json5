@@ -1,0 +1,11 @@
+{
+  // b3.settings.json5 — zai provider, no peers (the chain's tail).
+  hub: { label: "b3" },
+  providers: {
+    zai: {
+      url: "http://zai-stub:8080",
+      dialect: "openai",
+      key: "/etc/buckle/keys/zai.key",
+    },
+  },
+}

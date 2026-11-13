@@ -1,0 +1,81 @@
+{
+  "self": {
+    "buckle": { "label": "b1", "url": "http://buckle1:4111" },
+    "models": [
+      {
+        "id": "openrouter/qwen3-coder",
+        "origin": { "kind": "provider", "label": "openrouter", "url": "http://openrouter-stub:8080" },
+        "limits": { "max_concurrent": 40 },
+        "live": { "inflight": 2, "tps": 640 },
+        "meta": { "name": "Qwen3 Coder" }
+      }
+    ],
+    "stats": { "current_connections": 3, "tps": 1020 },
+    "connections": [
+      {
+        "principal": "carol@fleet",
+        "machine": "kk-mac",
+        "inflight": 3,
+        "connected_since": 1763000000000,
+        "last_seen": 1763005600000
+      }
+    ],
+    "peers": [
+      {
+        "buckle": { "label": "b2", "url": "http://buckle2:4111" },
+        "models": [
+          {
+            "id": "mscopilot/gpt-6-astra",
+            "origin": { "kind": "provider", "label": "mscopilot", "url": "http://mscopilot-stub:8080" },
+            "limits": { "max_concurrent": 10, "max_per_ip": 5 },
+            "live": { "inflight": 1, "tps": 380 },
+            "meta": {
+              "name": "GPT-6 Astra",
+              "vendor": "openai",
+              "model_picker_enabled": true,
+              "policy": { "state": "enabled" },
+              "capabilities": {
+                "limits": { "max_context_window_tokens": 200000, "max_output_tokens": 100000 },
+                "supports": { "tool_calls": true, "streaming": true }
+              }
+            }
+          }
+        ],
+        "stats": { "current_connections": 1, "tps": 380 },
+        "connections": [],
+        "peers": [
+          {
+            "buckle": { "label": "b3", "url": "http://buckle3:4111" },
+            "models": [
+              {
+                "id": "zai/glm-5.3",
+                "origin": { "kind": "provider", "label": "zai", "url": "http://zai-stub:8080" },
+                "limits": { "max_concurrent": 45 },
+                "live": { "inflight": 0, "tps": 0 },
+                "meta": { "name": "GLM-5.3" }
+              }
+            ],
+            "stats": { "current_connections": 0, "tps": 0 },
+            "connections": [],
+            "peers": []
+          }
+        ]
+      },
+      {
+        "buckle": { "label": "b3", "url": "http://buckle3:4111" },
+        "models": [
+          {
+            "id": "zai/glm-5.3",
+            "origin": { "kind": "provider", "label": "zai", "url": "http://zai-stub:8080" },
+            "limits": { "max_concurrent": 45 },
+            "live": { "inflight": 0, "tps": 0 },
+            "meta": { "name": "GLM-5.3" }
+          }
+        ],
+        "stats": { "current_connections": 0, "tps": 0 },
+        "connections": [],
+        "peers": []
+      }
+    ]
+  }
+}

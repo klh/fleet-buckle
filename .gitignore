@@ -1,0 +1,12 @@
+node_modules/
+.openapi-prev.json
+*.log
+.DS_Store
+/test/.playwright/
+/test-results/
+/playwright-report/
+.qlty/logs/
+.qlty/results/
+.qlty/out/
+.qlty/plugin_cachedir/
+.qlty/sources/

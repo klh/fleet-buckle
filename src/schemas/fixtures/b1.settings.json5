@@ -1,0 +1,23 @@
+{
+  // b1.settings.json5 — the demo topology's head buckle: openrouter +
+  // downstream peers b2, b3. Composed over default.settings.json5.
+  hub: { label: "b1" },
+  providers: {
+    openrouter: {
+      url: "http://openrouter-stub:8080",
+      dialect: "openai",
+      key: "/etc/buckle/keys/openrouter.key",
+    },
+  },
+  hubs: {
+    // d — DOWNSTREAM ONLY: we pull their catalogs; we never call up.
+    b2: {
+      url: "http://buckle2:4111",
+      token_file: "/etc/buckle/keys/peer-b2.token",
+    },
+    b3: {
+      url: "http://buckle3:4111",
+      token_file: "/etc/buckle/keys/peer-b3.token",
+    },
+  },
+}

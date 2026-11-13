@@ -1,0 +1,17 @@
+# compose.yaml — WIRING ONLY: image, ports, mounts, env PATHS.
+# No providers, no peers, no limits — all config lives in JSON5 settings.
+# (docker-compose is inherently yaml; it carries zero buckle config.)
+
+services:
+  buckle:
+    build: ..
+    # ONE unit + ONE outside-process health sidecar — never the process itself
+    environment:
+      BUCKLE_SETTINGS: /etc/buckle/settings.json
+      BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+    volumes:
+      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ./settings/b1.settings.json5:/etc/buckle/settings.json:ro
+      - ./keys/.gen:/etc/buckle/keys:ro
+    ports:
+      - "4111:4111"

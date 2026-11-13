@@ -1,0 +1,19 @@
+{
+  // default.settings.json5 — shared base every buckle composes over.
+  // Strictly JSON5. Secrets are PATHS. Models are FETCHED, never listed.
+  version: 1,
+  hub: {
+    label: "default",
+    ports: { buckle: 4111, ready: 4114 },
+  },
+  limits: {
+    // a — the generalized hub caps
+    max_concurrent: 1000,
+    max_per_ip: 100,
+  },
+  keys: {
+    // b — general security: PATHS, never values
+    root: "/etc/buckle/keys/root.key",
+    engine: "/etc/buckle/keys/engine.key",
+  },
+}
