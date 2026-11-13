@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { mkdtempSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { bootServer } from "./buckle.server.main.ts";
+import { HOP_TIMEOUT_MS } from "./buckle.server.hop.ts";
 import { loadSettings } from "./buckle.server.settings.ts";
 import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
 import { BuckleProblem } from "../schemas/buckle.problem.zod.ts";
@@ -65,13 +66,25 @@ function stubEngine(): {
 }
 
 /** transparent recorder: forwards every request to the peer
- *  VERBATIM and records what rode in (token, hop-path, body bytes). */
+ *  VERBATIM and records what rode in (token, hop-path, deadline, body). */
 function recorder(target: number): {
   port: number;
   stop: () => void;
-  seen: { auth: string | null; traceparent: string | null; hopPath: string | null; raw: string }[];
+  seen: {
+    auth: string | null;
+    traceparent: string | null;
+    hopPath: string | null;
+    deadline: string | null;
+    raw: string;
+  }[];
 } {
-  const seen: { auth: string | null; traceparent: string | null; hopPath: string | null; raw: string }[] = [];
+  const seen: {
+    auth: string | null;
+    traceparent: string | null;
+    hopPath: string | null;
+    deadline: string | null;
+    raw: string;
+  }[] = [];
   const server = Bun.serve({
     port: 0,
     fetch: async (req) => {
@@ -80,6 +93,7 @@ function recorder(target: number): {
         auth: req.headers.get("authorization"),
         traceparent: req.headers.get("traceparent"),
         hopPath: req.headers.get("x-fleet-buckle-hop-path"),
+        deadline: req.headers.get("x-fleet-buckle-deadline-ms"),
         raw,
       });
       return fetch(`http://127.0.0.1:${target}${new URL(req.url).pathname}`, {
@@ -89,6 +103,7 @@ function recorder(target: number): {
           ...(req.headers.get("traceparent") === null ? {} : { traceparent: req.headers.get("traceparent")! }),
           ...(req.headers.get("authorization") === null ? {} : { authorization: req.headers.get("authorization")! }),
           ...(req.headers.get("x-fleet-buckle-hop-path") === null ? {} : { "x-fleet-buckle-hop-path": req.headers.get("x-fleet-buckle-hop-path")! }),
+          ...(req.headers.get("x-fleet-buckle-deadline-ms") === null ? {} : { "x-fleet-buckle-deadline-ms": req.headers.get("x-fleet-buckle-deadline-ms")! }),
         },
         body: raw,
       });
@@ -264,6 +279,51 @@ describe("COMMIT 6 — the federated HOP (per-hop grants)", () => {
       expect(problem.kind).toBe("unavailable");
       expect(problem.title).toContain("b3");
       expect(world.engine.seen.length).toBe(0); // the peer never reached its engine
+    } finally {
+      world.stop();
+    }
+  });
+
+  test("the chain budget: an origin STAMPS it, a relay carries it VERBATIM", async () => {
+    const dir = keyDir();
+    const world = await bootHopWorld(dir, { scopes: ["models.list", "models.use"] });
+    try {
+      // origin (no inbound deadline): b1 stamps now + its hop budget
+      const before = Date.now();
+      expect((await postChat(world.head, "bksk_bob")).status).toBe(200);
+      const chat = world.seen.find((s) => s.raw === HOP_BODY)!;
+      const stamped = Number(chat.deadline);
+      expect(stamped).toBeGreaterThanOrEqual(before + 60_000);
+      expect(stamped).toBeLessThanOrEqual(Date.now() + HOP_TIMEOUT_MS);
+
+      // relay (inbound deadline present): carried VERBATIM, never rewritten
+      const relayDeadline = String(Date.now() + 5_000);
+      expect(
+        (
+          await postChat(world.head, "bksk_bob", {
+            "x-fleet-buckle-deadline-ms": relayDeadline,
+          })
+        ).status,
+      ).toBe(200);
+      const relayed = world.seen.filter((s) => s.raw === HOP_BODY).at(-1)!;
+      expect(relayed.deadline).toBe(relayDeadline);
+    } finally {
+      world.stop();
+    }
+  });
+
+  test("an EXHAUSTED deadline refuses before ANY peer traffic", async () => {
+    const dir = keyDir();
+    const world = await bootHopWorld(dir, { scopes: ["models.list", "models.use"] });
+    try {
+      const r = await postChat(world.head, "bksk_bob", {
+        "x-fleet-buckle-deadline-ms": String(Date.now() - 1_000),
+      });
+      expect(r.status).toBe(503);
+      const problem = BuckleProblem.parse(await r.json());
+      expect(problem.kind).toBe("unavailable");
+      expect(problem.title).toContain("deadline");
+      expect(world.seen.length).toBe(0); // not even the catalog pull rode
     } finally {
       world.stop();
     }

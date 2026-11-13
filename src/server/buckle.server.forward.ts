@@ -15,10 +15,12 @@ import type { MetricsRegistry } from "./buckle.server.metrics.ts";
 import type { LiveTracker } from "./buckle.server.live.ts";
 import { continueTraceparent } from "./buckle.server.telemetry.ts";
 import {
+  HOP_DEADLINE_HEADER,
   HOP_PATH_HEADER,
   SERVED_BY_HEADER,
   HopPeerSchema,
   hopChat,
+  hopDeadlineOf,
   hopPathOf,
   wouldLoop,
 } from "./buckle.server.hop.ts";
@@ -80,6 +82,16 @@ export async function forwardChat(
       `${settings.hub.label} is already on ${HOP_PATH_HEADER}: ${inboundPath.join(",")}`,
     );
 
+  // the chain budget: an already-exhausted deadline refuses before ANY
+  // peer traffic — a chain can never outlive its origin's budget
+  const deadline = hopDeadlineOf(req.headers.get(HOP_DEADLINE_HEADER));
+  if (deadline !== null && Date.now() >= deadline)
+    return problemResponse(
+      "unavailable",
+      "hop deadline exhausted",
+      `${settings.hub.label} reached with ${HOP_DEADLINE_HEADER} in the past`,
+    );
+
   // resolve in the principal's FEDERATED view — a peer model a grant
   // does not admit is indistinguishable from an unknown model (no leak)
   const catalog = await buildFederatedCatalog(settings, principal, tokenOf, traceparent);
@@ -119,6 +131,7 @@ export async function forwardChat(
       raw,
       traceparent,
       inboundPath,
+      deadline,
     );
     if (outcome.kind === "served") {
       metrics.countRequest(model);

@@ -16,6 +16,10 @@ import { continueTraceparent } from "./buckle.server.telemetry.ts";
 export const SERVED_BY_HEADER = "x-fleet-buckle-served-by";
 /** comma hub labels the request has already ridden (loop guard) */
 export const HOP_PATH_HEADER = "x-fleet-buckle-hop-path";
+/** remaining chain budget in epoch ms — stamped by the ORIGIN buckle,
+ *  carried VERBATIM by every relay: a chain can never outlive its
+ *  origin's budget, however many hops deep it goes */
+export const HOP_DEADLINE_HEADER = "x-fleet-buckle-deadline-ms";
 
 /** bounded waits: a hanging peer must not hold the client forever */
 export const HOP_TIMEOUT_MS = 120_000;
@@ -60,20 +64,36 @@ export function wouldLoop(path: string[], self: string): boolean {
   return path.includes(self);
 }
 
+/** Inbound chain deadline (epoch ms). Malformed/absent = null —
+ *  garbage never propagates, the origin budget takes over. */
+export function hopDeadlineOf(inbound: string | null): number | null {
+  if (inbound === null) return null;
+  const n = Number(inbound);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 /** Forward one chat body to the peer. NEVER throws — every failure is
  *  a named outcome. `inboundPath` is the path WE rode in on (fresh at
- *  a head buckle); the peer receives it plus OUR label. */
+ *  a head buckle); the peer receives it plus OUR label. `deadlineMs`
+ *  is the chain budget (null at an origin: we stamp our own and the
+ *  chain is bounded by it from here down). */
 export async function hopChat(
   self: string,
   peer: HopPeer,
   bodyText: string,
   traceparent: string,
   inboundPath: string[],
+  deadlineMs: number | null,
 ): Promise<HopOutcome> {
+  const budget = deadlineMs === null ? HOP_TIMEOUT_MS : deadlineMs - Date.now();
+  if (budget <= 0)
+    return { kind: "refused", detail: "hop deadline exhausted" };
+  const deadline = deadlineMs ?? Date.now() + HOP_TIMEOUT_MS;
   const headers: Record<string, string> = {
     "content-type": "application/json",
     traceparent: continueTraceparent(traceparent),
     [HOP_PATH_HEADER]: [...inboundPath, self].join(","),
+    [HOP_DEADLINE_HEADER]: String(deadline),
   };
   if (peer.token !== null) headers["authorization"] = `Bearer ${peer.token}`;
   let upstream: Response;
@@ -84,7 +104,8 @@ export async function hopChat(
         method: "POST",
         headers,
         body: bodyText,
-        signal: AbortSignal.timeout(HOP_TIMEOUT_MS),
+        // never longer than the chain budget, never longer than HOP_TIMEOUT_MS
+        signal: AbortSignal.timeout(Math.min(HOP_TIMEOUT_MS, budget)),
       },
     );
   } catch (e) {

@@ -21,6 +21,53 @@ in-loop:
 Never reimplement engine faces. Never add a "smart" feature that the
 engine already has.
 
+## Port doctrine (the anti-mess ratchet)
+
+The old monorepo buckle is 171 files; only ~22 were the proxy — the
+rest was org-plane (routing ladders, dialect adapters, admin APIs,
+eval harnesses). THIS repo stays small by rule: a port candidate must
+serve one of the four in-loop things or the forwarding substrate, and
+it lands as a REWRITE in this repo's patterns (zod-first, JSON5
+settings, secrets-as-paths, problem+json, honest unknowns, kit-tested,
+Docker-proven) — never a copy. If the engine, a sidecar, or operator
+config can do it, it is DENIED here.
+
+**Accepted ports** (each lands as its own commit with tests):
+
+1. **Streaming pass-through** (from `proxy-stream`/`sse*` intent) — the
+   forwarding substrate. Verbatim pipe upstream→client; NO reframing,
+   NO injected bytes (byte-identity outranks heartbeats); settle at the
+   real end; client-abort settles `abandoned`. New
+   `buckle.server.stream.ts`.
+2. **Durable usage ledger** (from `ledger`/`usage-record` intent) —
+   in-loop thing 3. One SQLite table, ONE row written at settle (a
+   crash undercounts, never writes a wrong row); tokens NULL = unknown
+   (never 0-faked); bounded read face. New `buckle.server.ledger.ts` +
+   `buckle.ledger.zod.ts`.
+3. **Cost stamping** (the `cost.ts` LAW only) — versioned operator
+   price table in settings; undeclared model = NULL cost, a declared
+   $0 is a real zero; stamped at settle, never repriced.
+4. **Scrub guard** (from the scrub rules) — every problem `detail`
+   passes `scrubDetail()`: key/token shapes and `/Users/<name>` paths
+   never ride errors. Mandatory because hop outcomes relay peer text.
+5. **Hop deadline propagation** (from `hop-deadline` intent) — the
+   remaining budget rides `x-fleet-buckle-deadline-ms`; each hop clamps
+   its timeout to it and refuses at zero. Bounded chains by construction.
+6. **Drain honesty** (the `drain.ts` LAW, minimized) — rides with
+   streaming: on shutdown, in-flight streams settle `abandoned`; no
+   invented terminals. Rolling/front owns deploys — no restart theater.
+
+**Denied** (do not iterate these back in): dialect adapters +
+count-tokens estimates (engine faces); router ladder, affinity,
+cooldown, hints, complexity (engine owns failover); governance admin
+API / HTTP key minting (static JSON5 grants + the on-machine mint
+tool); aids/pipeline machinery (context injection lands as NEW code
+per `docs/context_injection.md`); eval harness (blam's job); OTLP
+export + dashboards/read-models (`/v1/stats`, `/v1/tree`, `/metrics`,
+jaeger are the whole face); repo tiers, identity headers, overlays,
+residency, jwt, systemone (enterprise identity plane); servicemon
+richness (the health sidecar owns verdicts — outside-process law).
+
 ## Config
 
 - **Strictly JSON5** — `*.settings.json5`. No yaml is authored by us,
