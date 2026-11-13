@@ -2,7 +2,7 @@
 // parses the demo tree (b1 → b2 → b3), peers nest, origins discriminate.
 import { describe, expect, test } from "bun:test";
 import { BuckleTreeResponse } from "./buckle.tree.zod.ts";
-import demoTree from "./fixtures/tree.demo.json";
+import demoTree from "../../test/deploy/fixtures/tree.demo.json";
 
 describe("BuckleTreeResponse", () => {
   test("parses the demo topology: self b1, peers b2(b3), b3", () => {

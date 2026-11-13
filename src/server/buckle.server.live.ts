@@ -4,6 +4,7 @@
 // renders the snapshot. Peer snapshots (federation) join at the route.
 import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
 import type { BuckleStatsSnapshot } from "../schemas/buckle.stats.zod.ts";
+import type { TokenReader } from "./buckle.server.federated.ts";
 
 const TPS_WINDOW_MS = 10_000;
 
@@ -79,7 +80,7 @@ export function createLive(hub: string) {
 export async function federatedStats(
   settings: BuckleSettings,
   live: LiveTracker,
-  tokenOf: (file: string) => string | null,
+  tokenOf: TokenReader,
 ): Promise<{ self: BuckleStatsSnapshot; peers: Record<string, BuckleStatsSnapshot | null> }> {
   const peers: Record<string, BuckleStatsSnapshot | null> = {};
   for (const [label, peer] of Object.entries(settings.hubs ?? {})) {

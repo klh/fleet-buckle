@@ -1,5 +1,6 @@
 // buckle.check-laws.ts — every law has a check or it is a wish.
-// Fails on: wrong file naming, hand-written data types in schemas/,
+// Fails on: wrong file naming, hand-written data types, hand-casts of
+// wire shapes, kit-ownership drift in tests, schema shape duplication,
 // authored yaml outside compose wiring, line caps, openapi drift.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -51,6 +52,55 @@ for (const f of files.filter(
       continue; // only flag aliases NOT starting with z. — checked above for object literals
     void name;
   }
+}
+
+// 2b. no hand-cast object literals (type law): responses parse through
+//     their zod wire schema — `x as { ... }` anywhere is a defect.
+for (const f of files.filter(
+  (f) => f.endsWith(".ts") && /(\/src\/|\/tools\/|\/test\/)/.test(f),
+)) {
+  const src = readFileSync(f, "utf8");
+  if (/\)\s*as\s*\{/.test(src))
+    errors.push(`${f}: hand-cast object literal (\`as { … }\`) — parse through the zod wire schema`);
+}
+
+// 2c. kit-ownership: key dirs, stubs, recorders, world builders live
+//     ONLY in buckle.server.kit.ts — a test file never hand-rolls them.
+for (const f of files.filter((f) => /\/src\/.*\.test\.ts$/.test(f))) {
+  const src = readFileSync(f, "utf8");
+  for (const owned of ["function stubProvider", "function stubEngine", "function recorder", "function mintKeyDir", "function keyDir("]) {
+    if (src.includes(owned))
+    errors.push(`${f}: hand-rolled ${owned.slice(9)}( — import it from buckle.server.kit.ts`);
+  }
+}
+
+// 2d. schema composition: the same object field-set declared 3+ times
+//     across schemas is a re-declaration — compose one canonical shape
+//     (the BuckleLimits precedent: the limits triple once lived 5×).
+{
+  const shapeCounts = new Map<string, string[]>();
+  for (const f of files.filter((f) => /\/schemas\/.*\.zod\.ts$/.test(f) && !f.endsWith(".test.ts"))) {
+    const src = readFileSync(f, "utf8");
+    for (const m of src.matchAll(/z\.object\(\s*\{([^}]+)\}\s*\)/g)) {
+      const fields = [...m[1]!.matchAll(/^\s*([a-z_][a-z0-9_]*):/gm)].map((x) => x[1]).sort().join(",");
+      if (fields.split(",").length < 2) continue; // single-field shapes are cheap
+      const list = shapeCounts.get(fields) ?? [];
+      list.push(f.split("/").pop()!);
+      shapeCounts.set(fields, list);
+    }
+  }
+  for (const [fields, where] of shapeCounts) {
+    if (where.length >= 3)
+      errors.push(`schema duplication: {${fields}} declared ${where.length}× (${where.join(", ")}) — compose ONE canonical shape`);
+  }
+}
+
+// 2e. test files mirror their module: buckle.server.<m>.test.ts needs a
+//     sibling buckle.server.<m>.ts (federated.test.ts → federated.ts).
+for (const f of files.filter((f) => /\/src\/.*\.test\.ts$/.test(f))) {
+  const module = f.replace(".test.ts", ".ts");
+  if (!files.includes(module))
+    errors.push(`${f.split("/").pop()}: no sibling module ${module.split("/").pop()} — test names mirror modules`);
 }
 
 // 3. no AUTHORED yaml outside compose wiring (docker-compose is wiring

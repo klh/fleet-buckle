@@ -2,6 +2,7 @@
 // NOT Entra: upn-shaped ids, a kind, group memberships. A key minted to a
 // principal authenticates as that principal everywhere downstream.
 import { z } from "zod";
+import { BuckleLimits } from "./buckle.limits.zod.ts";
 
 export const BucklePrincipalKind = z.enum([
   "human",
@@ -26,14 +27,7 @@ export const BucklePrincipal = z
     /** Named tier override; absent = the tier for this kind. */
     tier: z.string().min(1).optional(),
     /** Per-principal limits; field-wise over the tier (most specific wins). */
-    limits: z
-      .object({
-        max_concurrent: z.number().int().positive().optional(),
-        max_per_ip: z.number().int().positive().optional(),
-        max_rpm: z.number().int().positive().optional(),
-      })
-      .strict()
-      .optional(),
+    limits: BuckleLimits.optional(),
   })
   .strict();
 export type BucklePrincipal = z.output<typeof BucklePrincipal>;

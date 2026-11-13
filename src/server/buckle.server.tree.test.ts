@@ -1,41 +1,30 @@
-// buckle.server.tree.test.ts — COMMIT 4 STEP 3 (test-first): the
-// federated tree. Downstream-only: /v1/tree renders self + every
-// configured peer's node (pulled with the peer token), peer-of-peer as
-// SUMMARIES (bounded by design). A dead peer fails SOFT: label with
-// empty models, the tree stays ours.
+// buckle.server.tree.test.ts — the federated TREE: /v1/tree is
+// grant-gated (tree.read); no hubs → peers []; depth-2 peers render
+// as summaries (bounded walk); a dead peer fails SOFT. Worlds ride
+// the kit; responses parse through BuckleTreeResponse.
 import { describe, expect, test } from "bun:test";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { mkdtempSync, writeFileSync, chmodSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { bootServer } from "./buckle.server.main.ts";
-import { loadSettings } from "./buckle.server.settings.ts";
+import {
+  bootBuckle,
+  mintKeyDir,
+  stubProvider,
+  type AccessRegistry,
+} from "./buckle.server.kit.ts";
 import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
 import { BuckleTreeResponse } from "../schemas/buckle.tree.zod.ts";
 
-const ROOT = fileURLToPath(new URL("../..", import.meta.url));
+const DIR = mintKeyDir({
+  "principal.root@fleet.test.key": "bksk_root_test",
+  "principal.peer1@fleet.test.key": "bksk_b1_test",
+  "principal.peer2@fleet.test.key": "bksk_b2_test",
+  "principal.peer3@fleet.test.key": "bksk_b3_test",
+  "principal.dead@fleet.test.key": "bksk_dead_test",
+  // hub tokens ride the kit convention: <dir>/peer-<label>.token,
+  // VALUE matching the peer's principal key so the peer resolves us
+  "peer-b2.token": "bksk_b2_test",
+  "peer-b3.token": "bksk_b3_test",
+});
 
-function mintKey(name: string, value: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "buckle-keys-"));
-  const p = join(dir, name);
-  writeFileSync(p, value + "\n");
-  chmodSync(p, 0o600);
-  return p;
-}
-
-function stubProvider(id: string): { port: number; stop: () => void } {
-  const server = Bun.serve({
-    port: 0,
-    fetch: (req) => {
-      if (new URL(req.url).pathname === "/v1/models")
-        return Response.json({ data: [{ id }] });
-      return new Response("not found", { status: 404 });
-    },
-  });
-  return { port: server.port ?? 0, stop: () => server.stop(true) };
-}
-
-const ACCESS = (id: string) =>
+const ACCESS = (id: string): AccessRegistry =>
   BuckleAccessRegistry.parse({
     principals: [{ id, kind: "service", groups: [] }],
     grants: [
@@ -44,51 +33,36 @@ const ACCESS = (id: string) =>
     tiers: [],
   });
 
+const CHAT_AUTH = (key: string) => ({ authorization: `Bearer ${key}` });
+
 async function boot(opts: {
   label: string;
   providerId: string;
-  keyPath: string;
   principal: string;
-  hubs?: Record<string, { url: string; token_file?: string }>;
+  hubs?: Record<string, string>;
 }): Promise<{ base: string; stop: () => void }> {
-  const provider = stubProvider(opts.providerId);
-  const base = await loadSettings({
-    defaults: join(ROOT, "deploy/settings/default.settings.json5"),
-    settings: join(ROOT, "deploy/settings/b1.settings.json5"),
-  });
-  const server = bootServer({
-    settings: {
-      ...base,
-      hub: { ...base.hub, label: opts.label },
-      keys: { ...(base.keys ?? {}), principals_dir: dirnameOf(opts.keyPath) },
-      access: ACCESS(opts.principal),
-      hubs: opts.hubs ?? {},
-      providers: { openrouter: { url: `http://127.0.0.1:${provider.port}` } },
-    },
-    port: 0,
+  const provider = stubProvider([{ id: opts.providerId }]);
+  const world = await bootBuckle({
+    label: opts.label,
+    dir: DIR,
+    access: ACCESS(opts.principal),
+    providers: { openrouter: `http://127.0.0.1:${provider.port}` },
+    ...(opts.hubs === undefined ? {} : { hubs: opts.hubs }),
   });
   return {
-    base: `http://127.0.0.1:${server.port}`,
+    base: world.base,
     stop: () => {
+      world.stop();
       provider.stop();
-      server.stop(true);
     },
   };
 }
 
-function dirnameOf(p: string): string {
-  return p.slice(0, p.lastIndexOf("/"));
-}
-
-const CHAT_AUTH = (key: string) => ({ authorization: `Bearer ${key}` });
-
-describe("COMMIT 4 STEP 3 — the federated tree", () => {
+describe("the federated tree", () => {
   test("/v1/tree is grant-gated (tree.read); no hubs → peers []", async () => {
-    const key = mintKey("principal.root@fleet.test.key", "bksk_root_test");
     const self = await boot({
       label: "b1",
       providerId: "openai/tree-self",
-      keyPath: key,
       principal: "root@fleet.test",
     });
     try {
@@ -108,29 +82,24 @@ describe("COMMIT 4 STEP 3 — the federated tree", () => {
   });
 
   test("depth 2: self renders peer nodes; peer-of-peer as SUMMARIES", async () => {
-    // b3 (leaf) ← b2 (peer of b1) ← b1 (self)
-    const b3Key = mintKey("principal.peer3@fleet.test.key", "bksk_b3_test");
+    // b3 (leaf) ← b2 (peer of b1) ← b1 (self) — one shared key dir,
+    // hub tokens resolve to peer-<label>.token (kit convention)
     const b3 = await boot({
       label: "b3",
       providerId: "openai/tree-b3",
-      keyPath: b3Key,
       principal: "peer3@fleet.test",
     });
-    const b2Key = mintKey("principal.peer2@fleet.test.key", "bksk_b2_test");
     const b2 = await boot({
       label: "b2",
       providerId: "openai/tree-b2",
-      keyPath: b2Key,
       principal: "peer2@fleet.test",
-      hubs: { b3: { url: b3.base, token_file: b3Key } },
+      hubs: { b3: b3.base },
     });
-    const b1Key = mintKey("principal.peer1@fleet.test.key", "bksk_b1_test");
     const b1 = await boot({
       label: "b1",
       providerId: "openai/tree-b1",
-      keyPath: b1Key,
       principal: "peer1@fleet.test",
-      hubs: { b2: { url: b2.base, token_file: b2Key } },
+      hubs: { b2: b2.base },
     });
     try {
       const r = await fetch(`${b1.base}/v1/tree`, {
@@ -155,13 +124,11 @@ describe("COMMIT 4 STEP 3 — the federated tree", () => {
   });
 
   test("a dead peer fails SOFT — label + empty models, tree stays ours", async () => {
-    const deadToken = mintKey("principal.dead@fleet.test.key", "bksk_dead_test");
     const self = await boot({
       label: "b1",
       providerId: "openai/tree-soft",
-      keyPath: deadToken,
       principal: "dead@fleet.test",
-      hubs: { gone: { url: "http://127.0.0.1:1", token_file: deadToken } },
+      hubs: { gone: "http://127.0.0.1:1" },
     });
     try {
       const r = await fetch(`${self.base}/v1/tree`, {

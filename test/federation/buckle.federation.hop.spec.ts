@@ -6,6 +6,8 @@
 // stores — glm-5.3 is zai-ONLY, gpt-6-astra is mscopilot-only (asserted
 // by the e2e matrix), so the hop edges are fixture-proof too.
 import { expect, test } from "@playwright/test";
+import { z } from "zod";
+import { BuckleProblem } from "../../src/schemas/buckle.problem.zod.ts";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +15,10 @@ import { fileURLToPath } from "node:url";
 const ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const keyOf = (principal: string): string =>
   readFileSync(join(ROOT, `test/deploy/keys/.gen/principal.${principal}.key`), "utf8").trim();
+
+// the engine/stub chat echo + our models face — parsed, never hand-cast
+const EngineEcho = z.object({ id: z.string(), usage: z.object({ total_tokens: z.number() }).optional() }).passthrough();
+const ModelsBody = z.object({ models: z.array(z.object({ id: z.string() })) }).passthrough();
 
 const B1 = "http://127.0.0.1:4711";
 const B2 = "http://127.0.0.1:4721";
@@ -56,7 +62,7 @@ test("bob@b1: zai chat HOPS b1→b3 — chain, body, BOTH hubs count it", async 
   const r = await chat(B1, keyOf("bob@fleet"), "glm-5.3");
   expect(r.status).toBe(200);
   expect(r.headers.get("x-fleet-buckle-served-by")).toBe("b1,b3");
-  const body = (await r.json()) as { id: string; usage?: { total_tokens: number } };
+  const body = EngineEcho.parse(await r.json());
   expect(body.id).toBe("stub-chat"); // b3's engine → zai stub served it
   expect(body.usage?.total_tokens).toBeGreaterThan(0);
   // the head AND the serving peer each count the model they served
@@ -68,7 +74,7 @@ test("carol@b2: zai chat HOPS b2→b3 (every-peer grant)", async () => {
   const r = await chat(B2, keyOf("carol@fleet"), "glm-5.3");
   expect(r.status).toBe(200);
   expect(r.headers.get("x-fleet-buckle-served-by")).toBe("b2,b3");
-  expect(((await r.json()) as { id: string }).id).toBe("stub-chat");
+  expect(EngineEcho.parse(await r.json()).id).toBe("stub-chat");
 });
 
 test("bob@b3 directly: the SAME model is a LOCAL engine path (chain 'b3')", async () => {
@@ -81,7 +87,7 @@ test("bob@b1: mscopilot model (peer NOT granted) is indistinguishable from unkno
   const r = await chat(B1, keyOf("bob@fleet"), "gpt-6-astra");
   expect(r.status).toBe(404);
   expect(r.headers.get("content-type")).toContain("application/problem+json");
-  const problem = (await r.json()) as { kind: string };
+  const problem = BuckleProblem.parse(await r.json());
   expect(problem.kind).toBe("not-found");
   // it exists on b2 — but bob asked b1, where his view excludes b2
   expect((await chat(B2, keyOf("carol@fleet"), "gpt-6-astra")).status).toBe(200);
@@ -90,7 +96,7 @@ test("bob@b1: mscopilot model (peer NOT granted) is indistinguishable from unkno
 test("alice@b1 (peers []): even a REAL peer model is 404 — own-only view", async () => {
   const r = await chat(B1, keyOf("alice@fleet"), "glm-5.3");
   expect(r.status).toBe(404);
-  const problem = (await r.json()) as { kind: string };
+  const problem = BuckleProblem.parse(await r.json());
   expect(problem.kind).toBe("not-found");
 });
 
@@ -103,7 +109,7 @@ test("the federated catalog is a SET — a machine may sit under several hubs, t
       headers: { authorization: `Bearer ${key}` },
     });
     expect(r.status).toBe(200);
-    const body = (await r.json()) as { models: { id: string }[] };
+    const body = ModelsBody.parse(await r.json());
     return body.models.map((m) => m.id);
   };
   const atB1 = await view(B1, keyOf("carol@fleet"));

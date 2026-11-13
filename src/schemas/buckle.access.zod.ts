@@ -3,6 +3,7 @@
 // its OWN registry — like an AD domain — and federation checks grants at
 // every hop against the peer's own registry.
 import { z } from "zod";
+import { BuckleLimits } from "./buckle.limits.zod.ts";
 import { BucklePrincipal } from "./buckle.principal.zod.ts";
 
 export const BuckleScope = z.enum([
@@ -20,10 +21,8 @@ export const BuckleTier = z
   .object({
     label: z.string().min(1),
     kind: z.enum(["human", "developer", "agent", "service"]),
-    max_concurrent: z.number().int().positive().optional(),
-    max_per_ip: z.number().int().positive().optional(),
-    max_rpm: z.number().int().positive().optional(),
   })
+  .extend(BuckleLimits.shape)
   .strict();
 export type BuckleTier = z.output<typeof BuckleTier>;
 
@@ -36,14 +35,7 @@ export const BuckleGrant = z
      *  (downstream only). ABSENT = every configured peer; the explicit
      *  empty list = own rows only (the matrix's alice). */
     peers: z.array(z.string().min(1)).optional(),
-    limits: z
-      .object({
-        max_concurrent: z.number().int().positive().optional(),
-        max_per_ip: z.number().int().positive().optional(),
-        max_rpm: z.number().int().positive().optional(),
-      })
-      .strict()
-      .optional(),
+    limits: BuckleLimits.optional(),
   })
   .strict();
 export type BuckleGrant = z.output<typeof BuckleGrant>;

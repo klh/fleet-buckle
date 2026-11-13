@@ -5,15 +5,16 @@
 // against its own registry — per-hop grants). Drift fails loud
 // (problem+json 404). Bodies ride UNTOUCHED (raw bytes in, raw bytes
 // out); the trace CONTINUES; the serving chain rides x-fleet-buckle-served-by;
-// every hop counts in /metrics.
+// every request counts in /metrics. This module is the PIPELINE —
+// the two legs live in buckle.server.hop.ts and buckle.server.engine.ts.
+import { z } from "zod";
 import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
 import {
   buildFederatedCatalog,
   type TokenReader,
-} from "./buckle.server.models.ts";
+} from "./buckle.server.federated.ts";
 import type { MetricsRegistry } from "./buckle.server.metrics.ts";
 import type { LiveTracker } from "./buckle.server.live.ts";
-import { continueTraceparent } from "./buckle.server.telemetry.ts";
 import {
   HOP_DEADLINE_HEADER,
   HOP_PATH_HEADER,
@@ -24,32 +25,18 @@ import {
   hopPathOf,
   wouldLoop,
 } from "./buckle.server.hop.ts";
+import { engineChat, usageOf } from "./buckle.server.engine.ts";
 import { problemResponse } from "./buckle.server.problem.ts";
 
 export { problemResponse };
 
-/** bounded waits: a hung engine must not hold the client forever */
-const ENGINE_TIMEOUT_MS = 120_000;
+/** we read ONLY the model id out of the chat body — everything else
+ *  rides verbatim (the engine owns its own face, never re-schematized) */
+const ChatBody = z.object({ model: z.string().min(1) }).passthrough();
 
-export function engineUrl(settings: BuckleSettings): string {
-  return (
-    settings.engine?.url ??
-    process.env["BUCKLE_ENGINE_URL"] ??
-    "http://127.0.0.1:4000"
-  );
-}
-
-/** total_tokens out of an upstream chat body (0 when absent/unparseable) */
-function usageTokensOf(text: string): number {
-  try {
-    const usage = (JSON.parse(text) as { usage?: { total_tokens?: unknown } })
-      .usage;
-    if (usage !== undefined && typeof usage.total_tokens === "number")
-      return usage.total_tokens;
-  } catch {
-    // non-JSON engine body: no token count, still a passthrough
-  }
-  return 0;
+function modelOf(raw: string): string | null {
+  const parsed = ChatBody.safeParse(JSON.parse(raw));
+  return parsed.success ? parsed.data.model : null;
 }
 
 export async function forwardChat(
@@ -61,19 +48,20 @@ export async function forwardChat(
   traceparent: string,
   tokenOf: TokenReader,
 ): Promise<Response> {
+  // 1 — the body must name a model (drift fails loud); the raw bytes
+  //     are read ONCE and ride untouched from here on
   const raw = await req.text();
   let model: string | null = null;
   try {
-    const body = JSON.parse(raw) as { model?: unknown };
-    if (typeof body.model === "string") model = body.model;
+    model = modelOf(raw);
   } catch {
-    // fall through: missing model fails loud below
+    // fall through: unparseable body fails loud below
   }
   if (model === null)
     return problemResponse("validation", "chat body missing model");
 
-  // the loop guard fires BEFORE any peer traffic: a hub already on the
-  // hop path refuses re-entry, no matter the model
+  // 2 — the loop guard fires BEFORE any peer traffic: a hub already on
+  //     the hop path refuses re-entry, no matter the model
   const inboundPath = hopPathOf(req.headers.get(HOP_PATH_HEADER));
   if (wouldLoop(inboundPath, settings.hub.label))
     return problemResponse(
@@ -82,8 +70,8 @@ export async function forwardChat(
       `${settings.hub.label} is already on ${HOP_PATH_HEADER}: ${inboundPath.join(",")}`,
     );
 
-  // the chain budget: an already-exhausted deadline refuses before ANY
-  // peer traffic — a chain can never outlive its origin's budget
+  // 3 — the chain budget: an already-exhausted deadline refuses before
+  //     ANY peer traffic — a chain can never outlive its origin's budget
   const deadline = hopDeadlineOf(req.headers.get(HOP_DEADLINE_HEADER));
   if (deadline !== null && Date.now() >= deadline)
     return problemResponse(
@@ -92,8 +80,9 @@ export async function forwardChat(
       `${settings.hub.label} reached with ${HOP_DEADLINE_HEADER} in the past`,
     );
 
-  // resolve in the principal's FEDERATED view — a peer model a grant
-  // does not admit is indistinguishable from an unknown model (no leak)
+  // 4 — resolve in the principal's FEDERATED view: a peer model a
+  //     grant does not admit is indistinguishable from an unknown
+  //     model (no leak)
   const catalog = await buildFederatedCatalog(settings, principal, tokenOf, traceparent);
   const known = catalog.models.find((m) => m.id === model);
   if (known === undefined)
@@ -102,106 +91,119 @@ export async function forwardChat(
       `model ${model} is not served by this buckle`,
     );
 
-  const kind = settings.access?.principals.find((p) => p.id === principal)?.kind;
+  // 5 — the leg: buckle-origin hops, provider-origin rides our engine
+  return known.origin.kind === "buckle"
+    ? await serveHop(settings, metrics, live, principal, known.origin.label, raw, traceparent, inboundPath, deadline, tokenOf, model)
+    : await serveEngine(settings, metrics, live, principal, raw, traceparent, model);
+}
 
-  // the peer hop: buckle-origin model → that peer, verbatim
-  if (known.origin.kind === "buckle") {
-    const peer = settings.hubs?.[known.origin.label];
-    if (peer === undefined)
-      return problemResponse(
-        "unavailable",
-        `peer ${known.origin.label} is no longer configured`,
-      );
-    const token = peer.token_file !== undefined ? tokenOf(peer.token_file) : null;
-    const hopPeer = HopPeerSchema.safeParse({
-      label: known.origin.label,
-      url: peer.url,
-      token,
-    });
-    if (!hopPeer.success)
-      return problemResponse(
-        "unavailable",
-        `peer ${known.origin.label} is misconfigured`,
-        hopPeer.error.issues.map((i) => i.path.join(".")).join(", "),
-      );
-    live.open(principal, kind, model);
-    const outcome = await hopChat(
-      settings.hub.label,
-      hopPeer.data,
-      raw,
-      traceparent,
-      inboundPath,
-      deadline,
-    );
-    if (outcome.kind === "served") {
-      metrics.countRequest(model);
-      live.close(principal, model, usageTokensOf(outcome.text));
-      return new Response(outcome.text, {
-        status: outcome.status,
-        headers: {
-          "content-type": outcome.contentType,
-          "cache-control": "no-store",
-          [SERVED_BY_HEADER]: outcome.servedBy,
-        },
-      });
-    }
-    live.close(principal, model, 0);
-    if (outcome.kind === "rate-limited") {
-      // the peer's verdict RELAYS: the client must see Retry-After
-      metrics.countRequest(model);
-      return problemResponse(
-        "rate-limited",
-        `peer ${known.origin.label} rate-limited the hop`,
-        outcome.detail,
-        { "retry-after": String(outcome.retryAfterS) },
-      );
-    }
-    if (outcome.kind === "refused") {
-      metrics.countRequest(model);
-      return problemResponse(
-        "unavailable",
-        `peer ${known.origin.label} refused the hop`,
-        outcome.detail,
-      );
-    }
+/** the peer leg: buckle-origin model → that peer, verbatim */
+async function serveHop(
+  settings: BuckleSettings,
+  metrics: MetricsRegistry,
+  live: LiveTracker,
+  principal: string,
+  peerLabel: string,
+  raw: string,
+  traceparent: string,
+  inboundPath: string[],
+  deadline: number | null,
+  tokenOf: TokenReader,
+  model: string,
+): Promise<Response> {
+  const peer = settings.hubs?.[peerLabel];
+  if (peer === undefined)
     return problemResponse(
       "unavailable",
-      `peer ${known.origin.label} unreachable`,
+      `peer ${peerLabel} is no longer configured`,
+    );
+  const token = peer.token_file !== undefined ? tokenOf(peer.token_file) : null;
+  const hopPeer = HopPeerSchema.safeParse({
+    label: peerLabel,
+    url: peer.url,
+    token,
+  });
+  if (!hopPeer.success)
+    return problemResponse(
+      "unavailable",
+      `peer ${peerLabel} is misconfigured`,
+      hopPeer.error.issues.map((i) => i.path.join(".")).join(", "),
+    );
+
+  const kind = settings.access?.principals.find((p) => p.id === principal)?.kind;
+  live.open(principal, kind, model);
+  const outcome = await hopChat(
+    settings.hub.label,
+    hopPeer.data,
+    raw,
+    traceparent,
+    inboundPath,
+    deadline,
+  );
+  if (outcome.kind === "served") {
+    metrics.countRequest(model);
+    live.close(principal, model, usageOf(outcome.text));
+    return new Response(outcome.text, {
+      status: outcome.status,
+      headers: {
+        "content-type": outcome.contentType,
+        "cache-control": "no-store",
+        [SERVED_BY_HEADER]: outcome.servedBy,
+      },
+    });
+  }
+  live.close(principal, model, 0);
+  metrics.countRequest(model);
+  if (outcome.kind === "rate-limited")
+    // the peer's verdict RELAYS: the client must see Retry-After
+    return problemResponse(
+      "rate-limited",
+      `peer ${peerLabel} rate-limited the hop`,
+      outcome.detail,
+      { "retry-after": String(outcome.retryAfterS) },
+    );
+  if (outcome.kind === "refused")
+    return problemResponse(
+      "unavailable",
+      `peer ${peerLabel} refused the hop`,
       outcome.detail,
     );
-  }
+  return problemResponse(
+    "unavailable",
+    `peer ${peerLabel} unreachable`,
+    outcome.detail,
+  );
+}
 
-  // the engine path: provider-origin model → OUR litellm
-  const engine = `${engineUrl(settings).replace(/\/$/, "")}/v1/chat/completions`;
+/** the engine leg: provider-origin model → OUR litellm */
+async function serveEngine(
+  settings: BuckleSettings,
+  metrics: MetricsRegistry,
+  live: LiveTracker,
+  principal: string,
+  raw: string,
+  traceparent: string,
+  model: string,
+): Promise<Response> {
+  const kind = settings.access?.principals.find((p) => p.id === principal)?.kind;
   live.open(principal, kind, model);
-  try {
-    const upstream = await fetch(engine, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        traceparent: continueTraceparent(traceparent),
-      },
-      body: raw,
-      signal: AbortSignal.timeout(ENGINE_TIMEOUT_MS),
-    });
+  const outcome = await engineChat(settings, raw, traceparent);
+  if (outcome.kind === "served") {
     metrics.countRequest(model);
-    const text = await upstream.text();
-    live.close(principal, model, usageTokensOf(text));
-    return new Response(text, {
-      status: upstream.status,
+    live.close(principal, model, usageOf(outcome.text));
+    return new Response(outcome.text, {
+      status: outcome.status,
       headers: {
-        "content-type": upstream.headers.get("content-type") ?? "application/json",
+        "content-type": outcome.contentType,
         "cache-control": "no-store",
         [SERVED_BY_HEADER]: settings.hub.label,
       },
     });
-  } catch (e) {
-    live.close(principal, model, 0);
-    if (
-      e instanceof Error &&
-      (e.name === "AbortError" || e.name === "TimeoutError")
-    )
-      return problemResponse("unavailable", "engine timeout");
-    return problemResponse("unavailable", "engine unreachable");
   }
+  live.close(principal, model, 0);
+  metrics.countRequest(model);
+  return problemResponse(
+    "unavailable",
+    outcome.kind === "timeout" ? "engine timeout" : "engine unreachable",
+  );
 }

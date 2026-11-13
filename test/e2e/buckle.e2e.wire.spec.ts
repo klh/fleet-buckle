@@ -4,6 +4,22 @@
 // the trace continued, and /metrics reflecting the traffic. Poll fns
 // are TOTAL (throws become "connecting") — expect.poll does not catch.
 import { expect, test } from "@playwright/test";
+import { z } from "zod";
+import { BuckleModelsResponse } from "../../src/schemas/buckle.model.wire.zod.ts";
+import { BuckleTreeResponse } from "../../src/schemas/buckle.tree.zod.ts";
+import { BuckleStatsResponse } from "../../src/schemas/buckle.stats.zod.ts";
+
+// the healthz face + the engine's chat echo — parsed, never hand-cast
+const HealthzBody = z.object({
+  ok: z.boolean().optional(),
+  status: z.string().optional(),
+  label: z.string().optional(),
+}).passthrough();
+const ProviderCatalog = z.object({ data: z.array(z.object({ id: z.string() })) });
+const ChatEcho = z.object({
+  id: z.string(),
+  choices: z.array(z.object({ message: z.object({ content: z.string().optional() }).optional() }).optional()).optional(),
+}).passthrough();
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,10 +37,10 @@ const AUTH = { authorization: `Bearer ${CAROL_KEY}` };
 // captured files the stubs serve, so a fixture refresh never needs a
 // spec edit (single source of truth)
 const fixtureIds = (provider: string): string[] =>
-  (
+  ProviderCatalog.parse(
     JSON.parse(
       readFileSync(join(ROOT, "test/deploy/fixtures", `${provider}.models.json`), "utf8"),
-    ) as { data: { id: string }[] }
+    ),
   ).data.map((m) => m.id);
 
 const UNITS = [
@@ -60,7 +76,7 @@ for (const unit of UNITS) {
           try {
             const r = await fetch(`${unit.base}/healthz`);
             if (r.status !== 200) return "bad-status";
-            const body = (await r.json()) as { ok?: boolean; status?: string; label?: string };
+            const body = HealthzBody.parse(await r.json());
             return body.ok === true && body.status === "up" && body.label === unit.label
               ? "up"
               : "wrong-body";
@@ -73,12 +89,11 @@ for (const unit of UNITS) {
       .toBe("up");
 
     // catalog — fetched from the provider stub, hub label ours
-    const catalog = (await (
-      await fetch(`${unit.base}/v1/models`, { headers: AUTH })
-    ).json()) as {
-      hub: string;
-      models: { id: string; origin: { kind: string; label: string } }[];
-    };
+    const catalog = BuckleModelsResponse.parse(
+      await (
+        await fetch(`${unit.base}/v1/models`, { headers: AUTH })
+      ).json(),
+    );
     expect(catalog.hub).toBe(unit.label);
     // carol's view FEDERATES: own ids always present (peers add rows)
     expect(catalog.models.map((m) => m.id).sort()).toEqual(
@@ -119,7 +134,7 @@ for (const unit of UNITS) {
       .toBe(200);
     const chat = await postChat();
     expect(chat.status).toBe(200);
-    const body = (await chat.json()) as { id: string; choices?: { message?: { content?: string } }[] };
+    const body = ChatEcho.parse(await chat.json());
     expect(body.id).toBe("stub-chat"); // engine passthrough, stub echo
 
     // unknown model fails LOUD (problem+json, never the engine's 404)
@@ -135,9 +150,7 @@ for (const unit of UNITS) {
     // peer b3 as a SUMMARY); b2 carries b3; b3 carries nobody
     const tree = await fetch(`${unit.base}/v1/tree`, { headers: AUTH });
     expect(tree.status).toBe(200);
-    const treeBody = (await tree.json()) as {
-      self: { buckle: { label: string }; peers: { buckle: { label: string }; models: unknown[]; peers: { buckle: { label: string } }[] }[] };
-    };
+    const treeBody = BuckleTreeResponse.parse(await tree.json());
     expect(treeBody.self.buckle.label).toBe(unit.label);
     const peerLabels = treeBody.self.peers.map((p) => p.buckle.label).sort();
     if (unit.label === "b1") expect(peerLabels).toEqual(["b2", "b3"]);
@@ -152,7 +165,7 @@ for (const unit of UNITS) {
     // live stats — grant-gated overview reflects the chatted traffic
     const stats = await fetch(`${unit.base}/v1/stats`, { headers: AUTH });
     expect(stats.status).toBe(200);
-    const statsBody = (await stats.json()) as { self: { hub: string; principals: { principal: string; requests: number }[] } };
+    const statsBody = BuckleStatsResponse.parse(await stats.json());
     expect(statsBody.self.hub).toBe(unit.label);
     expect(
       statsBody.self.principals.find((p) => p.principal === "carol@fleet")

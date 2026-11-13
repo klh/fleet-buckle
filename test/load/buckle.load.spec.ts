@@ -3,6 +3,7 @@
 // Retry-After (never 5xx, never silent), the catalog stays readable,
 // and carol (uncapped) keeps chatting THROUGH the storm.
 import { expect, test } from "@playwright/test";
+import { BuckleProblem } from "../../src/schemas/buckle.problem.zod.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,7 +41,7 @@ test.describe("load waves — 429 is a CONTRACT, not a crash", () => {
         expect(retry).not.toBeNull();
         expect(Number(retry)).toBeGreaterThanOrEqual(1);
         expect(Number(retry)).toBeLessThanOrEqual(60);
-        expect(((await r.json()) as { kind: string }).kind).toBe("rate-limited");
+        expect(BuckleProblem.parse(await r.json()).kind).toBe("rate-limited");
       }
       // carol rides THROUGH the storm (uncapped principal)
       const carolR = await chat(carol);

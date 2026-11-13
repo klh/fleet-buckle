@@ -7,23 +7,23 @@ import type {
   BucklePeer,
   BuckleSettings,
 } from "../schemas/buckle.settings.zod.ts";
-import type {
-  BuckleTreeNode,
-  BuckleTreePeer,
+import {
+  BuckleTreeResponse,
+  type BuckleTreeNode,
+  type BuckleTreePeer,
 } from "../schemas/buckle.tree.zod.ts";
 import { buildCatalog } from "./buckle.server.models.ts";
+import type { TokenReader } from "./buckle.server.federated.ts";
 import type { LiveTracker } from "./buckle.server.live.ts";
 import { continueTraceparent } from "./buckle.server.telemetry.ts";
 
 const PEER_TIMEOUT_MS = 1500;
 
-export type TokenReader = (file: string) => string | null;
-
 async function pullPeerTree(
   peer: BucklePeer,
   tokenOf: TokenReader,
   traceparent: string,
-): Promise<{ self: BuckleTreeNode } | null> {
+): Promise<BuckleTreeNode | null> {
   const headers: Record<string, string> = {
     traceparent: continueTraceparent(traceparent),
   };
@@ -37,7 +37,8 @@ async function pullPeerTree(
       signal: AbortSignal.timeout(PEER_TIMEOUT_MS),
     });
     if (!r.ok) return null;
-    return (await r.json()) as { self: BuckleTreeNode };
+    // the peer answers OUR wire face — parse it, never hand-cast
+    return BuckleTreeResponse.parse(await r.json()).self;
   } catch {
     return null;
   }
@@ -59,7 +60,7 @@ export async function buildTree(
       peers.push({ buckle: { label }, models: [], peers: [] });
       continue;
     }
-    const node = pulled.self;
+    const node = pulled;
     peers.push({
       buckle: node.buckle,
       models: node.models,

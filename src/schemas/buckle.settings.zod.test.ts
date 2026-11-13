@@ -2,8 +2,9 @@
 // laws — JSON5 shape, PATHS not values, fail-loud unknowns, deep merge.
 import { describe, expect, test } from "bun:test";
 import { mergeSettings, BuckleSettings } from "./buckle.settings.zod.ts";
-import defaultSettings from "./fixtures/default.settings.json5";
-import b1Settings from "./fixtures/b1.settings.json5";
+// the REAL deploy files are the single source — no fixture copies
+import defaultSettings from "../../deploy/settings/default.settings.json5";
+import b1Settings from "../../deploy/settings/b1.settings.json5";
 
 describe("BuckleSettings", () => {
   test("default ⊕ b1 deep-merges: providers and peers land, defaults hold", () => {

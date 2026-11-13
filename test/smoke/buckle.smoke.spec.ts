@@ -79,7 +79,7 @@ test("schema contracts hold (openapi in sync, fixtures parse, settings compose)"
   );
   const { default: b1 } = await import("../../deploy/settings/b1.settings.json5");
   const { default: demoTree } = await import(
-    "../../src/schemas/fixtures/tree.demo.json"
+    "../deploy/fixtures/tree.demo.json"
   );
   const merged = mergeSettings(defaults, b1);
   expect(merged.hub.label).toBe("b1");

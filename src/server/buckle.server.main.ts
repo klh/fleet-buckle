@@ -11,7 +11,7 @@ import {
   traceIdOf,
 } from "./buckle.server.telemetry.ts";
 import { loadSettings, type SettingsPaths } from "./buckle.server.settings.ts";
-import { buildFederatedCatalog } from "./buckle.server.models.ts";
+import { buildFederatedCatalog } from "./buckle.server.federated.ts";
 import { forwardChat, problemResponse } from "./buckle.server.forward.ts";
 import type { BuckleScope } from "../schemas/buckle.access.zod.ts";
 import { createMetrics } from "./buckle.server.metrics.ts";

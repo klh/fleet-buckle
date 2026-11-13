@@ -36,19 +36,26 @@ export const HopPeerSchema = z
   .strict();
 export type HopPeer = z.output<typeof HopPeerSchema>;
 
-/** The hop outcome, mapped by the caller into client-facing responses. */
-export type HopOutcome =
-  | {
-      kind: "served";
-      status: number;
-      text: string;
-      contentType: string;
+/** The hop outcome (zod union), mapped by the caller into client-facing
+ *  responses — every type is zod-derived (the type law). */
+export const HopOutcome = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("served"),
+      status: z.number().int(),
+      text: z.string(),
+      contentType: z.string(),
       /** the full serving chain, this hub PREPENDED */
-      servedBy: string;
-    }
-  | { kind: "rate-limited"; retryAfterS: number; detail: string }
-  | { kind: "refused"; detail: string }
-  | { kind: "unreachable"; detail: string };
+      servedBy: z.string(),
+    })
+    .strict(),
+  z
+    .object({ kind: z.literal("rate-limited"), retryAfterS: z.number(), detail: z.string() })
+    .strict(),
+  z.object({ kind: z.literal("refused"), detail: z.string() }).strict(),
+  z.object({ kind: z.literal("unreachable"), detail: z.string() }).strict(),
+]);
+export type HopOutcome = z.output<typeof HopOutcome>;
 
 /** Parse an inbound hop path (comma labels; empty/absent = fresh). */
 export function hopPathOf(inbound: string | null): string[] {

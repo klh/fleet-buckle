@@ -3,6 +3,7 @@
 // details, so secret shapes and home paths must never ride an error.
 import { describe, expect, test } from "bun:test";
 import { problemResponse, scrubDetail } from "./buckle.server.problem.ts";
+import { BuckleProblem } from "../schemas/buckle.problem.zod.ts";
 
 describe("the scrub guard — secrets never ride errors", () => {
   test("key/token shapes redact, home paths tilde", () => {
@@ -28,7 +29,7 @@ describe("the scrub guard — secrets never ride errors", () => {
       "status 500 — Bearer sk-abcdef1234567890 at /Users/kk/x.json",
     );
     expect(r.headers.get("content-type")).toContain("application/problem+json");
-    const body = (await r.json()) as { detail: string };
+    const body = BuckleProblem.parse(await r.json());
     expect(body.detail).toBe("status 500 — [redacted] at ~/x.json");
   });
 });

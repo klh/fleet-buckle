@@ -4,6 +4,7 @@
 // capabilities/supports/policy/picker flags ride along — captured, never
 // fabricated).
 import { z } from "zod";
+import { BuckleLimits } from "./buckle.limits.zod.ts";
 
 export const BuckleModelOrigin = z.discriminatedUnion("kind", [
   z
@@ -23,13 +24,8 @@ export const BuckleModelOrigin = z.discriminatedUnion("kind", [
 ]);
 export type BuckleModelOrigin = z.output<typeof BuckleModelOrigin>;
 
-export const BuckleModelLimits = z
-  .object({
-    max_concurrent: z.number().int().positive().optional(),
-    max_per_ip: z.number().int().positive().optional(),
-    max_rpm: z.number().int().positive().optional(),
-  })
-  .strict();
+// composed from the ONE caps schema (never re-declared)
+export const BuckleModelLimits = BuckleLimits;
 
 export const BuckleModelLive = z
   .object({

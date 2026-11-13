@@ -4,6 +4,7 @@
 // are problem+json: 401 unknown principal/key on THIS buckle, 403
 // known principal without the scope.
 import { expect, test } from "@playwright/test";
+import { z } from "zod";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +15,9 @@ const KEY = (p: string) =>
 const alice = KEY("principal.alice@fleet.key");
 const bob = KEY("principal.bob@fleet.key");
 const carol = KEY("principal.carol@fleet.key");
+
+import { BuckleModelsResponse } from "../../src/schemas/buckle.model.wire.zod.ts";
+import { BuckleProblem } from "../../src/schemas/buckle.problem.zod.ts";
 
 const B1 = "http://127.0.0.1:4711";
 const B2 = "http://127.0.0.1:4721";
@@ -28,20 +32,22 @@ async function view(base: string, token: string): Promise<Response> {
 async function ids(base: string, token: string): Promise<string[]> {
   const r = await view(base, token);
   expect(r.status).toBe(200);
-  const body = (await r.json()) as { models: { id: string }[] };
+  const body = BuckleModelsResponse.parse(await r.json());
   return body.models.map((m) => m.id).sort();
 }
 
 // per-provider views DERIVE from the fixture stores (the real captured
 // catalogs the stubs serve) — union = what federation must surface
+// a provider's own catalog face (the captured fixture the stub serves)
+const ProviderCatalog = z.object({ data: z.array(z.object({ id: z.string() })) });
 const cat = (provider: string): string[] =>
-  (
+  ProviderCatalog.parse(
     JSON.parse(
       readFileSync(
         join(ROOT, "test/deploy/fixtures", `${provider}.models.json`),
         "utf8",
       ),
-    ) as { data: { id: string }[] }
+    ),
   ).data.map((m) => m.id).sort();
 const OR = cat("openrouter");
 const CP = cat("mscopilot");
@@ -76,7 +82,7 @@ test.describe("the federation matrix (Docker)", () => {
     const r = await view(B2, bob);
     expect(r.status).toBe(401);
     expect(r.headers.get("content-type")).toContain("application/problem+json");
-    expect(((await r.json()) as { title: string }).title).toBeTruthy();
+    expect(BuckleProblem.parse(await r.json()).title).toBeTruthy();
   });
 
   test("denial paths — 403 known principal without the scope", async () => {

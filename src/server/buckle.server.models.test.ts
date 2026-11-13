@@ -1,37 +1,28 @@
-// buckle.server.models.test.ts — STEP 2 (test-first): the catalog is
-// FETCHED from providers, never declared (law c): a stub provider
-// serves fixture rows (bare ids AND a full mscopilot-shaped row);
-// GET /v1/models maps them through the wire schema — origin names the
-// provider, full metadata rides VERBATIM (captured, never fabricated).
+// buckle.server.models.test.ts — the OWN catalog is FETCHED from
+// providers, never declared (law c): a stub provider serves fixture
+// rows (bare ids AND a full mscopilot-shaped row); GET /v1/models
+// maps them through the wire schema — origin names the provider, full
+// metadata rides VERBATIM (captured, never fabricated). Worlds ride
+// the kit; responses parse through BuckleModelsResponse.
 import { describe, expect, test } from "bun:test";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { bootServer } from "./buckle.server.main.ts";
-import { loadSettings } from "./buckle.server.settings.ts";
-import { BuckleModelsResponse } from "../schemas/buckle.model.wire.zod.ts";
+import {
+  bootBuckle,
+  mintKeyDir,
+  stubProvider,
+  type AccessRegistry,
+} from "./buckle.server.kit.ts";
 import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
+import { BuckleModelsResponse } from "../schemas/buckle.model.wire.zod.ts";
 
-const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-
-import { mkdtempSync, writeFileSync, chmodSync } from "node:fs";
-import { tmpdir } from "node:os";
-const KEYS_DIR = mkdtempSync(join(tmpdir(), "buckle-keys-"));
-const wireKey = (name: string): string => {
-  const p = join(KEYS_DIR, name);
-  writeFileSync(p, "bksk_wire_test\n");
-  chmodSync(p, 0o600);
-  return p;
-};
-wireKey("principal.wire@fleet.test.key");
+const DIR = mintKeyDir({ "principal.wire@fleet.test.key": "bksk_wire_test" });
 const AUTH = { authorization: "Bearer bksk_wire_test" };
-const ACCESS = BuckleAccessRegistry.parse({
+const ACCESS: AccessRegistry = BuckleAccessRegistry.parse({
   principals: [{ id: "wire@fleet.test", kind: "service", groups: [] }],
-  grants: [
-    { principal: "wire@fleet.test", scopes: ["models.list", "models.use"] },
-  ],
+  grants: [{ principal: "wire@fleet.test", scopes: ["models.list", "models.use"] }],
   tiers: [],
 });
 
+/** a full mscopilot-shaped provider row (captured shape) */
 const FULL_ROW = {
   id: "mscopilot/gpt-6-astra",
   name: "GPT-6 Astra",
@@ -45,41 +36,25 @@ const FULL_ROW = {
   },
 };
 
-function stubProvider(rows: unknown[]): { port: number; stop: () => void } {
-  const server = Bun.serve({
-    port: 0,
-    fetch: (req) => {
-      if (new URL(req.url).pathname === "/v1/models")
-        return Response.json({ data: rows });
-      return new Response("not found", { status: 404 });
-    },
-  });
-  return { port: server.port ?? 0, stop: () => server.stop(true) };
-}
-
-async function bootedWithProviders(providers: Record<string, unknown>) {
-  const base = await loadSettings({
-    defaults: join(ROOT, "deploy/settings/default.settings.json5"),
-    settings: join(ROOT, "deploy/settings/b1.settings.json5"),
-  });
-  const settings = {
-    ...base,
-    keys: { ...(base.keys ?? {}), principals_dir: KEYS_DIR },
+async function bootedWithProviders(providers: Record<string, string>) {
+  const world = await bootBuckle({
+    label: "b1",
+    dir: DIR,
     access: ACCESS,
-    providers: providers as never,
-  };
-  const server = bootServer({ settings, port: 0 });
-  return { server, base: `http://127.0.0.1:${server.port}` };
+    providers,
+    hubs: {},
+  });
+  return { world, base: world.base };
 }
 
-describe("STEP 2 — /v1/models (fetch, never declare)", () => {
+describe("/v1/models (fetch, never declare)", () => {
   test("bare provider rows pass through with origin", async () => {
     const provider = stubProvider([
       { id: "openrouter/qwen3-coder" },
       { id: "openrouter/qwen3-235b" },
     ]);
-    const { server, base } = await bootedWithProviders({
-      openrouter: { url: `http://127.0.0.1:${provider.port}` },
+    const { world, base } = await bootedWithProviders({
+      openrouter: `http://127.0.0.1:${provider.port}`,
     });
     try {
       const r = await fetch(`${base}/v1/models`, { headers: AUTH });
@@ -98,14 +73,14 @@ describe("STEP 2 — /v1/models (fetch, never declare)", () => {
         });
     } finally {
       provider.stop();
-      server.stop(true);
+      world.stop();
     }
   });
 
   test("FULL provider metadata rides verbatim — captured, never fabricated", async () => {
     const provider = stubProvider([FULL_ROW]);
-    const { server, base } = await bootedWithProviders({
-      mscopilot: { url: `http://127.0.0.1:${provider.port}` },
+    const { world, base } = await bootedWithProviders({
+      mscopilot: `http://127.0.0.1:${provider.port}`,
     });
     try {
       const r = await fetch(`${base}/v1/models`, { headers: AUTH });
@@ -122,16 +97,16 @@ describe("STEP 2 — /v1/models (fetch, never declare)", () => {
       expect(m.meta).toEqual(FULL_ROW);
     } finally {
       provider.stop();
-      server.stop(true);
+      world.stop();
     }
   });
 
   test("a dead provider fails CLOSED for its rows only (others still serve)", async () => {
     const alive = stubProvider([{ id: "zai/glm-5.3" }]);
     // port 1 on 127.0.0.1: nothing listens — fetch fails fast
-    const { server, base } = await bootedWithProviders({
-      zai: { url: `http://127.0.0.1:${alive.port}` },
-      dead: { url: "http://127.0.0.1:1" },
+    const { world, base } = await bootedWithProviders({
+      zai: `http://127.0.0.1:${alive.port}`,
+      dead: "http://127.0.0.1:1",
     });
     try {
       const r = await fetch(`${base}/v1/models`, { headers: AUTH });
@@ -141,7 +116,7 @@ describe("STEP 2 — /v1/models (fetch, never declare)", () => {
       expect(body.models.every((m) => m.origin.kind === "provider")).toBe(true);
     } finally {
       alive.stop();
-      server.stop(true);
+      world.stop();
     }
   });
 });

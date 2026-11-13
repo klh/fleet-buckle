@@ -10,14 +10,10 @@ export const KeyPath = z.string().min(1);
 export type KeyPath = z.output<typeof KeyPath>;
 
 /** Connection caps. Resolution: model > provider > hub, per field. */
-export const BuckleLimits = z
-  .object({
-    max_concurrent: z.number().int().positive().optional(),
-    max_per_ip: z.number().int().positive().optional(),
-    max_rpm: z.number().int().positive().optional(),
-  })
-  .strict();
-export type BuckleLimits = z.output<typeof BuckleLimits>;
+// composed from the ONE caps schema — imported here, re-exported for
+// settings readers (never re-declared)
+import { BuckleLimits } from "./buckle.limits.zod.ts";
+export { BuckleLimits };
 
 /** A provider this buckle fronts (c). Keys are paths (c.2). */
 export const BuckleProvider = z
