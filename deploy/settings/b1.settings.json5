@@ -2,6 +2,20 @@
   // b1.settings.json5 — the demo topology's head buckle: openrouter +
   // downstream peers b2, b3. Composed over default.settings.json5.
   hub: { label: "b1" },
+  access: {
+    principals: [
+      { id: "alice@fleet", kind: "human", groups: [] },
+
+      { id: "carol@fleet", kind: "developer", groups: ["platform"] },
+    ],
+    grants: [
+      { principal: "alice@fleet", scopes: ["models.list", "models.use"] },
+      {
+        principal: "carol@fleet",
+        scopes: ["models.list", "models.use", "stats.read", "tree.read"],
+      },
+    ],
+  },
   providers: {
     openrouter: {
       url: "http://openrouter-stub:8080",

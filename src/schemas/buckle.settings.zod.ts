@@ -3,6 +3,7 @@
 // buckle runs is default.settings.json5 ⊕ <buckle>.settings.json5,
 // deep-merged, then safeParse'd here — fail loud, never limp along.
 import { z } from "zod";
+import { BuckleAccessRegistry } from "./buckle.access.zod.ts";
 
 /** A path to a 0600 secret file. The value never rides any artifact. */
 export const KeyPath = z.string().min(1);
@@ -86,7 +87,12 @@ export const BuckleSettings = z
     context_policy: BuckleContextPolicy.optional(),
     /** b — general security: key PATHS, never values. */
     keys: z
-      .object({ root: KeyPath.optional(), engine: KeyPath.optional() })
+      .object({
+        root: KeyPath.optional(),
+        engine: KeyPath.optional(),
+        /** dir of per-principal 0600 key files: principal.<id>.key */
+        principals_dir: KeyPath.optional(),
+      })
       .strict()
       .optional(),
     /** the unit's litellm engine — the forward target of the MITM loop. */
@@ -94,6 +100,8 @@ export const BuckleSettings = z
       .object({ url: z.url() })
       .strict()
       .optional(),
+    /** per-buckle access registry (this buckle's OWN "AD domain"). */
+    access: BuckleAccessRegistry.optional(),
     /** c — providers configured on this hub. */
     providers: z.record(z.string(), BuckleProvider).optional(),
     /** d — downstream peers. */

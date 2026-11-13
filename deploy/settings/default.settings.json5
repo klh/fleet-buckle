@@ -15,5 +15,7 @@
     // b — general security: PATHS, never values
     root: "/etc/buckle/keys/root.key",
     engine: "/etc/buckle/keys/engine.key",
+    // per-principal 0600 key files: principal.<id>.key (minted, never typed)
+    principals_dir: "/etc/buckle/keys",
   },
 }

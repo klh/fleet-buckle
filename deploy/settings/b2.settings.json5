@@ -1,6 +1,17 @@
 {
   // b2.settings.json5 — ms copilot provider + downstream peer b3.
   hub: { label: "b2" },
+  access: {
+    principals: [
+      { id: "carol@fleet", kind: "developer", groups: ["platform"] },
+    ],
+    grants: [
+      {
+        principal: "carol@fleet",
+        scopes: ["models.list", "models.use", "stats.read", "tree.read"],
+      },
+    ],
+  },
   providers: {
     mscopilot: {
       url: "http://mscopilot-stub:8080",

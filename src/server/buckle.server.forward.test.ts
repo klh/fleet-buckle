@@ -8,8 +8,28 @@ import { fileURLToPath } from "node:url";
 import { bootServer } from "./buckle.server.main.ts";
 import { loadSettings } from "./buckle.server.settings.ts";
 import { BuckleProblem } from "../schemas/buckle.problem.zod.ts";
+import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
+
+import { mkdtempSync, writeFileSync, chmodSync } from "node:fs";
+import { tmpdir } from "node:os";
+const KEYS_DIR = mkdtempSync(join(tmpdir(), "buckle-keys-"));
+const wireKey = (name: string): string => {
+  const p = join(KEYS_DIR, name);
+  writeFileSync(p, "bksk_wire_test\n");
+  chmodSync(p, 0o600);
+  return p;
+};
+wireKey("principal.wire@fleet.test.key");
+const AUTH = { authorization: "Bearer bksk_wire_test" };
+const ACCESS = BuckleAccessRegistry.parse({
+  principals: [{ id: "wire@fleet.test", kind: "service", groups: [] }],
+  grants: [
+    { principal: "wire@fleet.test", scopes: ["models.list", "models.use"] },
+  ],
+  tiers: [],
+});
 
 /** the engine stub: echoes what it received (headers we assert on) */
 function stubEngine(): { port: number; stop: () => void; seen: { traceparent: string | null; body: unknown }[] } {
@@ -51,6 +71,8 @@ async function booted(enginePort: number, providerPort: number) {
   const server = bootServer({
     settings: {
       ...base,
+      keys: { ...(base.keys ?? {}), principals_dir: KEYS_DIR },
+      access: ACCESS,
       engine: { url: `http://127.0.0.1:${enginePort}` },
       providers: { openrouter: { url: `http://127.0.0.1:${providerPort}` } } as never,
     },
@@ -73,7 +95,7 @@ describe("STEP 3 — the MITM forward loop", () => {
       const inbound = "00-1234567890abcdef1234567890abcdef-fedcba9876543210-01";
       const r = await fetch(`${base}/v1/chat/completions`, {
         method: "POST",
-        headers: { "content-type": "application/json", traceparent: inbound },
+        headers: { "content-type": "application/json", traceparent: inbound, ...AUTH },
         body: JSON.stringify(CHAT),
       });
       expect(r.status).toBe(200);
@@ -100,7 +122,7 @@ describe("STEP 3 — the MITM forward loop", () => {
     try {
       const r = await fetch(`${base}/v1/chat/completions`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...AUTH },
         body: JSON.stringify({ ...CHAT, model: "nope/nothing" }),
       });
       expect(r.status).toBe(404);
@@ -123,7 +145,7 @@ describe("STEP 3 — the MITM forward loop", () => {
       for (let i = 0; i < 2; i++) {
         const r = await fetch(`${base}/v1/chat/completions`, {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...AUTH },
           body: JSON.stringify(CHAT),
         });
         expect(r.status).toBe(200);

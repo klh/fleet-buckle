@@ -12,8 +12,10 @@ import {
 } from "./buckle.server.telemetry.ts";
 import { loadSettings, type SettingsPaths } from "./buckle.server.settings.ts";
 import { buildCatalog } from "./buckle.server.models.ts";
-import { forwardChat } from "./buckle.server.forward.ts";
+import { forwardChat, problemResponse } from "./buckle.server.forward.ts";
+import type { BuckleScope } from "../schemas/buckle.access.zod.ts";
 import { createMetrics } from "./buckle.server.metrics.ts";
+import { authenticate, bearerOf, holdsScope } from "./buckle.server.access.ts";
 
 export function bootServer(input: { settings: BuckleSettings; port?: number }) {
   const { settings } = input;
@@ -35,20 +37,37 @@ export function bootServer(input: { settings: BuckleSettings; port?: number }) {
         return res;
       };
       const { pathname } = new URL(req.url);
-      if (pathname === "/v1/chat/completions" && req.method === "POST")
+      const principal = authenticate(settings, bearerOf(req));
+      const guard = (scope: BuckleScope): Response | null => {
+        if (principal === null)
+          return problemResponse("unauthenticated", "a principal key is required");
+        if (!holdsScope(settings, principal, scope))
+          return problemResponse(
+            "forbidden",
+            `${principal} lacks ${scope} on this buckle`,
+          );
+        return null;
+      };
+      if (pathname === "/v1/chat/completions" && req.method === "POST") {
+        const denied = guard("models.use");
+        if (denied !== null) return done(denied);
         return done(await forwardChat(settings, metrics, req, tp));
+      }
       if (pathname === "/metrics")
         return done(
           new Response(metrics.render(), {
             headers: { "content-type": "text/plain; version=0.0.4" },
           }),
         );
-      if (pathname === "/v1/models")
+      if (pathname === "/v1/models") {
+        const denied = guard("models.list");
+        if (denied !== null) return done(denied);
         return done(
           Response.json(await buildCatalog(settings, tp), {
             headers: { "cache-control": "no-store" },
           }),
         );
+      }
       if (pathname === "/healthz")
         return done(
           Response.json(

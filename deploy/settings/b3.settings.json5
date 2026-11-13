@@ -1,6 +1,20 @@
 {
   // b3.settings.json5 — zai provider, no peers (the chain's tail).
   hub: { label: "b3" },
+  access: {
+    principals: [
+      { id: "bob@fleet", kind: "human", groups: [] },
+
+      { id: "carol@fleet", kind: "developer", groups: ["platform"] },
+    ],
+    grants: [
+      { principal: "bob@fleet", scopes: ["models.list", "models.use"] },
+      {
+        principal: "carol@fleet",
+        scopes: ["models.list", "models.use", "stats.read", "tree.read"],
+      },
+    ],
+  },
   providers: {
     zai: {
       url: "http://zai-stub:8080",

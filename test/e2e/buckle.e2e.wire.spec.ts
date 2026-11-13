@@ -4,6 +4,18 @@
 // the trace continued, and /metrics reflecting the traffic. Poll fns
 // are TOTAL (throws become "connecting") — expect.poll does not catch.
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// carol holds every scope on every buckle of the demo topology; her key
+// is MINTED (0600, gitignored) by globalSetup before the stack boots
+const ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
+const CAROL_KEY = readFileSync(
+  join(ROOT, "deploy/keys/.gen/principal.carol@fleet.key"),
+  "utf8",
+).trim();
+const AUTH = { authorization: `Bearer ${CAROL_KEY}` };
 
 const UNITS = [
   {
@@ -52,7 +64,7 @@ for (const unit of UNITS) {
 
     // catalog — fetched from the provider stub, hub label ours
     const catalog = (await (
-      await fetch(`${unit.base}/v1/models`)
+      await fetch(`${unit.base}/v1/models`, { headers: AUTH })
     ).json()) as {
       hub: string;
       models: { id: string; origin: { kind: string; label: string } }[];
@@ -74,7 +86,7 @@ for (const unit of UNITS) {
     const postChat = (): Promise<Response> =>
       fetch(`${unit.base}/v1/chat/completions`, {
         method: "POST",
-        headers: { "content-type": "application/json", traceparent: inbound },
+        headers: { "content-type": "application/json", traceparent: inbound, ...AUTH },
         body: JSON.stringify({
           model: unit.chatModel,
           messages: [{ role: "user", content: `hello from ${unit.label} e2e` }],
@@ -100,7 +112,7 @@ for (const unit of UNITS) {
     // unknown model fails LOUD (problem+json, never the engine's 404)
     const unknown = await fetch(`${unit.base}/v1/chat/completions`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...AUTH },
       body: JSON.stringify({ model: "nope/nothing", messages: [] }),
     });
     expect(unknown.status).toBe(404);

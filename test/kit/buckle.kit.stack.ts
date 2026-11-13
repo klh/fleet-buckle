@@ -2,9 +2,22 @@
 // whole playwright run (globalSetup/globalTeardown call these), every
 // project's specs hit the same Docker Desktop topology. docker only —
 // no local mode; compose is the topology of record.
-import { stackDown, stackUp } from "./buckle.kit.compose.ts";
+import { stackDown, stackUp as composeUp } from "./buckle.kit.compose.ts";
 
-export { stackUp, stackDown };
+/** the demo keys are MINTED before the stack boots (secrets are never
+ *  typed): per-principal 0600 files into deploy/keys/.gen, which compose
+ *  mounts at /etc/buckle/keys. */
+export async function stackUp(): Promise<void> {
+  const { execSync } = await import("node:child_process");
+  execSync("bun tools/src/buckle.mint-keys.ts", {
+    encoding: "utf8",
+    stdio: "inherit",
+    cwd: new URL("../..", import.meta.url).pathname,
+  });
+  composeUp();
+}
+
+export { stackDown };
 
 /** host ports of the demo topology — the single port truth for specs */
 export const PORTS = {

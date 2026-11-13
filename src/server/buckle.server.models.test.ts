@@ -9,8 +9,28 @@ import { fileURLToPath } from "node:url";
 import { bootServer } from "./buckle.server.main.ts";
 import { loadSettings } from "./buckle.server.settings.ts";
 import { BuckleModelsResponse } from "../schemas/buckle.model.wire.zod.ts";
+import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
+
+import { mkdtempSync, writeFileSync, chmodSync } from "node:fs";
+import { tmpdir } from "node:os";
+const KEYS_DIR = mkdtempSync(join(tmpdir(), "buckle-keys-"));
+const wireKey = (name: string): string => {
+  const p = join(KEYS_DIR, name);
+  writeFileSync(p, "bksk_wire_test\n");
+  chmodSync(p, 0o600);
+  return p;
+};
+wireKey("principal.wire@fleet.test.key");
+const AUTH = { authorization: "Bearer bksk_wire_test" };
+const ACCESS = BuckleAccessRegistry.parse({
+  principals: [{ id: "wire@fleet.test", kind: "service", groups: [] }],
+  grants: [
+    { principal: "wire@fleet.test", scopes: ["models.list", "models.use"] },
+  ],
+  tiers: [],
+});
 
 const FULL_ROW = {
   id: "mscopilot/gpt-6-astra",
@@ -44,6 +64,8 @@ async function bootedWithProviders(providers: Record<string, unknown>) {
   });
   const settings = {
     ...base,
+    keys: { ...(base.keys ?? {}), principals_dir: KEYS_DIR },
+    access: ACCESS,
     providers: providers as never,
   };
   const server = bootServer({ settings, port: 0 });
@@ -60,7 +82,7 @@ describe("STEP 2 — /v1/models (fetch, never declare)", () => {
       openrouter: { url: `http://127.0.0.1:${provider.port}` },
     });
     try {
-      const r = await fetch(`${base}/v1/models`);
+      const r = await fetch(`${base}/v1/models`, { headers: AUTH });
       expect(r.status).toBe(200);
       const body = BuckleModelsResponse.parse(await r.json());
       expect(body.hub).toBe("b1");
@@ -86,7 +108,7 @@ describe("STEP 2 — /v1/models (fetch, never declare)", () => {
       mscopilot: { url: `http://127.0.0.1:${provider.port}` },
     });
     try {
-      const r = await fetch(`${base}/v1/models`);
+      const r = await fetch(`${base}/v1/models`, { headers: AUTH });
       const body = BuckleModelsResponse.parse(await r.json());
       expect(body.models.length).toBe(1);
       const m = body.models[0]!;
@@ -112,7 +134,7 @@ describe("STEP 2 — /v1/models (fetch, never declare)", () => {
       dead: { url: "http://127.0.0.1:1" },
     });
     try {
-      const r = await fetch(`${base}/v1/models`);
+      const r = await fetch(`${base}/v1/models`, { headers: AUTH });
       expect(r.status).toBe(200);
       const body = BuckleModelsResponse.parse(await r.json());
       expect(body.models.map((m) => m.id)).toEqual(["zai/glm-5.3"]);
