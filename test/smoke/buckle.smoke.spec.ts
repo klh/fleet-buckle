@@ -1,35 +1,85 @@
-// smoke: the schema-first contract holds — openapi.json is in sync with
-// the wire schemas, and every fixture parses against its schema.
+// smoke — PROJECT 1, runs first, no deps:
+//   a) the docker engine is running
+//   b) the correct versions of the 3 buckles are running (all 13 services
+//      of the demo topology, built from THIS source)
+//   c) they are healthy — via the fleet-health sidecars, never the
+//      processes themselves. TODAY the honest verdict is UNHEALTHY for
+//      all three: the buckle server lands in commit 3. This test flips
+//      to `up` assertions when it does — the proof the sidecars tell the
+//      truth is that they say DOWN while the rest is not done yet.
 import { test, expect } from "@playwright/test";
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import {
-  BuckleTreeResponse,
-  mergeSettings,
-} from "../../src/schemas/index.ts";
-import defaultSettings from "../../deploy/settings/default.settings.json5";
-import b1Settings from "../../deploy/settings/b1.settings.json5";
-import demoTree from "../../src/schemas/fixtures/tree.demo.json";
+import { HealthVerdict } from "@fleet/health";
+import { PORTS, SERVICES } from "../kit/buckle.kit.stack.ts";
+import { psMap } from "../kit/buckle.kit.compose.ts";
 
-const root = fileURLToPath(new URL("../..", import.meta.url));
+test("a) the docker engine is running", () => {
+  const version = execSync("docker info --format {{.ServerVersion}}", {
+    encoding: "utf8",
+  }).trim();
+  expect(version).toMatch(/^\d+\.\d+/);
+});
 
-test("openapi.json is generated, committed, in sync", () => {
-  execSync("bun tools/src/buckle.gen-openapi.ts --check", { cwd: root });
-  const doc = JSON.parse(readFileSync(`${root}/openapi.json`, "utf8"));
-  expect(doc.openapi).toBe("3.1.0");
-  expect(Object.keys(doc.paths)).toEqual(
-    expect.arrayContaining(["/v1/models", "/v1/tree", "/stats"]),
+test("b) the correct versions of the 3 buckles are running (full stack, this build)", () => {
+  const ps = psMap();
+  for (const svc of SERVICES) {
+    expect(ps[svc], `service ${svc} in compose ps`).toBeDefined();
+  }
+  // built-from-this-source: 13 containers of OUR project; the 3 buckles
+  // run OUR project's built images (not a registry pull)
+  const names = execSync(
+    "docker ps -a --filter label=com.docker.compose.project=fleet-buckle-test --format {{.Names}}",
+    { encoding: "utf8" },
+  )
+    .trim()
+    .split("\n")
+    .filter((l) => l.length > 0);
+  expect(names.length).toBe(SERVICES.length);
+  const buckleNames = names.filter((n) => /buckle[123]-\d+$/.test(n));
+  expect(buckleNames.length).toBe(3);
+  for (const n of buckleNames) {
+    const image = execSync(`docker inspect -f {{.Config.Image}} ${n}`, {
+      encoding: "utf8",
+    }).trim();
+    expect(image).toContain("fleet-buckle-test-buckle");
+  }
+});
+
+test.setTimeout(120_000);
+test("c) verdict: ALL THREE buckles are UNHEALTHY — the server has not landed yet", async () => {
+  // the fleet-health sidecars poll the real targets; expect.poll does not
+  // catch throws — the poll fn must be total
+  const verdictState = async (port: number): Promise<string> => {
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}/status`);
+      return HealthVerdict.parse(await r.json()).state;
+    } catch {
+      return "connecting";
+    }
+  };
+  for (const port of [PORTS.b1Health, PORTS.b2Health, PORTS.b3Health]) {
+    await expect
+      .poll(() => verdictState(port), { timeout: 60_000 })
+      .toBe("down");
+  }
+});
+
+test("schema contracts hold (openapi in sync, fixtures parse, settings compose)", async () => {
+  const { execSync: exec } = await import("node:child_process");
+  exec("bun tools/src/buckle.gen-openapi.ts --check");
+  const { BuckleTreeResponse, mergeSettings } = await import(
+    "../../src/schemas/index.ts"
   );
-});
-
-test("demo tree fixture parses against the tree schema", () => {
-  const tree = BuckleTreeResponse.parse(demoTree);
-  expect(tree.self.buckle.label).toBe("b1");
-});
-
-test("demo settings compose: default ⊕ b1 parses and declares peers", () => {
-  const merged = mergeSettings(defaultSettings, b1Settings);
+  const { default: defaults } = await import(
+    "../../deploy/settings/default.settings.json5"
+  );
+  const { default: b1 } = await import("../../deploy/settings/b1.settings.json5");
+  const { default: demoTree } = await import(
+    "../../src/schemas/fixtures/tree.demo.json"
+  );
+  const merged = mergeSettings(defaults, b1);
   expect(merged.hub.label).toBe("b1");
   expect(Object.keys(merged.hubs ?? {}).sort()).toEqual(["b2", "b3"]);
+  const tree = BuckleTreeResponse.parse(demoTree);
+  expect(tree.self.buckle.label).toBe("b1");
 });

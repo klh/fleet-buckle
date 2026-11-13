@@ -1,0 +1,9 @@
+node_modules
+.git
+.qlty
+test
+tools
+deploy
+openapi.json
+test-results
+playwright-report

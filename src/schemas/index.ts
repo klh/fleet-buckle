@@ -7,3 +7,4 @@ export * from "./buckle.tree.zod.ts";
 export * from "./buckle.stats.zod.ts";
 export * from "./buckle.problem.zod.ts";
 export * from "./buckle.openapi.ts";
+export * from "./buckle.healthz.zod.ts";

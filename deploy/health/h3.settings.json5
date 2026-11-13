@@ -1,0 +1,12 @@
+{
+  // h3.settings.json5 — the sidecar for buckle1 of the fleet-buckle demo
+  // stack: poll the buckle's healthz over the container network, serve
+  // the verdict on the sidecar's own port.
+  probe: {
+    target: "http://buckle1:4111/healthz",
+  },
+  serve: {
+    port: 4312,
+    bind: "0.0.0.0",
+  },
+}

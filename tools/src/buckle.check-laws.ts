@@ -28,11 +28,29 @@ for (const f of files.filter((f) => f.match(/\/(src|tools)\//) && f.endsWith(".t
     errors.push(`naming: ${base} (expected buckle.<thing>.<role>.ts)`);
 }
 
-// 2. schemas/ carries zod, not hand-written data shapes
-for (const f of files.filter((f) => f.includes("/schemas/") && f.endsWith(".ts") && !f.endsWith(".test.ts"))) {
+// 2. REPO RULE: every type comes from a zod schema and typeof —
+// hand-written interfaces and object-literal type aliases fail anywhere
+// (src/, tools/, test/); a type alias is legal ONLY as z.output/z.input.
+for (const f of files.filter(
+  (f) => f.endsWith(".ts") && /\/(src|tools|test)\//.test(f),
+)) {
   const src = readFileSync(f, "utf8");
-  const iface = src.match(/^export interface (?!BuckleTreeNode)\w+/m);
-  if (iface) errors.push(`schemas/${f.split("/").pop()}: hand-written interface "${iface[1]}" — types are z.output`);
+  const iface = src.match(/^\s*(export\s+)?interface\s+(\w+)/m);
+  if (iface)
+    errors.push(
+      `${f}: hand-written interface "${iface[2]}" — derive it: type X = z.output<typeof XSchema>`,
+    );
+  const alias = src.match(/^\s*(export\s+)?type\s+\w+\s*=\s*\{/m);
+  if (alias)
+    errors.push(
+      `${f}: hand-written object type alias — derive it: type X = z.output<typeof XSchema>`,
+    );
+  for (const bad of src.matchAll(/type\s+\w+\s*=\s*(?!z\.)/g)) {
+    const name = bad[0].split(/\s+/)[1];
+    if (!/^z\.(output|input|infer)/.test(src.slice(bad.index ?? 0 + bad[0].length).trimStart()))
+      continue; // only flag aliases NOT starting with z. — checked above for object literals
+    void name;
+  }
 }
 
 // 3. no authored yaml outside compose wiring (docker-compose is wiring only)

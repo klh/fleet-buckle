@@ -1,0 +1,58 @@
+// buckle.kit.compose.ts — the compose driver: docker-only harness (the
+// specs always hit the real Docker Desktop topology). One project name,
+// deterministic service set, json output for asserts.
+import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+const ROOT = fileURLToPath(new URL("../..", import.meta.url));
+export const COMPOSE_FILE = `${ROOT}/deploy/compose.test.yaml`;
+export const PROJECT = "fleet-buckle-test";
+
+/** The stack fixture refuses to mystery-fail: the sidecar image builds
+ *  from the fleet-health sibling checkout — point at it or clone it. */
+export function requireHealthSibling(): void {
+  const sibling = `${ROOT}/../fleet-health`;
+  if (!existsSync(`${sibling}/Dockerfile`))
+    throw new Error(
+      `fleet-health sibling missing at ${sibling} — git clone git@github.com:klh/fleet-health.git`,
+    );
+}
+
+export function compose(args: string): string {
+  return execSync(
+    `docker compose -f ${COMPOSE_FILE} -p ${PROJECT} ${args}`,
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  );
+}
+
+export async function stackUp(): Promise<void> {
+  requireHealthSibling();
+  execSync(
+    `docker compose -f ${COMPOSE_FILE} -p ${PROJECT} up -d --build`,
+    { encoding: "utf8", stdio: "inherit" },
+  );
+}
+
+export function stackDown(): void {
+  execSync(
+    `docker compose -f ${COMPOSE_FILE} -p ${PROJECT} down -v --remove-orphans`,
+    { encoding: "utf8", stdio: "inherit" },
+  );
+}
+
+/** compose ps as a service -> state map (json). */
+export function psMap(): Record<string, string> {
+  const out = compose("ps --all --format json");
+  const rows = out
+    .trim()
+    .split("\n")
+    .filter((l) => l.length > 0)
+    .map((l) => JSON.parse(l) as Record<string, string>);
+  const map: Record<string, string> = {};
+  for (const r of rows) {
+    const svc = r["Service"];
+    if (svc !== undefined) map[svc] = r["State"] ?? "unknown";
+  }
+  return map;
+}

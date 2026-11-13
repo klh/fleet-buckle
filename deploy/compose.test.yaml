@@ -1,57 +1,133 @@
 # compose.test.yaml — the DEMONSTRABLE federation topology on Docker
-# Desktop. Three buckles, three stub providers, wiring ONLY.
+# Desktop. A buckle UNIT is itself a compose stack: buckle + litellm
+# engine + fleet-health sidecar. Three units, three stub providers,
+# Jaeger (OTLP) for the tracing ids that flow through everything.
+# WIRING ONLY — no config here; providers/peers live in settings/*.json5.
 #
+# Host ports ride a clean 47xx block (4111/4112 are owned by the live
+# desktop hub on this machine; the demo never collides with reality):
+#   b1 4711/4712 · b2 4721/4722 · b3 4731/4732 · jaeger 16686
 #   b1 (openrouter) → peers b2, b3      bob(b1+b3) sees openrouter+zai
 #   b2 (ms copilot) → peer  b3          carol(all)  sees everything
 #   b3 (zai)        → no peers          alice(b1)   sees openrouter only
 #
-# Providers/peers/grants live in settings/*.settings.json5 — NOT here.
+# Requires the fleet-health sibling checkout (the sidecar image):
+#   git clone git@github.com:klh/fleet-health.git ../../fleet-health
 
 services:
-  # ── stub providers (the test kit serves model fixtures) ──
+  # ── Jaeger: the tracing backend every unit exports to (OTLP) ──
+  jaeger:
+    image: jaegertracing/all-in-one:1.76.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686" # UI
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+
+  # ── stub providers (fixtures ride mounts; the kit serves model rows) ──
   openrouter-stub:
     build: ../test/kit/stub
+    volumes:
+      - ../deploy/fixtures/openrouter.models.json:/etc/stub/models.json:ro
   mscopilot-stub:
     build: ../test/kit/stub
+    volumes:
+      - ../deploy/fixtures/mscopilot.models.json:/etc/stub/models.json:ro
   zai-stub:
     build: ../test/kit/stub
+    volumes:
+      - ../deploy/fixtures/zai.models.json:/etc/stub/models.json:ro
 
-  # ── the three buckles ──
+  # ── unit 1 ──
+  litellm1:
+    image: ghcr.io/berriai/litellm:v1.103.0 # digest-pin at v0.0.1 tag
+    # engine config is GENERATED at boot from the JSON catalog (commit 3);
+    # CLI flags are wiring, never authored yaml. Dummy value: test fixture,
+    # not a secret — provider keys are PATHS in settings.json5.
+    command: ["--model", "openai/gpt-4o-mini", "--port", "4000"]
+    environment:
+      OPENAI_API_KEY: sk-stub-fixture
+  health1:
+    build: ../../fleet-health
+    environment:
+      HEALTH_SETTINGS: /etc/health/settings.json5
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    volumes:
+      - ./health/h1.settings.json5:/etc/health/settings.json5:ro
+    ports:
+      - "4712:4112"
+    depends_on: [buckle1, jaeger]
   buckle1:
     build: ..
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
     volumes:
       - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
       - ./settings/b1.settings.json5:/etc/buckle/settings.json:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:
-      - "4111:4111"
-    depends_on: [openrouter-stub]
+      - "4711:4111"
+    depends_on: [litellm1, openrouter-stub, jaeger]
 
+  # ── unit 2 ──
+  litellm2:
+    image: ghcr.io/berriai/litellm:v1.103.0
+    command: ["--model", "openai/gpt-4o-mini", "--port", "4000"]
+    environment:
+      OPENAI_API_KEY: sk-stub-fixture
+  health2:
+    build: ../../fleet-health
+    environment:
+      HEALTH_SETTINGS: /etc/health/settings.json5
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    volumes:
+      - ./health/h2.settings.json5:/etc/health/settings.json5:ro
+    ports:
+      - "4722:4212"
+    depends_on: [buckle2, jaeger]
   buckle2:
     build: ..
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
     volumes:
       - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
       - ./settings/b2.settings.json5:/etc/buckle/settings.json:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:
-      - "4211:4111"
-    depends_on: [mscopilot-stub]
+      - "4721:4111"
+    depends_on: [litellm2, mscopilot-stub, jaeger]
 
+  # ── unit 3 ──
+  litellm3:
+    image: ghcr.io/berriai/litellm:v1.103.0
+    command: ["--model", "openai/gpt-4o-mini", "--port", "4000"]
+    environment:
+      OPENAI_API_KEY: sk-stub-fixture
+  health3:
+    build: ../../fleet-health
+    environment:
+      HEALTH_SETTINGS: /etc/health/settings.json5
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    volumes:
+      - ./health/h3.settings.json5:/etc/health/settings.json5:ro
+    ports:
+      - "4732:4312"
+    depends_on: [buckle3, jaeger]
   buckle3:
     build: ..
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
     volumes:
       - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
       - ./settings/b3.settings.json5:/etc/buckle/settings.json:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:
-      - "4311:4111"
-    depends_on: [zai-stub]
+      - "4731:4111"
+    depends_on: [litellm3, zai-stub, jaeger]

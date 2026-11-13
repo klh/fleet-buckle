@@ -29,12 +29,12 @@ describe("BuckleSettings", () => {
       hub: { label: "x" },
       providers: { zai: { url: "https://api.z.ai/api", key: "/etc/k" } },
     });
-    expect(parsed.providers?.zai?.key).toBe("/etc/k");
+    expect(parsed.providers?.['zai']?.key).toBe("/etc/k");
   });
 
   test("downstream peers are declared under hubs — never an upstream list", () => {
     const merged = mergeSettings(defaultSettings, b1Settings);
     // b1 declares b2,b3; nothing else exists in the file
-    expect(merged.hubs?.b2?.url).toMatch(/^http/);
+    expect(merged.hubs?.['b2']?.url).toMatch(/^http/);
   });
 });

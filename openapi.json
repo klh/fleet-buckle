@@ -6,6 +6,66 @@
     "description": "The LLM MITM gateway: context injection, key management, tracking, downstream federation, live overview."
   },
   "paths": {
+    "/healthz": {
+      "get": {
+        "summary": "Own liveness face (the fleet-health sidecar polls this)",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "up",
+                        "down"
+                      ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{32}$"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "status",
+                    "label",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Prometheus export: requests, inflight, tok/s per model/provider/buckle",
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/models": {
       "get": {
         "summary": "Federated model list for the authenticated principal",
@@ -218,15 +278,6 @@
                   "type": "object",
                   "properties": {
                     "self": {
-                      "$ref": "#/$defs/__schema0"
-                    }
-                  },
-                  "required": [
-                    "self"
-                  ],
-                  "additionalProperties": false,
-                  "$defs": {
-                    "__schema0": {
                       "type": "object",
                       "properties": {
                         "buckle": {
@@ -418,7 +469,363 @@
                         "peers": {
                           "type": "array",
                           "items": {
-                            "$ref": "#/$defs/__schema0"
+                            "type": "object",
+                            "properties": {
+                              "buckle": {
+                                "type": "object",
+                                "properties": {
+                                  "label": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "url": {
+                                    "type": "string",
+                                    "format": "uri"
+                                  }
+                                },
+                                "required": [
+                                  "label"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "models": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "origin": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "kind": {
+                                              "type": "string",
+                                              "const": "provider"
+                                            },
+                                            "label": {
+                                              "type": "string",
+                                              "minLength": 1
+                                            },
+                                            "url": {
+                                              "type": "string",
+                                              "format": "uri"
+                                            }
+                                          },
+                                          "required": [
+                                            "kind",
+                                            "label"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "kind": {
+                                              "type": "string",
+                                              "const": "buckle"
+                                            },
+                                            "label": {
+                                              "type": "string",
+                                              "minLength": 1
+                                            },
+                                            "url": {
+                                              "type": "string",
+                                              "format": "uri"
+                                            }
+                                          },
+                                          "required": [
+                                            "kind",
+                                            "label",
+                                            "url"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      ]
+                                    },
+                                    "limits": {
+                                      "type": "object",
+                                      "properties": {
+                                        "max_concurrent": {
+                                          "type": "integer",
+                                          "exclusiveMinimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "max_per_ip": {
+                                          "type": "integer",
+                                          "exclusiveMinimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "max_rpm": {
+                                          "type": "integer",
+                                          "exclusiveMinimum": 0,
+                                          "maximum": 9007199254740991
+                                        }
+                                      },
+                                      "additionalProperties": false
+                                    },
+                                    "live": {
+                                      "type": "object",
+                                      "properties": {
+                                        "inflight": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "tps": {
+                                          "type": "number",
+                                          "minimum": 0
+                                        }
+                                      },
+                                      "required": [
+                                        "inflight",
+                                        "tps"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "meta": {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {}
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "origin"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "stats": {
+                                "type": "object",
+                                "properties": {
+                                  "current_connections": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "tps": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  }
+                                },
+                                "required": [
+                                  "current_connections",
+                                  "tps"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "connections": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "principal": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "machine": {
+                                      "type": "string"
+                                    },
+                                    "inflight": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "connected_since": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "last_seen": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    }
+                                  },
+                                  "required": [
+                                    "principal",
+                                    "inflight",
+                                    "connected_since",
+                                    "last_seen"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "peers": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "buckle": {
+                                      "type": "object",
+                                      "properties": {
+                                        "label": {
+                                          "type": "string",
+                                          "minLength": 1
+                                        },
+                                        "url": {
+                                          "type": "string",
+                                          "format": "uri"
+                                        }
+                                      },
+                                      "required": [
+                                        "label"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "models": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "minLength": 1
+                                          },
+                                          "origin": {
+                                            "oneOf": [
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "kind": {
+                                                    "type": "string",
+                                                    "const": "provider"
+                                                  },
+                                                  "label": {
+                                                    "type": "string",
+                                                    "minLength": 1
+                                                  },
+                                                  "url": {
+                                                    "type": "string",
+                                                    "format": "uri"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "kind",
+                                                  "label"
+                                                ],
+                                                "additionalProperties": false
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "kind": {
+                                                    "type": "string",
+                                                    "const": "buckle"
+                                                  },
+                                                  "label": {
+                                                    "type": "string",
+                                                    "minLength": 1
+                                                  },
+                                                  "url": {
+                                                    "type": "string",
+                                                    "format": "uri"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "kind",
+                                                  "label",
+                                                  "url"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            ]
+                                          },
+                                          "limits": {
+                                            "type": "object",
+                                            "properties": {
+                                              "max_concurrent": {
+                                                "type": "integer",
+                                                "exclusiveMinimum": 0,
+                                                "maximum": 9007199254740991
+                                              },
+                                              "max_per_ip": {
+                                                "type": "integer",
+                                                "exclusiveMinimum": 0,
+                                                "maximum": 9007199254740991
+                                              },
+                                              "max_rpm": {
+                                                "type": "integer",
+                                                "exclusiveMinimum": 0,
+                                                "maximum": 9007199254740991
+                                              }
+                                            },
+                                            "additionalProperties": false
+                                          },
+                                          "live": {
+                                            "type": "object",
+                                            "properties": {
+                                              "inflight": {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "maximum": 9007199254740991
+                                              },
+                                              "tps": {
+                                                "type": "number",
+                                                "minimum": 0
+                                              }
+                                            },
+                                            "required": [
+                                              "inflight",
+                                              "tps"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          "meta": {
+                                            "type": "object",
+                                            "propertyNames": {
+                                              "type": "string"
+                                            },
+                                            "additionalProperties": {}
+                                          }
+                                        },
+                                        "required": [
+                                          "id",
+                                          "origin"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "stats": {
+                                      "type": "object",
+                                      "properties": {
+                                        "current_connections": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "tps": {
+                                          "type": "number",
+                                          "minimum": 0
+                                        }
+                                      },
+                                      "required": [
+                                        "current_connections",
+                                        "tps"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "required": [
+                                    "buckle",
+                                    "models"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "buckle",
+                              "models",
+                              "peers"
+                            ],
+                            "additionalProperties": false
                           }
                         }
                       },
@@ -429,7 +836,11 @@
                       ],
                       "additionalProperties": false
                     }
-                  }
+                  },
+                  "required": [
+                    "self"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }

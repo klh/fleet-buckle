@@ -6,6 +6,7 @@ import { BuckleModelsResponse } from "./buckle.model.wire.zod.ts";
 import { BuckleTreeResponse } from "./buckle.tree.zod.ts";
 import { BuckleStatsResponse } from "./buckle.stats.zod.ts";
 import { BuckleProblem } from "./buckle.problem.zod.ts";
+import { BuckleHealthz } from "./buckle.healthz.zod.ts";
 
 const json = (schema: z.ZodType): unknown =>
   z.toJSONSchema(schema, { io: "output", target: "draft-2020-12" });
@@ -22,6 +23,25 @@ export function buildOpenApi(): Record<string, unknown> {
         "tracking, downstream federation, live overview.",
     },
     paths: {
+      "/healthz": {
+        get: {
+          summary: "Own liveness face (the fleet-health sidecar polls this)",
+          responses: {
+            200: { content: { "application/json": { schema: json(BuckleHealthz) } } },
+          },
+        },
+      },
+      "/metrics": {
+        get: {
+          summary:
+            "Prometheus export: requests, inflight, tok/s per model/provider/buckle",
+          responses: {
+            200: {
+              content: { "text/plain": { schema: { type: "string" } } },
+            },
+          },
+        },
+      },
       "/v1/models": {
         get: {
           summary: "Federated model list for the authenticated principal",
