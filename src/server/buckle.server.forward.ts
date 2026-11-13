@@ -25,6 +25,7 @@ export function problemResponse(
   kind: BuckleProblemKind,
   title: string,
   detail?: string,
+  headers?: Record<string, string>,
 ): Response {
   const problem = BuckleProblem.parse({
     type: "https://buckle.fleet/problems/1",
@@ -35,7 +36,10 @@ export function problemResponse(
   });
   return Response.json(problem, {
     status: problem.status,
-    headers: { "content-type": "application/problem+json" },
+    headers: {
+      "content-type": "application/problem+json",
+      ...(headers ?? {}),
+    },
   });
 }
 

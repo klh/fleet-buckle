@@ -18,12 +18,14 @@ import { createMetrics } from "./buckle.server.metrics.ts";
 import { authenticate, bearerOf, holdsScope } from "./buckle.server.access.ts";
 import { createLive, federatedStats } from "./buckle.server.live.ts";
 import { buildTree } from "./buckle.server.tree.ts";
+import { createLimiter, resolveRpmCap } from "./buckle.server.limits.ts";
 import { readFileSync } from "node:fs";
 
 export function bootServer(input: { settings: BuckleSettings; port?: number }) {
   const { settings } = input;
   const metrics = createMetrics(settings.hub.label);
   const live = createLive(settings.hub.label);
+  const limiter = createLimiter();
   /** read a token/key file (PATHS, never values); null = unreadable */
   const tokenOf = (file: string): string | null => {
     try {
@@ -63,10 +65,28 @@ export function bootServer(input: { settings: BuckleSettings; port?: number }) {
       if (pathname === "/v1/chat/completions" && req.method === "POST") {
         const denied = guard("models.use");
         if (denied !== null) return done(denied);
-        if (principal !== null)
+        if (principal !== null) {
+          const grant = (settings.access?.grants ?? []).find(
+            (g) => g.principal === principal,
+          );
+          const kind = settings.access?.principals.find(
+            (p) => p.id === principal,
+          )?.kind;
+          const cap = resolveRpmCap(grant, kind, settings.access?.tiers ?? []);
+          const verdict = limiter.admit(principal, cap);
+          if (!verdict.allowed)
+            return done(
+              problemResponse(
+                "rate-limited",
+                "rpm cap reached",
+                `${cap}/min on this buckle`,
+                { "retry-after": String(verdict.retryAfterS) },
+              ),
+            );
           return done(
             await forwardChat(settings, metrics, live, principal, req, tp),
           );
+        }
       }
       if (pathname === "/metrics")
         return done(

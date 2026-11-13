@@ -11,11 +11,13 @@
       { id: "federation@fleet", kind: "service", groups: [] },
     ],
     grants: [
-      // own rows ONLY — the empty peer list (federated views ride grants)
+      // own rows ONLY (empty peer list); the load waves ride her small
+      // rpm cap — 429 + Retry-After is DEMOED, not just unit-tested
       {
         principal: "alice@fleet",
         scopes: ["models.list", "models.use"],
         peers: [],
+        limits: { max_rpm: 4 },
       },
       // own + b3's zai rows — the matrix's openrouter+zai cell
       {
