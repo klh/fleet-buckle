@@ -1,6 +1,10 @@
 {
   "data": [
-    { "id": "openrouter/qwen3-coder" },
-    { "id": "openrouter/qwen3-235b" }
+    {
+      "id": "openai/qwen3-coder"
+    },
+    {
+      "id": "openai/qwen3-235b"
+    }
   ]
 }

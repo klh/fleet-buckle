@@ -42,6 +42,39 @@ export function buildOpenApi(): Record<string, unknown> {
           },
         },
       },
+      "/v1/chat/completions": {
+        post: {
+          summary: "The MITM forward loop (OpenAI wire)",
+          description:
+            "Validates the model exists in this buckle's catalog " +
+            "(drift fails loud), then forwards to the unit's litellm " +
+            "engine with the W3C trace CONTINUED (same trace id, new " +
+            "span id on every hop). Response passes through untouched.",
+          requestBody: {
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["model", "messages"],
+                  properties: {
+                    model: { type: "string" },
+                    messages: { type: "array" },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description: "engine response, passed through",
+              "content": { "application/json": { schema: { type: "object" } } },
+            },
+            default: {
+              "content": { "application/problem+json": { schema: problem } },
+            },
+          },
+        },
+      },
       "/v1/models": {
         get: {
           summary: "Federated model list for the authenticated principal",

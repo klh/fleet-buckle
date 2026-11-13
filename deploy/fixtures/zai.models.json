@@ -1,6 +1,10 @@
 {
   "data": [
-    { "id": "zai/glm-5.3" },
-    { "id": "zai/glm-5.3-air" }
+    {
+      "id": "openai/glm-5.3"
+    },
+    {
+      "id": "openai/glm-5.3-air"
+    }
   ]
 }

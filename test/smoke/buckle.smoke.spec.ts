@@ -3,13 +3,12 @@
 //   b) the correct versions of the 3 buckles are running (all 13 services
 //      of the demo topology, built from THIS source)
 //   c) they are healthy — via the fleet-health sidecars, never the
-//      processes themselves. TODAY the honest verdict is UNHEALTHY for
-//      all three: the buckle server lands in commit 3. This test flips
-//      to `up` assertions when it does — the proof the sidecars tell the
-//      truth is that they say DOWN while the rest is not done yet.
+//      processes themselves. The server landed (commit 3): the honest
+//      verdict is now `up` for all three — the flip from the pre-server
+//      truth (down) is itself the proof the sidecars tell the truth.
 import { test, expect } from "@playwright/test";
 import { execSync } from "node:child_process";
-import { HealthVerdict } from "@fleet/health";
+import { HealthFace } from "@fleet/health";
 import { PORTS, SERVICES } from "../kit/buckle.kit.stack.ts";
 import { psMap } from "../kit/buckle.kit.compose.ts";
 
@@ -24,6 +23,9 @@ test("b) the correct versions of the 3 buckles are running (full stack, this bui
   const ps = psMap();
   for (const svc of SERVICES) {
     expect(ps[svc], `service ${svc} in compose ps`).toBeDefined();
+    expect(ps[svc], `service ${svc} must be RUNNING (not exited)`).toBe(
+      "running",
+    );
   }
   // built-from-this-source: 13 containers of OUR project; the 3 buckles
   // run OUR project's built images (not a registry pull)
@@ -46,13 +48,15 @@ test("b) the correct versions of the 3 buckles are running (full stack, this bui
 });
 
 test.setTimeout(120_000);
-test("c) verdict: ALL THREE buckles are UNHEALTHY — the server has not landed yet", async () => {
+test("c) verdict: ALL THREE buckles are up — the server serves", async () => {
   // the fleet-health sidecars poll the real targets; expect.poll does not
   // catch throws — the poll fn must be total
   const verdictState = async (port: number): Promise<string> => {
     try {
-      const r = await fetch(`http://127.0.0.1:${port}/status`);
-      return HealthVerdict.parse(await r.json()).state;
+      // /healthz is the COMPACT face — parse it with HealthFace
+      // (the full /status body is the HealthVerdict shape)
+      const r = await fetch(`http://127.0.0.1:${port}/healthz`);
+      return HealthFace.parse(await r.json()).state;
     } catch {
       return "connecting";
     }
@@ -60,7 +64,7 @@ test("c) verdict: ALL THREE buckles are UNHEALTHY — the server has not landed 
   for (const port of [PORTS.b1Health, PORTS.b2Health, PORTS.b3Health]) {
     await expect
       .poll(() => verdictState(port), { timeout: 60_000 })
-      .toBe("down");
+      .toBe("up");
   }
 });
 

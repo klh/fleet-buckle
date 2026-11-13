@@ -89,6 +89,11 @@ export const BuckleSettings = z
       .object({ root: KeyPath.optional(), engine: KeyPath.optional() })
       .strict()
       .optional(),
+    /** the unit's litellm engine — the forward target of the MITM loop. */
+    engine: z
+      .object({ url: z.url() })
+      .strict()
+      .optional(),
     /** c — providers configured on this hub. */
     providers: z.record(z.string(), BuckleProvider).optional(),
     /** d — downstream peers. */

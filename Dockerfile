@@ -8,6 +8,4 @@ WORKDIR /app
 RUN bun add zod@4.6.7
 COPY src ./src
 EXPOSE 4111
-# the server lands in commit 3 — until then this entrypoint honestly
-# fails and the fleet-health sidecar reports the truth: down.
-CMD ["bun", "src/server/main.ts"]
+CMD ["bun", "src/server/buckle.server.main.ts"]
