@@ -138,6 +138,9 @@ export function bootServer(input: { settings: BuckleSettings; port?: number }) {
               ok: true,
               status: "up",
               label: settings.hub.label,
+              ...(settings.hub.version !== undefined
+                ? { version: settings.hub.version }
+                : {}),
               trace_id: traceIdOf(tp),
             }),
             { headers: { "cache-control": "no-store" } },

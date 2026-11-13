@@ -37,3 +37,34 @@ behind the server today, skipped).
 
 the demo matrix curls as spec: grants per principal per buckle, denial
 paths 403 problem+json, federation tree depth-2 summaries, load waves.
+
+## Stage 0 — the standing first-stage demo (`deploy/compose.stage0.yaml`)
+
+The stack's first smoke moment, kept forever: stubs + the three buckles
++ sidecars, NO engines. The minimal buckle ANSWERS (`/healthz` — label
+per hub), so the sidecars swear all three `up` (the smoke that should
+NOT fail works); a chat round trip is honestly red — 503
+`application/problem+json` (the smoke that should fail, fails).
+Host ports 49xx; runs beside the full 47xx stack in one pass.
+
+## Rolling deploy (`deploy/compose.rolling.yaml` + `deploy/front/`)
+
+The architecture that makes a new buckle version swappable with zero
+downtime: a per-unit FRONT (tiny reverse proxy) — the active upstream
+is a STATE FILE, read per request. The switch is a same-inode write
+into the mounted `deploy/roll/` directory (a host-side rename replaces
+the inode and VirtioFS never shows it; the front's last-known-good
+makes a torn read harmless — it serves the previous version until a
+clean read lands).
+
+The rolling spec proves the sequence:
+1. v1 serves through the front (`x-buckle-upstream` observable)
+2. the unit-surface sidecar (polling the FRONT) is up — the contract
+3. the NEW version gates healthy BEFORE traffic flips: its own
+   sidecar swears it up, and its `hub.version` stamp ("v2-rolling")
+   answers on healthz while v1 still serves
+4. THE SWITCH under load: a v1 stream (all 200/upstream=v1) → one
+   state write → the stream continues all-200/upstream=v2, the version
+   stamp visible THROUGH the front, and the unit sidecar never went
+   down — no dropped request
+5. drain: v1 stops; chats keep riding v2; the front never blinked

@@ -1,0 +1,12 @@
+// hf1.settings.json5 — the sidecar for the FRONT of unit b1 (rolling
+// deploy): the unit's user-facing surface. It stays up across the
+// version switch — that constancy is the zero-downtime proof.
+{
+  probe: {
+    target: "http://front1:4113/healthz",
+  },
+  serve: {
+    port: 4112,
+    bind: "0.0.0.0",
+  },
+}

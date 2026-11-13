@@ -8,6 +8,9 @@
 //   3. federation — per-hop grant edges + denial paths (subset of e2e,
 //                 split for sharded runs).
 //   4. load    — repeatEach waves, 429/503 + Retry-After.
+//   5. rolling — the rolling deploy: v2 up behind the front, gated by
+//                 its own sidecar, state-file flip under load, v1
+//                 drained — zero dropped requests through the front.
 // The stack rides a worker-scoped docker fixture (test/kit) — docker
 // only, no local mode; compose is the topology of record.
 import { defineConfig } from "@playwright/test";
@@ -37,6 +40,11 @@ export default defineConfig({
       dependencies: ["smoke"],
       repeatEach: Number(process.env.BUCKLE_LOAD_REPEAT ?? 200),
       retries: 0,
+    },
+    {
+      name: "rolling",
+      testMatch: "**/rolling/*.spec.ts",
+      dependencies: ["smoke"],
     },
   ],
 });

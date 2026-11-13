@@ -31,6 +31,10 @@
                       "type": "string",
                       "minLength": 1
                     },
+                    "version": {
+                      "type": "string",
+                      "minLength": 1
+                    },
                     "trace_id": {
                       "type": "string",
                       "pattern": "^[0-9a-f]{32}$"

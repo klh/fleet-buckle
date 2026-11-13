@@ -1,0 +1,11 @@
+// hv2.settings.json5 — the sidecar for the NEW VERSION (buckle1v2):
+// it must swear v2 healthy BEFORE any traffic flips to it. The gate.
+{
+  probe: {
+    target: "http://buckle1v2:4111/healthz",
+  },
+  serve: {
+    port: 4112,
+    bind: "0.0.0.0",
+  },
+}

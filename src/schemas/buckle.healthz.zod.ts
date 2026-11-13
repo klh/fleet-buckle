@@ -8,6 +8,9 @@ export const BuckleHealthz = z
     ok: z.boolean(),
     status: z.enum(["up", "down"]),
     label: z.string().min(1),
+    // optional version stamp from settings (hub.version) — the rolling
+    // deploy switch proves itself here: same hub, new version answering
+    version: z.string().min(1).optional(),
     // W3C trace id of this answer — tracing ids through everything
     trace_id: z.string().regex(/^[0-9a-f]{32}$/),
   })

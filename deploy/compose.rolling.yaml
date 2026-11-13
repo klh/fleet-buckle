@@ -1,0 +1,86 @@
+# compose.rolling.yaml — the ROLLING DEPLOY demo for unit b1: two
+# versions of the buckle behind one front. The front's active upstream
+# is a STATE FILE (mounted from the host), re-read per request:
+#
+#   1. v1 serves; the unit sidecar polls the FRONT (the user surface)
+#   2. v2 comes up with its OWN sidecar — it must be up before traffic
+#   3. flip the state file: new requests ride v2, in-flight ride v1
+#   4. drain: stop v1 — the front never blinked
+#
+# The engine + stub are shared (a roll changes the GATEWAY, not the
+# engine). Host ports 48xx: no collision with 47xx (full) / 49xx
+# (stage 0).
+
+services:
+  openrouter-stub:
+    build: ../test/kit/stub
+    volumes:
+      - ../deploy/fixtures/openrouter.models.json:/etc/stub/models.json:ro
+
+  litellm1:
+    image: ghcr.io/berriai/litellm:v1.103.0
+    command: ["--model", "openai/qwen3-coder", "--port", "4000"]
+    environment:
+      OPENAI_API_KEY: sk-stub-fixture
+      OPENAI_API_BASE: http://openrouter-stub:8080/v1
+
+  # ── the current version ──
+  buckle1v1:
+    build: ..
+    environment:
+      BUCKLE_SETTINGS: /etc/buckle/settings.json
+      BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+      BUCKLE_ENGINE_URL: http://litellm1:4000
+    volumes:
+      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ./settings/b1.settings.json5:/etc/buckle/settings.json:ro
+      - ./keys/.gen:/etc/buckle/keys:ro
+    ports:
+      - "4821:4111"
+
+  # ── the new version — up FIRST, traffic LATER ──
+  buckle1v2:
+    build: ..
+    environment:
+      BUCKLE_SETTINGS: /etc/buckle/settings.json
+      BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+      BUCKLE_ENGINE_URL: http://litellm1:4000
+    volumes:
+      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ./settings/b1.rolling-v2.json5:/etc/buckle/settings.json:ro
+      - ./keys/.gen:/etc/buckle/keys:ro
+    ports:
+      - "4831:4111"
+
+  # ── the front — the switch is its state file ──
+  front1:
+    build: ./front
+    environment:
+      # the DIRECTORY is mounted (a single-file bind pins the inode —
+      # an atomic rename on the host would never reach the container);
+      # the switch renames INSIDE the mounted dir, per-request read
+      FRONT_STATE: /state/b1.active.json
+    volumes:
+      - ./roll:/state:ro
+    ports:
+      - "4811:4113"
+
+  # ── sidecars: the unit surface (through the front) + the v2 gate ──
+  health-front:
+    build: ../../fleet-health
+    environment:
+      HEALTH_SETTINGS: /etc/health/settings.json5
+    volumes:
+      - ./health/hf1.settings.json5:/etc/health/settings.json5:ro
+    ports:
+      - "4812:4112"
+    depends_on: [front1]
+  health-v2:
+    build: ../../fleet-health
+    environment:
+      HEALTH_SETTINGS: /etc/health/settings.json5
+    volumes:
+      - ./health/hv2.settings.json5:/etc/health/settings.json5:ro
+    ports:
+      - "4832:4112"
+    depends_on: [buckle1v2]

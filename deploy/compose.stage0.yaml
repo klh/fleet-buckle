@@ -1,0 +1,86 @@
+# compose.stage0.yaml — the FIRST-STAGE demo: stubs and the three
+# buckles ARE up in Docker (the minimal buckle answers /healthz — the
+# sidecar swears them healthy), but the units are NOT DONE: no litellm
+# engines behind them yet, so chat is honestly red. The smoke test
+# that should fail (a chat round trip) fails; the one that should not
+# (3 buckles up + healthy) works.
+#
+# WIRING ONLY — the full topology minus engines and tracing. Host
+# ports 49xx never collide with the full 47xx stack: both run in one
+# playwright pass.
+
+services:
+  # ── stub providers (the buckles' upstreams, already real) ──
+  openrouter-stub:
+    build: ../test/kit/stub
+    volumes:
+      - ../deploy/fixtures/openrouter.models.json:/etc/stub/models.json:ro
+  mscopilot-stub:
+    build: ../test/kit/stub
+    volumes:
+      - ../deploy/fixtures/mscopilot.models.json:/etc/stub/models.json:ro
+  zai-stub:
+    build: ../test/kit/stub
+    volumes:
+      - ../deploy/fixtures/zai.models.json:/etc/stub/models.json:ro
+
+  # ── the three buckles — up, not done ──
+  buckle1:
+    build: ..
+    environment:
+      BUCKLE_SETTINGS: /etc/buckle/settings.json
+      BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+    volumes:
+      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ./settings/b1.settings.json5:/etc/buckle/settings.json:ro
+      - ./keys/.gen:/etc/buckle/keys:ro
+    ports:
+      - "4911:4111"
+  buckle2:
+    build: ..
+    environment:
+      BUCKLE_SETTINGS: /etc/buckle/settings.json
+      BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+    volumes:
+      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ./settings/b2.settings.json5:/etc/buckle/settings.json:ro
+      - ./keys/.gen:/etc/buckle/keys:ro
+    ports:
+      - "4921:4111"
+  buckle3:
+    build: ..
+    environment:
+      BUCKLE_SETTINGS: /etc/buckle/settings.json
+      BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+    volumes:
+      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ./settings/b3.settings.json5:/etc/buckle/settings.json:ro
+      - ./keys/.gen:/etc/buckle/keys:ro
+    ports:
+      - "4931:4111"
+
+  # ── the sidecars, swearing the buckles up over the network ──
+  health1:
+    build: ../../fleet-health
+    environment:
+      HEALTH_SETTINGS: /etc/health/settings.json5
+    volumes:
+      - ./health/h1.settings.json5:/etc/health/settings.json5:ro
+    ports:
+      - "4912:4112"
+  health2:
+    build: ../../fleet-health
+    environment:
+      HEALTH_SETTINGS: /etc/health/settings.json5
+    volumes:
+      - ./health/h2.settings.json5:/etc/health/settings.json5:ro
+    ports:
+      - "4922:4212"
+  health3:
+    build: ../../fleet-health
+    environment:
+      HEALTH_SETTINGS: /etc/health/settings.json5
+    volumes:
+      - ./health/h3.settings.json5:/etc/health/settings.json5:ro
+    ports:
+      - "4932:4312"

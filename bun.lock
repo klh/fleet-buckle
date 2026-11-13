@@ -5,7 +5,7 @@
     "": {
       "name": "@fleet/buckle",
       "dependencies": {
-        "@fleet/health": "git+ssh://git@github.com/klh/fleet-health.git#main",
+        "@fleet/health": "git+ssh://git@github.com/klh/fleet-health.git#v1.0.0",
         "zod": "4.6.7",
       },
       "devDependencies": {
@@ -16,7 +16,7 @@
     },
   },
   "packages": {
-    "@fleet/health": ["@fleet/health@git+ssh://git@github.com/klh/fleet-health.git#447a725708adff39a09fe2d921eef1358e3fdd12", { "dependencies": { "zod": "4.6.7" }, "bin": { "fleet-health": "./src/main/health.main.ts" } }, "447a725708adff39a09fe2d921eef1358e3fdd12"],
+    "@fleet/health": ["@fleet/health@git+ssh://git@github.com/klh/fleet-health.git#200be4ba25a2d082c52ea4f256b1ab7cb5fb50b5", { "dependencies": { "zod": "4.6.7" }, "bin": { "fleet-health": "./src/main/health.main.ts" } }, "200be4ba25a2d082c52ea4f256b1ab7cb5fb50b5"],
 
     "@playwright/test": ["@playwright/test@1.65.0", "", { "dependencies": { "playwright": "1.65.0" }, "bin": { "playwright": "cli.js" } }, "sha512-iGURLGuKDLakSEl7Pgfv8h7f+XLT+V861Wfhz0zlEl5nyFuKUopdkFBPKqTllTUp06aOwPuH8iuUEb3yp3MpbQ=="],
 

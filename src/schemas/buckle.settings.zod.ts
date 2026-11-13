@@ -70,6 +70,9 @@ export const BuckleSettings = z
     hub: z
       .object({
         label: z.string().min(1),
+        // optional version stamp — the rolling-deploy marker: a new
+        // buckle answers /healthz with its version before traffic flips
+        version: z.string().min(1).optional(),
         url: z.url().optional(),
         ports: z
           .object({
