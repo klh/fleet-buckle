@@ -118,6 +118,16 @@ for (const unit of UNITS) {
     expect(unknown.status).toBe(404);
     expect(unknown.headers.get("content-type")).toContain("problem+json");
 
+    // live stats — grant-gated overview reflects the chatted traffic
+    const stats = await fetch(`${unit.base}/v1/stats`, { headers: AUTH });
+    expect(stats.status).toBe(200);
+    const statsBody = (await stats.json()) as { self: { hub: string; principals: { principal: string; requests: number }[] } };
+    expect(statsBody.self.hub).toBe(unit.label);
+    expect(
+      statsBody.self.principals.find((p) => p.principal === "carol@fleet")
+        ?.requests ?? 0,
+    ).toBeGreaterThanOrEqual(1);
+
     // metrics — the traffic landed in the Prometheus face (warm-up
     // polls may have bumped the counter; assert the line with a
     // NONZERO count, not an exact one)

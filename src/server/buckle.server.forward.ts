@@ -10,6 +10,7 @@ import {
 } from "../schemas/buckle.problem.zod.ts";
 import { buildCatalog } from "./buckle.server.models.ts";
 import type { MetricsRegistry } from "./buckle.server.metrics.ts";
+import type { LiveTracker } from "./buckle.server.live.ts";
 import { continueTraceparent } from "./buckle.server.telemetry.ts";
 
 export function engineUrl(settings: BuckleSettings): string {
@@ -41,6 +42,8 @@ export function problemResponse(
 export async function forwardChat(
   settings: BuckleSettings,
   metrics: MetricsRegistry,
+  live: LiveTracker,
+  principal: string,
   req: Request,
   traceparent: string,
 ): Promise<Response> {
@@ -68,17 +71,34 @@ export async function forwardChat(
     },
     body: JSON.stringify(body),
   };
+  const kind = settings.access?.principals.find((p) => p.id === principal)?.kind;
+  live.open(principal, kind, model);
   try {
     const upstream = await fetch(engine, init);
     metrics.countRequest(model);
-    return new Response(upstream.body, {
+    // buffer to count usage tokens for the live overview (chat bodies
+    // are small; the demo does not stream SSE)
+    const text = await upstream.text();
+    let tokens = 0;
+    try {
+      const usage = (JSON.parse(text) as { usage?: { total_tokens?: unknown } }).usage;
+      if (usage !== undefined && typeof usage.total_tokens === "number")
+        tokens = usage.total_tokens;
+    } catch {
+      // non-JSON engine body: no token count, still a passthrough
+    }
+    live.close(principal, model, tokens);
+    return new Response(text, {
       status: upstream.status,
       headers: {
         "content-type": upstream.headers.get("content-type") ?? "application/json",
         "cache-control": "no-store",
       },
     });
-  } catch {
+  } catch (e) {
+    live.close(principal, model, 0);
+    if (e instanceof Error && e.name === "AbortError")
+      return problemResponse("unavailable", "engine timeout");
     return problemResponse("unavailable", "engine unreachable");
   }
 }

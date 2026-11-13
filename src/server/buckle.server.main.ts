@@ -16,10 +16,13 @@ import { forwardChat, problemResponse } from "./buckle.server.forward.ts";
 import type { BuckleScope } from "../schemas/buckle.access.zod.ts";
 import { createMetrics } from "./buckle.server.metrics.ts";
 import { authenticate, bearerOf, holdsScope } from "./buckle.server.access.ts";
+import { createLive, federatedStats } from "./buckle.server.live.ts";
+import { readFileSync } from "node:fs";
 
 export function bootServer(input: { settings: BuckleSettings; port?: number }) {
   const { settings } = input;
   const metrics = createMetrics(settings.hub.label);
+  const live = createLive(settings.hub.label);
   const server = Bun.serve({
     hostname: "0.0.0.0",
     port: input.port ?? settings.hub.ports?.buckle ?? 4111,
@@ -51,7 +54,10 @@ export function bootServer(input: { settings: BuckleSettings; port?: number }) {
       if (pathname === "/v1/chat/completions" && req.method === "POST") {
         const denied = guard("models.use");
         if (denied !== null) return done(denied);
-        return done(await forwardChat(settings, metrics, req, tp));
+        if (principal !== null)
+          return done(
+            await forwardChat(settings, metrics, live, principal, req, tp),
+          );
       }
       if (pathname === "/metrics")
         return done(
@@ -66,6 +72,22 @@ export function bootServer(input: { settings: BuckleSettings; port?: number }) {
           Response.json(await buildCatalog(settings, tp), {
             headers: { "cache-control": "no-store" },
           }),
+        );
+      }
+      if (pathname === "/v1/stats") {
+        const denied = guard("stats.read");
+        if (denied !== null) return done(denied);
+        return done(
+          Response.json(
+            await federatedStats(settings, live, (file) => {
+              try {
+                return readFileSync(file, "utf8").trim();
+              } catch {
+                return null;
+              }
+            }),
+            { headers: { "cache-control": "no-store" } },
+          ),
         );
       }
       if (pathname === "/healthz")
