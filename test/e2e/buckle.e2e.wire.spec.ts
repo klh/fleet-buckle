@@ -17,29 +17,39 @@ const CAROL_KEY = readFileSync(
 ).trim();
 const AUTH = { authorization: `Bearer ${CAROL_KEY}` };
 
+// catalog expectations DERIVE from the fixture stores — the same real
+// captured files the stubs serve, so a fixture refresh never needs a
+// spec edit (single source of truth)
+const fixtureIds = (provider: string): string[] =>
+  (
+    JSON.parse(
+      readFileSync(join(ROOT, "deploy/fixtures", `${provider}.models.json`), "utf8"),
+    ) as { data: { id: string }[] }
+  ).data.map((m) => m.id);
+
 const UNITS = [
   {
     label: "b1",
     base: "http://127.0.0.1:4711",
     provider: "openrouter",
     chatModel: "qwen/qwen3.8-max-prime",
-    catalogIds: ["qwen/qwen3.8-max-prime", "qwen/qwen3.8-flash"],
+    catalogIds: fixtureIds("openrouter"),
   },
   {
     label: "b2",
     base: "http://127.0.0.1:4721",
     provider: "mscopilot",
     chatModel: "gpt-6-astra",
-    catalogIds: ["gpt-6-astra"],
+    catalogIds: fixtureIds("mscopilot"),
   },
   {
     label: "b3",
     base: "http://127.0.0.1:4731",
     provider: "zai",
     chatModel: "glm-5.3",
-    catalogIds: ["glm-5.3", "glm-5.3-flash"],
+    catalogIds: fixtureIds("zai"),
   },
-] as const;
+];
 
 for (const unit of UNITS) {
   test(`STEP 4 — ${unit.label}: healthz, catalog, MITM round trip, metrics`, async () => {

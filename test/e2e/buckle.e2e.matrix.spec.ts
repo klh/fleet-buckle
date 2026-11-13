@@ -32,49 +32,43 @@ async function ids(base: string, token: string): Promise<string[]> {
   return body.models.map((m) => m.id).sort();
 }
 
+// per-provider views DERIVE from the fixture stores (the real captured
+// catalogs the stubs serve) — union = what federation must surface
+const cat = (provider: string): string[] =>
+  (
+    JSON.parse(
+      readFileSync(
+        join(ROOT, "deploy/fixtures", `${provider}.models.json`),
+        "utf8",
+      ),
+    ) as { data: { id: string }[] }
+  ).data.map((m) => m.id).sort();
+const OR = cat("openrouter");
+const CP = cat("mscopilot");
+const ZAI = cat("zai");
+const union = (...sets: string[][]): string[] =>
+  [...new Set(sets.flat())].sort();
+
 test.describe("the federation matrix (Docker)", () => {
   // a key valid HERE sees the view the REGISTRY grants — per cell:
   test("alice@b1: own provider rows ONLY (empty peer list)", async () => {
-    expect(await ids(B1, alice)).toEqual([
-      "qwen/qwen3.8-flash",
-      "qwen/qwen3.8-max-prime",
-    ]);
+    expect(await ids(B1, alice)).toEqual(union(OR));
   });
 
   test("bob@b1: own + b3's zai rows", async () => {
-    expect(await ids(B1, bob)).toEqual([
-      "glm-5.3",
-      "glm-5.3-flash",
-      "qwen/qwen3.8-flash",
-      "qwen/qwen3.8-max-prime",
-    ]);
+    expect(await ids(B1, bob)).toEqual(union(OR, ZAI));
   });
 
   test("carol@b1: every peer rides (openrouter + copilot + zai)", async () => {
-    expect(await ids(B1, carol)).toEqual([
-      "glm-5.3",
-      "glm-5.3-flash",
-      "gpt-5.3-codex",
-      "gpt-6-astra",
-      "qwen/qwen3.8-flash",
-      "qwen/qwen3.8-max-prime",
-    ]);
+    expect(await ids(B1, carol)).toEqual(union(OR, CP, ZAI));
   });
 
   test("carol@b2: copilot + b3's zai", async () => {
-    expect(await ids(B2, carol)).toEqual([
-      "glm-5.3",
-      "glm-5.3-flash",
-      "gpt-5.3-codex",
-      "gpt-6-astra",
-    ]);
+    expect(await ids(B2, carol)).toEqual(union(CP, ZAI));
   });
 
   test("carol@b3: zai only (leaf buckle — nothing downstream)", async () => {
-    expect(await ids(B3, carol)).toEqual([
-      "glm-5.3",
-      "glm-5.3-flash",
-    ]);
+    expect(await ids(B3, carol)).toEqual(union(ZAI));
   });
 
   test("denial paths — 401 unknown principal on THIS buckle", async () => {
