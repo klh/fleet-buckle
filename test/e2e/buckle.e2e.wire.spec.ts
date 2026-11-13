@@ -118,6 +118,24 @@ for (const unit of UNITS) {
     expect(unknown.status).toBe(404);
     expect(unknown.headers.get("content-type")).toContain("problem+json");
 
+    // the federated tree — b1's view carries its peers (and b2's own
+    // peer b3 as a SUMMARY); b2 carries b3; b3 carries nobody
+    const tree = await fetch(`${unit.base}/v1/tree`, { headers: AUTH });
+    expect(tree.status).toBe(200);
+    const treeBody = (await tree.json()) as {
+      self: { buckle: { label: string }; peers: { buckle: { label: string }; models: unknown[]; peers: { buckle: { label: string } }[] }[] };
+    };
+    expect(treeBody.self.buckle.label).toBe(unit.label);
+    const peerLabels = treeBody.self.peers.map((p) => p.buckle.label).sort();
+    if (unit.label === "b1") expect(peerLabels).toEqual(["b2", "b3"]);
+    if (unit.label === "b2") expect(peerLabels).toEqual(["b3"]);
+    if (unit.label === "b3") expect(peerLabels).toEqual([]);
+    if (unit.label === "b1") {
+      const b2Node = treeBody.self.peers.find((p) => p.buckle.label === "b2")!;
+      expect(b2Node.peers.map((p) => p.buckle.label)).toEqual(["b3"]); // summary
+      expect(b2Node.models.length).toBeGreaterThan(0); // pulled, not empty
+    }
+
     // live stats — grant-gated overview reflects the chatted traffic
     const stats = await fetch(`${unit.base}/v1/stats`, { headers: AUTH });
     expect(stats.status).toBe(200);

@@ -17,12 +17,21 @@ import type { BuckleScope } from "../schemas/buckle.access.zod.ts";
 import { createMetrics } from "./buckle.server.metrics.ts";
 import { authenticate, bearerOf, holdsScope } from "./buckle.server.access.ts";
 import { createLive, federatedStats } from "./buckle.server.live.ts";
+import { buildTree } from "./buckle.server.tree.ts";
 import { readFileSync } from "node:fs";
 
 export function bootServer(input: { settings: BuckleSettings; port?: number }) {
   const { settings } = input;
   const metrics = createMetrics(settings.hub.label);
   const live = createLive(settings.hub.label);
+  /** read a token/key file (PATHS, never values); null = unreadable */
+  const tokenOf = (file: string): string | null => {
+    try {
+      return readFileSync(file, "utf8").trim();
+    } catch {
+      return null;
+    }
+  };
   const server = Bun.serve({
     hostname: "0.0.0.0",
     port: input.port ?? settings.hub.ports?.buckle ?? 4111,
@@ -79,15 +88,25 @@ export function bootServer(input: { settings: BuckleSettings; port?: number }) {
         if (denied !== null) return done(denied);
         return done(
           Response.json(
-            await federatedStats(settings, live, (file) => {
-              try {
-                return readFileSync(file, "utf8").trim();
-              } catch {
-                return null;
-              }
-            }),
+            await federatedStats(settings, live, tokenOf),
             { headers: { "cache-control": "no-store" } },
           ),
+        );
+      }
+      if (pathname === "/v1/tree") {
+        const denied = guard("tree.read");
+        if (denied !== null) return done(denied);
+        const tokenOf: (file: string) => string | null = (file) => {
+          try {
+            return readFileSync(file, "utf8").trim();
+          } catch {
+            return null;
+          }
+        };
+        return done(
+          Response.json(await buildTree(settings, live, tokenOf, tp), {
+            headers: { "cache-control": "no-store" },
+          }),
         );
       }
       if (pathname === "/healthz")

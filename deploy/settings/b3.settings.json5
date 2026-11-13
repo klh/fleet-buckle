@@ -6,12 +6,17 @@
       { id: "bob@fleet", kind: "human", groups: [] },
 
       { id: "carol@fleet", kind: "developer", groups: ["platform"] },
+      { id: "federation@fleet", kind: "service", groups: [] },
     ],
     grants: [
       { principal: "bob@fleet", scopes: ["models.list", "models.use"] },
       {
         principal: "carol@fleet",
         scopes: ["models.list", "models.use", "stats.read", "tree.read"],
+      },
+      {
+        principal: "federation@fleet",
+        scopes: ["models.list", "stats.read", "tree.read"],
       },
     ],
   },
