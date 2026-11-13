@@ -36,42 +36,44 @@ test.describe("the federation matrix (Docker)", () => {
   // a key valid HERE sees the view the REGISTRY grants — per cell:
   test("alice@b1: own provider rows ONLY (empty peer list)", async () => {
     expect(await ids(B1, alice)).toEqual([
-      "openai/qwen3-235b",
-      "openai/qwen3-coder",
+      "qwen/qwen3.8-flash",
+      "qwen/qwen3.8-max-prime",
     ]);
   });
 
   test("bob@b1: own + b3's zai rows", async () => {
     expect(await ids(B1, bob)).toEqual([
-      "openai/glm-5.3",
-      "openai/glm-5.3-air",
-      "openai/qwen3-235b",
-      "openai/qwen3-coder",
+      "glm-5.3",
+      "glm-5.3-flash",
+      "qwen/qwen3.8-flash",
+      "qwen/qwen3.8-max-prime",
     ]);
   });
 
   test("carol@b1: every peer rides (openrouter + copilot + zai)", async () => {
     expect(await ids(B1, carol)).toEqual([
-      "openai/glm-5.3",
-      "openai/glm-5.3-air",
-      "openai/gpt-6-astra",
-      "openai/qwen3-235b",
-      "openai/qwen3-coder",
+      "glm-5.3",
+      "glm-5.3-flash",
+      "gpt-5.3-codex",
+      "gpt-6-astra",
+      "qwen/qwen3.8-flash",
+      "qwen/qwen3.8-max-prime",
     ]);
   });
 
   test("carol@b2: copilot + b3's zai", async () => {
     expect(await ids(B2, carol)).toEqual([
-      "openai/glm-5.3",
-      "openai/glm-5.3-air",
-      "openai/gpt-6-astra",
+      "glm-5.3",
+      "glm-5.3-flash",
+      "gpt-5.3-codex",
+      "gpt-6-astra",
     ]);
   });
 
   test("carol@b3: zai only (leaf buckle — nothing downstream)", async () => {
     expect(await ids(B3, carol)).toEqual([
-      "openai/glm-5.3",
-      "openai/glm-5.3-air",
+      "glm-5.3",
+      "glm-5.3-flash",
     ]);
   });
 

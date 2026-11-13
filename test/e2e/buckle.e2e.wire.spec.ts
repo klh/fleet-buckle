@@ -22,22 +22,22 @@ const UNITS = [
     label: "b1",
     base: "http://127.0.0.1:4711",
     provider: "openrouter",
-    chatModel: "openai/qwen3-coder",
-    catalogIds: ["openai/qwen3-coder", "openai/qwen3-235b"],
+    chatModel: "qwen/qwen3.8-max-prime",
+    catalogIds: ["qwen/qwen3.8-max-prime", "qwen/qwen3.8-flash"],
   },
   {
     label: "b2",
     base: "http://127.0.0.1:4721",
     provider: "mscopilot",
-    chatModel: "openai/gpt-6-astra",
-    catalogIds: ["openai/gpt-6-astra"],
+    chatModel: "gpt-6-astra",
+    catalogIds: ["gpt-6-astra"],
   },
   {
     label: "b3",
     base: "http://127.0.0.1:4731",
     provider: "zai",
-    chatModel: "openai/glm-5.3",
-    catalogIds: ["openai/glm-5.3", "openai/glm-5.3-air"],
+    chatModel: "glm-5.3",
+    catalogIds: ["glm-5.3", "glm-5.3-flash"],
   },
 ] as const;
 

@@ -3,17 +3,22 @@
 // project's specs hit the same Docker Desktop topology. docker only —
 // no local mode; compose is the topology of record.
 import { stackDown, stackUp as composeUp } from "./buckle.kit.compose.ts";
+import { genEngineConfigs } from "../../tools/src/buckle.gen-engine-config.ts";
 
-/** the demo keys are MINTED before the stack boots (secrets are never
- *  typed): per-principal 0600 files into deploy/keys/.gen, which compose
- *  mounts at /etc/buckle/keys. */
+/** the demo keys are MINTED and the engine configs GENERATED before
+ * the stack boots: keys are never typed (per-principal 0600 files into
+ * deploy/keys/.gen, mounted at /etc/buckle/keys), and the litellm
+ * deployments come from the REAL captured catalogs so engine ids and
+ * catalog ids can never drift. */
 export async function stackUp(): Promise<void> {
   const { execSync } = await import("node:child_process");
+  const cwd = new URL("../..", import.meta.url).pathname;
   execSync("bun tools/src/buckle.mint-keys.ts", {
     encoding: "utf8",
     stdio: "inherit",
-    cwd: new URL("../..", import.meta.url).pathname,
+    cwd,
   });
+  genEngineConfigs();
   composeUp();
 }
 

@@ -7,7 +7,10 @@
 //   2. e2e      — the MITM loop + the federation matrix (the test flow).
 //   3. federation — per-hop grant edges + denial paths (subset of e2e,
 //                 split for sharded runs).
-//   4. load    — repeatEach waves, 429/503 + Retry-After.
+//   4. load    — the rpm waves (429/503 + Retry-After). The waves are
+//                 loops INSIDE the spec — no repeatEach: one run of the
+//                 project is the load proof. Target it deliberately:
+//                 bun --bun playwright test --project=load
 //   5. rolling — the rolling deploy: v2 up behind the front, gated by
 //                 its own sidecar, state-file flip under load, v1
 //                 drained — zero dropped requests through the front.
@@ -38,7 +41,6 @@ export default defineConfig({
       name: "load",
       testMatch: "**/load/*.spec.ts",
       dependencies: ["smoke"],
-      repeatEach: Number(process.env.BUCKLE_LOAD_REPEAT ?? 200),
       retries: 0,
     },
     {

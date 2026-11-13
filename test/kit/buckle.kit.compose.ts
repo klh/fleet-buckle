@@ -1,7 +1,7 @@
 // buckle.kit.compose.ts — the compose driver: docker-only harness (the
 // specs always hit the real Docker Desktop topology). One project name,
 // deterministic service set, json output for asserts.
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -24,6 +24,20 @@ export function compose(args: string): string {
     `docker compose -f ${COMPOSE_FILE} -p ${PROJECT} ${args}`,
     { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
   );
+}
+
+/** compose against ANOTHER stack (stage0, rolling): any file, any
+ *  project — the specs that own their own topology reuse this driver
+ *  instead of re-rolling execFileSync. */
+export function composeOn(
+  file: string,
+  project: string,
+  ...args: string[]
+): void {
+  execFileSync("docker", ["compose", "-f", file, "-p", project, ...args], {
+    cwd: ROOT,
+    stdio: "pipe",
+  });
 }
 
 export async function stackUp(): Promise<void> {

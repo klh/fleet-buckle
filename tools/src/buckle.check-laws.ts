@@ -53,9 +53,14 @@ for (const f of files.filter(
   }
 }
 
-// 3. no authored yaml outside compose wiring (docker-compose is wiring only)
+// 3. no AUTHORED yaml outside compose wiring (docker-compose is wiring
+//    only). deploy/engine/*.litellm.yaml is GENERATED from the captured
+//    fixtures (buckle.gen-engine-config.ts, gitignored) — litellm only
+//    reads yaml configs, so generated-and-never-edited is the sanctioned
+//    exception.
 for (const f of files.filter((f) => f.endsWith(".yaml") || f.endsWith(".yml"))) {
-  if (!f.includes("/deploy/compose")) errors.push(`yaml authored outside compose wiring: ${f}`);
+  if (!f.includes("/deploy/compose") && !f.includes("/deploy/engine/"))
+    errors.push(`yaml authored outside compose wiring: ${f}`);
 }
 
 // 4. line caps: warn 400, hard fail 1500

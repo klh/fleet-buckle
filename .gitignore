@@ -11,3 +11,4 @@ node_modules/
 .qlty/plugin_cachedir/
 .qlty/sources/
 deploy/keys/.gen/*
+deploy/engine/

@@ -6,10 +6,10 @@
 // down: that constancy IS the zero-downtime claim, sworn outside the
 // process.
 import { test, expect } from "@playwright/test";
-import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
-import { HealthFace, HealthVerdict } from "@fleet/health";
 import { BuckleHealthz } from "../../src/schemas/buckle.healthz.zod.ts";
+import { face, verdict } from "../kit/buckle.kit.health.ts";
+import { composeOn } from "../kit/buckle.kit.compose.ts";
 
 const PROJECT = "fleet-buckle-rolling";
 const ROOT = new URL("../..", import.meta.url).pathname;
@@ -19,12 +19,7 @@ const V2 = "http://buckle1v2:4111";
 const STATE = `${ROOT}/deploy/roll/b1.active.json`; // inside the mounted dir
 
 const FILE = "deploy/compose.rolling.yaml";
-function compose(...args: string[]): void {
-  execFileSync("docker", ["compose", "-f", FILE, "-p", PROJECT, ...args], {
-    cwd: ROOT,
-    stdio: "pipe",
-  });
-}
+const compose = (...args: string[]) => composeOn(FILE, PROJECT, ...args);
 
 /** the flip — SAME-INODE write: a host-side rename replaces the inode
  * and VirtioFS never shows it to the container. The front's
@@ -37,14 +32,14 @@ function flip(upstream: string): void {
 let carol = "";
 
 async function chat(
-  port: number,
+  base: string,
 ): Promise<{ status: number; upstream: string | null }> {
   try {
-    const r = await fetch(`${port === 4811 ? FRONT : `http://127.0.0.1:${port}`}/v1/chat/completions`, {
+    const r = await fetch(`${base}/v1/chat/completions`, {
       method: "POST",
       headers: { authorization: `Bearer ${carol}`, "content-type": "application/json" },
       body: JSON.stringify({
-        model: "openai/qwen3-coder",
+        model: "qwen/qwen3.8-max-prime",
         messages: [{ role: "user", content: "rolling" }],
       }),
     });
@@ -59,23 +54,6 @@ async function healthzThroughFront(): Promise<BuckleHealthz> {
   return BuckleHealthz.parse(await r.json());
 }
 
-async function face(port: number): Promise<string> {
-  try {
-    const r = await fetch(`http://127.0.0.1:${port}/healthz`);
-    return HealthFace.parse(await r.json()).state;
-  } catch {
-    return "connecting";
-  }
-}
-
-async function verdict(port: number): Promise<HealthVerdict | null> {
-  try {
-    const r = await fetch(`http://127.0.0.1:${port}/status`);
-    return HealthVerdict.parse(await r.json());
-  } catch {
-    return null;
-  }
-}
 
 test.describe.serial("rolling deploy — unit b1 v1 → v2, no downtime", () => {
   test.beforeAll(async () => {
@@ -86,9 +64,9 @@ test.describe.serial("rolling deploy — unit b1 v1 → v2, no downtime", () => 
 
   test("v1 serves through the front", async () => {
     await expect
-      .poll(async () => (await chat(4811)).status, { timeout: 30_000 })
+      .poll(async () => (await chat(FRONT)).status, { timeout: 30_000 })
       .toBe(200);
-    const r = await chat(4811);
+    const r = await chat(FRONT);
     expect(r.upstream).toBe(V1);
     const h = await healthzThroughFront();
     expect(h.label).toBe("b1");
@@ -112,14 +90,14 @@ test.describe.serial("rolling deploy — unit b1 v1 → v2, no downtime", () => 
     expect(h.label).toBe("b1");
     expect(h.version).toBe("v2-rolling");
     // v2 can chat (shared engine) — the new version is READY, not just alive
-    const r = await chat(4831);
+    const r = await chat("http://127.0.0.1:4831");
     expect(r.status).toBe(200);
   });
 
   test("the switch under load — no dropped request across the flip", async () => {
     // BEFORE: a stream of chats, every one served by v1
     const before: { status: number; upstream: string | null }[] = [];
-    for (let i = 0; i < 6; i++) before.push(await chat(4811));
+    for (let i = 0; i < 6; i++) before.push(await chat(FRONT));
     expect(before.map((r) => r.status)).toEqual(Array(6).fill(200));
     expect(before.every((r) => r.upstream === V1)).toBe(true);
 
@@ -130,7 +108,7 @@ test.describe.serial("rolling deploy — unit b1 v1 → v2, no downtime", () => 
     // AFTER: the stream continues without a gap — every one 200, all
     // on the new version (the stamp is visible through the front)
     const after: { status: number; upstream: string | null }[] = [];
-    for (let i = 0; i < 12; i++) after.push(await chat(4811));
+    for (let i = 0; i < 12; i++) after.push(await chat(FRONT));
     expect(after.map((r) => r.status)).toEqual(Array(12).fill(200));
     expect(after.every((r) => r.upstream === V2)).toBe(true);
     const h = await healthzThroughFront();
@@ -144,7 +122,7 @@ test.describe.serial("rolling deploy — unit b1 v1 → v2, no downtime", () => 
   test("drain — v1 stops, the front never blinks", async () => {
     compose("stop", "buckle1v1");
     for (let i = 0; i < 6; i++) {
-      const r = await chat(4811);
+      const r = await chat(FRONT);
       expect(r.status).toBe(200);
       expect(r.upstream).toBe(V2);
     }

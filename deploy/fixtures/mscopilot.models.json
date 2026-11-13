@@ -1,24 +1,11 @@
 {
+  "object": "list",
   "data": [
     {
-      "id": "openai/gpt-6-astra",
-      "name": "GPT-6 Astra",
-      "vendor": "openai",
-      "version": "6.0",
-      "preview": false,
-      "policy": {
-        "state": "enabled"
-      },
-      "capabilities": {
-        "limits": {
-          "max_context_window_tokens": 200000,
-          "max_output_tokens": 100000
-        },
-        "supports": {
-          "tool_calls": true,
-          "streaming": true
-        }
-      }
+      "id": "gpt-5.3-codex"
+    },
+    {
+      "id": "gpt-6-astra"
     }
   ]
 }

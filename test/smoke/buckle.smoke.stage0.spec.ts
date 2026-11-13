@@ -5,39 +5,15 @@
 // the one that should fail fails: a chat round trip is honestly red
 // (no engine behind these buckles), proven with test.fail.
 import { test, expect } from "@playwright/test";
-import { execFileSync } from "node:child_process";
-import { HealthFace, HealthVerdict } from "@fleet/health";
 import { BuckleHealthz } from "../../src/schemas/buckle.healthz.zod.ts";
+import { face, verdict } from "../kit/buckle.kit.health.ts";
+import { composeOn } from "../kit/buckle.kit.compose.ts";
 
 const PROJECT = "fleet-buckle-stage0";
+const FILE = "deploy/compose.stage0.yaml";
+const compose = (...args: string[]) => composeOn(FILE, PROJECT, ...args);
 const ROOT = new URL("../..", import.meta.url).pathname;
 let carol = "";
-
-const FILE = "deploy/compose.stage0.yaml";
-function compose(...args: string[]): void {
-  execFileSync("docker", ["compose", "-f", FILE, "-p", PROJECT, ...args], {
-    cwd: ROOT,
-    stdio: "pipe",
-  });
-}
-
-async function face(port: number): Promise<string> {
-  try {
-    const r = await fetch(`http://127.0.0.1:${port}/healthz`);
-    return HealthFace.parse(await r.json()).state;
-  } catch {
-    return "connecting";
-  }
-}
-
-async function verdict(port: number): Promise<HealthVerdict | null> {
-  try {
-    const r = await fetch(`http://127.0.0.1:${port}/status`);
-    return HealthVerdict.parse(await r.json());
-  } catch {
-    return null;
-  }
-}
 
 test.describe.serial("stage 0 — stubs + 3 buckles up, engines not yet", () => {
   test.beforeAll(async () => {
@@ -87,7 +63,7 @@ test.describe.serial("stage 0 — stubs + 3 buckles up, engines not yet", () => 
                 "content-type": "application/json",
               },
               body: JSON.stringify({
-                model: "openai/qwen3-coder",
+                model: "qwen/qwen3.8-max-prime",
                 messages: [{ role: "user", content: "hello" }],
               }),
             });
@@ -106,7 +82,7 @@ test.describe.serial("stage 0 — stubs + 3 buckles up, engines not yet", () => 
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/qwen3-coder",
+        model: "qwen/qwen3.8-max-prime",
         messages: [{ role: "user", content: "hello" }],
       }),
     });

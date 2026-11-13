@@ -4,6 +4,18 @@ Step by step, test by test: every step writes its FAILING tests first,
 then the smallest implementation that passes them. No file outside the
 established capability folders; no organization drift.
 
+## Fixtures are REAL captures — never hand-typed
+
+The stub catalogs (`deploy/fixtures/*.models.json`) are slices of the
+providers' REAL `/v1/models` responses, captured by
+`bun tools/src/buckle.capture-fixtures.ts` (keys are machine-local
+paths, never committed). Refresh whenever the demo should ride new
+reality. From those fixtures, `bun tools/src/buckle.gen-engine-config.ts`
+generates the litellm engine configs (`deploy/engine/*.litellm.yaml`,
+gitignored): every catalog row becomes a deployment under its REAL id —
+engine and catalog can never drift, and the generator runs in the
+playwright global-setup, so the stack always boots consistent.
+
 ## Commit 3 — "the wire" (server: healthz → catalog → forward)
 
 1. **healthz face** (unit `src/server/buckle.server.main.test.ts`):
@@ -22,7 +34,7 @@ established capability folders; no organization drift.
    per request (Prometheus text).
 4. **docker e2e** (`test/e2e/buckle.e2e.wire.spec.ts`): the REAL stack
    — each buckle: healthz 200, its provider's catalog rows, one chat
-   round trip through litellm→stub (OPENAI_API_BASE wiring), /metrics
+   round trip through litellm→stub (generated engine config), /metrics
    reflects the traffic.
 5. **smoke flip** (`test/smoke`): c) goes from ALL UNHEALTHY to
    all `up` — the LAST change, only after the wire truly serves.

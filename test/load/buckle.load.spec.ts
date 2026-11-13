@@ -19,7 +19,7 @@ const chat = (token: string) =>
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify({
-      model: "openai/qwen3-coder",
+      model: "qwen/qwen3.8-max-prime",
       messages: [{ role: "user", content: "wave" }],
     }),
   });

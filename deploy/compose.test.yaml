@@ -47,10 +47,9 @@ services:
     # not a secret — provider keys are PATHS in settings.json5.
     # the CLI registers ONE model (last --model wins); it is the model
     # the demo chats. The catalog's extra rows come from the STUB fixture.
-    command: ["--model", "openai/qwen3-coder", "--port", "4000"]
-    environment:
-      OPENAI_API_KEY: sk-stub-fixture
-      OPENAI_API_BASE: http://openrouter-stub:8080/v1
+    command: ["--config", "/etc/engine/openrouter.litellm.yaml", "--port", "4000"]
+    volumes:
+      - ./engine/openrouter.litellm.yaml:/etc/engine/openrouter.litellm.yaml:ro
   health1:
     build: ../../fleet-health
     environment:
@@ -79,10 +78,9 @@ services:
   # ── unit 2 ──
   litellm2:
     image: ghcr.io/berriai/litellm:v1.103.0
-    command: ["--model", "openai/gpt-6-astra", "--port", "4000"]
-    environment:
-      OPENAI_API_KEY: sk-stub-fixture
-      OPENAI_API_BASE: http://mscopilot-stub:8080/v1
+    command: ["--config", "/etc/engine/mscopilot.litellm.yaml", "--port", "4000"]
+    volumes:
+      - ./engine/mscopilot.litellm.yaml:/etc/engine/mscopilot.litellm.yaml:ro
   health2:
     build: ../../fleet-health
     environment:
@@ -111,10 +109,9 @@ services:
   # ── unit 3 ──
   litellm3:
     image: ghcr.io/berriai/litellm:v1.103.0
-    command: ["--model", "openai/glm-5.3", "--port", "4000"]
-    environment:
-      OPENAI_API_KEY: sk-stub-fixture
-      OPENAI_API_BASE: http://zai-stub:8080/v1
+    command: ["--config", "/etc/engine/zai.litellm.yaml", "--port", "4000"]
+    volumes:
+      - ./engine/zai.litellm.yaml:/etc/engine/zai.litellm.yaml:ro
   health3:
     build: ../../fleet-health
     environment:

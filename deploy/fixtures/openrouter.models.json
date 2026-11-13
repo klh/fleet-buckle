@@ -1,10 +1,11 @@
 {
+  "object": "list",
   "data": [
     {
-      "id": "openai/qwen3-coder"
+      "id": "qwen/qwen3.8-max-prime"
     },
     {
-      "id": "openai/qwen3-235b"
+      "id": "qwen/qwen3.8-flash"
     }
   ]
 }

@@ -1,47 +1,15 @@
 // b1.rolling-v2.json5 — the NEW VERSION of unit b1 for the rolling
-// deploy demo: same hub, version-stamped (healthz answers v2 before
-// any traffic flips), no peers (the roll rides one unit's surface).
+// deploy: a pure DIFF. Composed over b1.settings.json5 (mounted as
+// BUCKLE_DEFAULTS for the v2 container): the unit, its provider, its
+// principals and grants are inherited wholesale — only the version
+// stamp is new, and healthz answers it BEFORE any traffic flips.
+// The keys block is restated because b1 sits at the BOTTOM of this
+// compose (the shared default layer's keys.dir does not ride here).
 {
-  hub: { label: "b1", version: "v2-rolling" },
-  providers: {
-    openrouter: {
-      url: "http://openrouter-stub:8080",
-      dialect: "openai",
-      key: "/etc/buckle/keys/openrouter.key",
-    },
-  },
-  access: {
-    principals: [
-      { id: "alice@fleet", kind: "human", groups: [] },
-      { id: "bob@fleet", kind: "human", groups: [] },
-      { id: "carol@fleet", kind: "developer", groups: ["platform"] },
-      { id: "federation@fleet", kind: "service", groups: [] },
-    ],
-    grants: [
-      {
-        principal: "alice@fleet",
-        scopes: ["models.list", "models.use"],
-        peers: [],
-        limits: { max_rpm: 4 },
-      },
-      {
-        principal: "bob@fleet",
-        scopes: ["models.list", "models.use"],
-        peers: ["b3"],
-      },
-      {
-        principal: "carol@fleet",
-        scopes: [
-          "models.list",
-          "models.use",
-          "stats.read",
-          "tree.read",
-        ],
-      },
-      {
-        principal: "federation@fleet",
-        scopes: ["models.list", "stats.read", "tree.read"],
-      },
-    ],
+  hub: { version: "v2-rolling" },
+  keys: {
+    root: "/etc/buckle/keys/root.key",
+    engine: "/etc/buckle/keys/engine.key",
+    principals_dir: "/etc/buckle/keys",
   },
 }

@@ -19,10 +19,9 @@ services:
 
   litellm1:
     image: ghcr.io/berriai/litellm:v1.103.0
-    command: ["--model", "openai/qwen3-coder", "--port", "4000"]
-    environment:
-      OPENAI_API_KEY: sk-stub-fixture
-      OPENAI_API_BASE: http://openrouter-stub:8080/v1
+    command: ["--config", "/etc/engine/openrouter.litellm.yaml", "--port", "4000"]
+    volumes:
+      - ./engine/openrouter.litellm.yaml:/etc/engine/openrouter.litellm.yaml:ro
 
   # ── the current version ──
   buckle1v1:
@@ -46,7 +45,9 @@ services:
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
       BUCKLE_ENGINE_URL: http://litellm1:4000
     volumes:
-      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      # v2 = default ⊕ b1 ⊕ {version}: the unit inherits b1's label,
+      # provider and registry wholesale — only the version stamps new
+      - ./settings/b1.settings.json5:/etc/buckle/default.settings.json5:ro
       - ./settings/b1.rolling-v2.json5:/etc/buckle/settings.json:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:
