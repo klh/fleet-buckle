@@ -548,10 +548,17 @@
                                   "service"
                                 ]
                               },
-                              "machine": {
-                                "type": "string"
-                              },
                               "inflight": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "requests": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "tokens": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
@@ -570,6 +577,8 @@
                             "required": [
                               "principal",
                               "inflight",
+                              "requests",
+                              "tokens",
                               "connected_since",
                               "last_seen"
                             ],
@@ -748,10 +757,17 @@
                                         "service"
                                       ]
                                     },
-                                    "machine": {
-                                      "type": "string"
-                                    },
                                     "inflight": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "requests": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "tokens": {
                                       "type": "integer",
                                       "minimum": 0,
                                       "maximum": 9007199254740991
@@ -770,6 +786,8 @@
                                   "required": [
                                     "principal",
                                     "inflight",
+                                    "requests",
+                                    "tokens",
                                     "connected_since",
                                     "last_seen"
                                   ],
@@ -1057,6 +1075,16 @@
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
+                              "requests": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "tokens": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
                               "tps": {
                                 "type": "number",
                                 "minimum": 0
@@ -1065,10 +1093,17 @@
                             "required": [
                               "model",
                               "inflight",
+                              "requests",
+                              "tokens",
                               "tps"
                             ],
                             "additionalProperties": false
                           }
+                        },
+                        "active_models": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
                         },
                         "current_connections": {
                           "type": "integer",
@@ -1097,15 +1132,17 @@
                                   "service"
                                 ]
                               },
-                              "machine": {
-                                "type": "string"
-                              },
                               "inflight": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
                               "requests": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "tokens": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
@@ -1125,19 +1162,85 @@
                               "principal",
                               "inflight",
                               "requests",
+                              "tokens",
                               "connected_since",
                               "last_seen"
                             ],
                             "additionalProperties": false
                           }
+                        },
+                        "sessions": {
+                          "type": "object",
+                          "properties": {
+                            "by_kind": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "longest_running_s": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "top_tokens": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "principal": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "human",
+                                      "developer",
+                                      "agent",
+                                      "service"
+                                    ]
+                                  },
+                                  "requests": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "tokens": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "principal",
+                                  "requests",
+                                  "tokens"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "by_kind",
+                            "longest_running_s",
+                            "top_tokens"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
                         "hub",
                         "models",
+                        "active_models",
                         "current_connections",
                         "tps",
-                        "principals"
+                        "principals",
+                        "sessions"
                       ],
                       "additionalProperties": false
                     },
@@ -1169,6 +1272,16 @@
                                       "minimum": 0,
                                       "maximum": 9007199254740991
                                     },
+                                    "requests": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "tokens": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
                                     "tps": {
                                       "type": "number",
                                       "minimum": 0
@@ -1177,10 +1290,17 @@
                                   "required": [
                                     "model",
                                     "inflight",
+                                    "requests",
+                                    "tokens",
                                     "tps"
                                   ],
                                   "additionalProperties": false
                                 }
+                              },
+                              "active_models": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
                               },
                               "current_connections": {
                                 "type": "integer",
@@ -1209,15 +1329,17 @@
                                         "service"
                                       ]
                                     },
-                                    "machine": {
-                                      "type": "string"
-                                    },
                                     "inflight": {
                                       "type": "integer",
                                       "minimum": 0,
                                       "maximum": 9007199254740991
                                     },
                                     "requests": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "tokens": {
                                       "type": "integer",
                                       "minimum": 0,
                                       "maximum": 9007199254740991
@@ -1237,19 +1359,85 @@
                                     "principal",
                                     "inflight",
                                     "requests",
+                                    "tokens",
                                     "connected_since",
                                     "last_seen"
                                   ],
                                   "additionalProperties": false
                                 }
+                              },
+                              "sessions": {
+                                "type": "object",
+                                "properties": {
+                                  "by_kind": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    },
+                                    "additionalProperties": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    }
+                                  },
+                                  "longest_running_s": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "top_tokens": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "principal": {
+                                          "type": "string",
+                                          "minLength": 1
+                                        },
+                                        "kind": {
+                                          "type": "string",
+                                          "enum": [
+                                            "human",
+                                            "developer",
+                                            "agent",
+                                            "service"
+                                          ]
+                                        },
+                                        "requests": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "tokens": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        }
+                                      },
+                                      "required": [
+                                        "principal",
+                                        "requests",
+                                        "tokens"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "by_kind",
+                                  "longest_running_s",
+                                  "top_tokens"
+                                ],
+                                "additionalProperties": false
                               }
                             },
                             "required": [
                               "hub",
                               "models",
+                              "active_models",
                               "current_connections",
                               "tps",
-                              "principals"
+                              "principals",
+                              "sessions"
                             ],
                             "additionalProperties": false
                           },
@@ -1258,11 +1446,112 @@
                           }
                         ]
                       }
+                    },
+                    "rollup": {
+                      "type": "object",
+                      "properties": {
+                        "hubs": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "tps": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "current_connections": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "active_models": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sessions": {
+                          "type": "object",
+                          "properties": {
+                            "users": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "agents": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "services": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "users",
+                            "agents",
+                            "services"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "longest_running_s": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "top_tokens": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "hub": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "principal": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "human",
+                                  "developer",
+                                  "agent",
+                                  "service"
+                                ]
+                              },
+                              "tokens": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "hub",
+                              "principal",
+                              "tokens"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "hubs",
+                        "tps",
+                        "current_connections",
+                        "active_models",
+                        "sessions",
+                        "longest_running_s",
+                        "top_tokens"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
                     "self",
-                    "peers"
+                    "peers",
+                    "rollup"
                   ],
                   "additionalProperties": false
                 }

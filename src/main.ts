@@ -17,7 +17,7 @@ import {
 import { loadSettings, readToken, resolveSettingsPaths, type SettingsPaths } from "./settings.ts";
 import { createMetrics } from "./live/buckle.live.metrics.ts";
 import { createLive, type LiveTracker } from "./live/buckle.live.tracker.ts";
-import { federatedStats } from "./live/buckle.live.stats.ts";
+import { createStatsCache, statsBody } from "./live/buckle.live.stats.ts";
 import { authenticate, bearerOf, holdsScope } from "./access/buckle.access.registry.ts";
 import { createLimiter, resolveRpmCap } from "./admission/buckle.admission.limits.ts";
 import { buildFederatedCatalog } from "./catalog/buckle.catalog.view.ts";
@@ -34,6 +34,7 @@ function createServerState(parts: {
   live: LiveTracker;
   limiter: ReturnType<typeof createLimiter>;
   tokenOf: typeof readToken;
+  stats: ReturnType<typeof createStatsCache>;
 }) {
   return parts;
 }
@@ -123,7 +124,7 @@ const statsFace: Face = async (srv, rq) => {
   const denied = requireScope(srv, rq.principal, "stats.read");
   if (denied !== null) return denied;
   return Response.json(
-    await federatedStats(srv.settings, srv.live, srv.tokenOf),
+    await statsBody(srv.settings, srv.live, srv.stats),
     { headers: noStore },
   );
 };
@@ -175,6 +176,7 @@ export function bootServer(input: { settings: BuckleSettings; port?: number }) {
     // THE token reader (secrets are paths, never values) — one
     // implementation, in the settings home; faults logged there
     tokenOf: readToken,
+    stats: createStatsCache(input.settings, readToken),
   });
   const { settings } = srv;
   return Bun.serve({

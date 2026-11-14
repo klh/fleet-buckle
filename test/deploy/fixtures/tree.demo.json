@@ -31,10 +31,11 @@
     "connections": [
       {
         "principal": "carol@fleet",
-        "machine": "kk-mac",
         "inflight": 3,
         "connected_since": 1763000000000,
-        "last_seen": 1763005600000
+        "last_seen": 1763005600000,
+        "requests": 0,
+        "tokens": 0
       }
     ],
     "peers": [

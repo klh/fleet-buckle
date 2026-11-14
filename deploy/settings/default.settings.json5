@@ -11,6 +11,8 @@
     max_concurrent: 1000,
     max_per_ip: 100,
   },
+  // the unit's litellm engine — every unit file overrides this
+  engine: { url: "http://127.0.0.1:4000" },
   keys: {
     // b — general security: PATHS, never values
     root: "/etc/buckle/keys/root.key",

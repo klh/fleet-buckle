@@ -63,10 +63,12 @@ async function chat(base: string): Promise<Response> {
 
 describe("the tracked row (the tracker's contract)", () => {
   test("kind optional, everything else always-known, strict", () => {
-    const base = { inflight: 0, requests: 0, connected_since: 1, last_seen: 1 };
+    const base = { inflight: 0, requests: 0, tokens: 0, connected_since: 1, last_seen: 1 };
     expect(TrackedPrincipalState.safeParse(base).success).toBe(true);
     expect(TrackedPrincipalState.safeParse({ ...base, kind: "agent" }).success).toBe(true);
     expect(TrackedPrincipalState.safeParse({ ...base, kind: "robot" }).success).toBe(false);
+    // tokens is always-known now (banked per session) — absent fails
+    expect(TrackedPrincipalState.safeParse({ inflight: 0, requests: 0, connected_since: 1, last_seen: 1 }).success).toBe(false);
     expect(TrackedPrincipalState.safeParse({ ...base, extra: 1 }).success).toBe(false);
   });
 });

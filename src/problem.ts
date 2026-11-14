@@ -8,6 +8,7 @@ import {
   BuckleProblemStatus,
   type BuckleProblemKind,
 } from "./schemas/buckle.problem.zod.ts";
+import { pick } from "./pick.ts";
 
 const SECRET_SHAPES =
   /\b(?:sk-[A-Za-z0-9_-]{8,}|bksk_[A-Za-z0-9_-]{8,}|ghp_[A-Za-z0-9]{8,}|gho_[A-Za-z0-9]{8,}|AKIA[0-9A-Z]{16}|bearer\s+[A-Za-z0-9._~+/=-]{8,})/gi;
@@ -30,7 +31,7 @@ export function problemResponse(
     kind,
     title,
     status: BuckleProblemStatus[kind],
-    ...(detail === undefined ? {} : { detail: scrubDetail(detail) }),
+    ...pick("detail", detail === undefined ? undefined : scrubDetail(detail)),
   });
   return Response.json(problem, {
     status: problem.status,

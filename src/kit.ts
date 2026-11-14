@@ -15,6 +15,11 @@ import {
   mergeSettings,
   type BuckleSettings,
 } from "./schemas/buckle.settings.zod.ts";
+import {
+  HOP_DEADLINE_HEADER,
+  HOP_PATH_HEADER,
+  VERBATIM_HOP_HEADERS,
+} from "./federation/buckle.federation.protocol.ts";
 
 export const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
@@ -36,23 +41,15 @@ function sawOf(req: Request, raw: string): SawRequest {
   return SawRequest.parse({
     auth: req.headers.get("authorization"),
     traceparent: req.headers.get("traceparent"),
-    hopPath: req.headers.get("x-fleet-buckle-hop-path"),
-    deadline: req.headers.get("x-fleet-buckle-deadline-ms"),
+    hopPath: req.headers.get(HOP_PATH_HEADER),
+    deadline: req.headers.get(HOP_DEADLINE_HEADER),
     raw,
   });
 }
 
-/** the hop headers a proxy forwards verbatim */
-const VERBATIM = [
-  "traceparent",
-  "authorization",
-  "x-fleet-buckle-hop-path",
-  "x-fleet-buckle-deadline-ms",
-] as const;
-
 function verbatimHeaders(req: Request): Record<string, string> {
   const out: Record<string, string> = { "content-type": "application/json" };
-  for (const h of VERBATIM) {
+  for (const h of VERBATIM_HOP_HEADERS) {
     const v = req.headers.get(h);
     if (v !== null) out[h] = v;
   }
@@ -110,6 +107,20 @@ export function stubEngine(
     },
   });
   return { port: server.port ?? 0, stop: () => server.stop(true), seen };
+}
+
+/** a canned-body peer stub: answers every path with `body`, counts
+ *  hits (federation folds ride this — cache/rollup tests) */
+export function stubPeer(body: unknown): { port: number; stop: () => void; hits: number } {
+  let hits = 0;
+  const server = Bun.serve({
+    port: 0,
+    fetch: () => {
+      hits += 1;
+      return Response.json(body);
+    },
+  });
+  return { port: server.port ?? 0, stop: () => server.stop(true), get hits() { return hits; } };
 }
 
 /** a transparent recorder: forwards every request VERBATIM to the

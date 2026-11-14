@@ -24,8 +24,9 @@ const BuckleConnection = z
   .object({
     principal: z.string().min(1),
     kind: BucklePrincipalKind.optional(),
-    machine: z.string().optional(),
     inflight: z.number().int().min(0),
+    requests: z.number().int().min(0),
+    tokens: z.number().int().min(0),
     connected_since: z.number().int().min(0),
     last_seen: z.number().int().min(0),
   })

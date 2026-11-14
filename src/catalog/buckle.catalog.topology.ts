@@ -96,8 +96,9 @@ export async function buildTree(
       connections: snap.principals.map((p) => ({
         principal: p.principal,
         ...pick("kind", p.kind),
-        ...pick("machine", p.machine),
         inflight: p.inflight,
+        requests: p.requests,
+        tokens: p.tokens,
         connected_since: p.connected_since,
         last_seen: p.last_seen,
       })),

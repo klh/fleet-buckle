@@ -145,11 +145,10 @@ export const BuckleSettings = z
       .strict()
       .optional(),
     /** the unit's litellm engine — the forward target of the MITM
-     *  loop. ONE home: this url (no env override exists). */
-    engine: z
-      .object({ url: z.url().default("http://127.0.0.1:4000") })
-      .strict()
-      .prefault({}),
+     *  loop. ONE home: this url (no env override exists); the VALUE
+     *  defaults in deploy/settings/default.settings.json5, never here.
+     *  Optional: a relay-only unit (pure federation hop) has none. */
+    engine: z.object({ url: z.url() }).strict().optional(),
     /** per-buckle access registry (this buckle's OWN "AD domain"). */
     access: BuckleAccessRegistry.optional(),
     /** c — providers configured on this hub (registry-resolved). */
@@ -171,6 +170,9 @@ export const BuckleSettings = z
         hop_ms: z.number().int().min(1000).default(120_000),
         /** upstream catalog cache freshness */
         catalog_cache_ms: z.number().int().min(0).default(2000),
+        /** federated stats fold freshness — peer snapshots are pulled
+         *  at most this often; the own snapshot stays live */
+        stats_cache_ms: z.number().int().min(0).default(2000),
       })
       .strict()
       .prefault({}),

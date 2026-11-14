@@ -19,6 +19,16 @@ export const HOP_PATH_HEADER = "x-fleet-buckle-hop-path";
  *  origin's budget, however many hops deep it goes */
 export const HOP_DEADLINE_HEADER = "x-fleet-buckle-deadline-ms";
 
+/** the headers a proxy forwards VERBATIM (the hop's whole wire
+ *  context: identity, trace, path, deadline) — the ONE list; the
+ *  test kit's stubs read it, never re-type it */
+export const VERBATIM_HOP_HEADERS = [
+  "traceparent",
+  "authorization",
+  HOP_PATH_HEADER,
+  HOP_DEADLINE_HEADER,
+] as const;
+
 /** parse an inbound hop path (comma labels; empty/absent = fresh) */
 export function hopPathOf(inbound: string | null): string[] {
   if (inbound === null) return [];

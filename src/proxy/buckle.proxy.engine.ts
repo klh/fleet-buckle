@@ -10,10 +10,12 @@ import { bodyText, httpSend, parseJson } from "../fault.ts";
 import type { TokenReader } from "../federation/buckle.federation.peer.ts";
 import { continueTraceparent } from "../live/buckle.live.trace.ts";
 
-/** the engine base url — ONE home: settings.engine.url */
-function engineUrl(settings: BuckleSettings): string {
-  return settings.engine.url;
-}
+/** the engine outcome for a unit with no engine configured — the
+ *  leg answers a typed fault, never a crash (relay-only units) */
+const noEngineOutcome = (): EngineOutcome => ({
+  kind: "fault",
+  fault: { kind: "malformed", detail: "no engine configured on this unit" },
+});
 
 /** the engine outcome, mapped by the caller into client responses.
  *  served carries servedBy — provenance is named AT THE SOURCE so the
@@ -55,7 +57,8 @@ export async function engineChat(
   traceparent: string,
   tokenOf: TokenReader,
 ): Promise<EngineOutcome> {
-  const engine = `${engineUrl(settings).replace(/\/$/, "")}/v1/chat/completions`;
+  if (settings.engine === undefined) return noEngineOutcome();
+  const engine = `${settings.engine.url.replace(/\/$/, "")}/v1/chat/completions`;
   const engineToken = settings.keys?.engine !== undefined
     ? tokenOf(settings.keys.engine)
     : null;
