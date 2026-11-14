@@ -20,12 +20,17 @@ function walk(dir: string, files: string[] = []): string[] {
 }
 
 const files = walk(root);
+const SRC = join(root, "src") + "/";
+const inSrc = (f: string): boolean => f.startsWith(SRC);
 
-// 1. naming: src/tools ts files are buckle.<thing>.<role>.ts or barrels
+// 1. naming: nested src/tools ts files are buckle.<thing>.<role>.ts or
+//    barrels; src/ ROOT files (main, settings, kit, fault, problem, pick)
+//    are the DAG's composition roots and live flat by design.
 for (const f of files.filter((f) => f.match(/\/(src|tools)\//) && f.endsWith(".ts"))) {
   const base = f.split("/").pop() as string;
   if (base === "index.ts" || base.endsWith(".test.ts")) continue;
-  if (!/^buckle\.[a-z0-9-]+(\.[a-z0-9-]+)*\.ts$/.test(base))
+  const inSrcRoot = /\/src\/[^/]+\.ts$/.test(f);
+  if (!inSrcRoot && !/^buckle\.[a-z0-9-]+(\.[a-z0-9-]+)*\.ts$/.test(base))
     errors.push(`naming: ${base} (expected buckle.<thing>.<role>.ts)`);
 }
 
@@ -75,7 +80,7 @@ for (const f of files.filter((f) => /\/src\/.*\.test\.ts$/.test(f))) {
   const src = readFileSync(f, "utf8");
   for (const owned of ["function stubProvider", "function stubEngine", "function recorder", "function mintKeyDir", "function keyDir("]) {
     if (src.includes(owned))
-    errors.push(`${f}: hand-rolled ${owned.slice(9)}( — import it from buckle.server.kit.ts`);
+    errors.push(`${f}: hand-rolled ${owned.slice(9)}( — import it from kit.ts`);
   }
 }
 
@@ -106,6 +111,41 @@ for (const f of files.filter((f) => /\/src\/.*\.test\.ts$/.test(f))) {
   const module = f.replace(".test.ts", ".ts");
   if (!files.includes(module))
     errors.push(`${f.split("/").pop()}: no sibling module ${module.split("/").pop()} — test names mirror modules`);
+}
+
+// 2f. no-try-catch: the ONLY sanctioned catch boundary in src/ is
+//     fault.ts (classify, never swallow) and settings.ts (readToken/
+//     listDir fault classification). Every other src module composes
+//     typed Fault values — a bare catch anywhere else is a defect.
+for (const f of files.filter(
+  (f) => inSrc(f) && !f.endsWith(".test.ts"),
+)) {
+  const base = f.split("/").pop() as string;
+  if (base === "fault.ts" || base === "settings.ts") continue;
+  if (/\} catch/.test(readFileSync(f, "utf8")))
+    errors.push(`${f}: bare catch — the only catch boundary is fault.ts (+ settings.ts readToken/listDir); compose typed Faults instead`);
+}
+
+// 2g. env boundary: process.env is read ONLY by the settings loader
+//     (src/settings.ts). Every knob — urls, timeouts, telemetry —
+//     lives in the settings schema; a scattered env read is a defect.
+for (const f of files.filter(
+  (f) => inSrc(f) && !f.endsWith(".test.ts"),
+)) {
+  if (f === SRC + "settings.ts") continue;
+  if (/process\.env/.test(readFileSync(f, "utf8")))
+    errors.push(`${f}: process.env outside the loader (src/settings.ts) — the knob belongs in the settings schema`);
+}
+
+// 2h. timeout knobs: every bounded wait lives in the settings schema
+//     (timeouts.*). A module-local TIMEOUT_MS constant is a scattered
+//     knob — fail. (TPS_WINDOW_MS is definitional, not a wait bound.)
+for (const f of files.filter(
+  (f) => inSrc(f) && !f.endsWith(".test.ts"),
+)) {
+  if (f.endsWith("buckle.settings.zod.ts")) continue;
+  if (/TIMEOUT_MS\s*=/.test(readFileSync(f, "utf8")))
+    errors.push(`${f}: module-local TIMEOUT constant — the knob belongs in settings.timeouts (one home, zod-defaulted)`);
 }
 
 // 3. no AUTHORED yaml outside compose wiring (docker-compose is wiring

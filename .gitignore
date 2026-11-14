@@ -12,3 +12,6 @@ node_modules/
 .qlty/sources/
 test/deploy/keys/.gen/*
 test/deploy/engine/
+
+.worktrees/
+.workgraph.jsonl

@@ -5,6 +5,10 @@
   // open); real mode mints it into the mounted keys dir.
   keys: { engine: "/etc/buckle/keys/engine.master.key" },
   hub: { label: "b3" },
+  // the compose network names this unit's engine + telemetry sink —
+  // mode-independent facts (stub and real ride the same topology)
+  engine: { url: "http://litellm3:4000" },
+  telemetry: { otlp_url: "http://jaeger:4318" },
   access: {
     principals: [
       { id: "bob@fleet", kind: "human", groups: [] },

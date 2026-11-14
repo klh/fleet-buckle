@@ -2,6 +2,7 @@
 // (inflight + tok/s per model), and WHO is connected (principals with
 // machines, per buckle). Served by /stats and folded into the tree.
 import { z } from "zod";
+import { BucklePrincipalKind } from "./buckle.principal.zod.ts";
 
 export const BuckleStatModelRow = z
   .object({
@@ -14,7 +15,7 @@ export const BuckleStatModelRow = z
 export const BuckleStatPrincipalRow = z
   .object({
     principal: z.string().min(1),
-    kind: z.enum(["human", "developer", "agent", "service"]).optional(),
+    kind: BucklePrincipalKind.optional(),
     machine: z.string().optional(),
     inflight: z.number().int().min(0),
     requests: z.number().int().min(0),

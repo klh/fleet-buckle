@@ -147,11 +147,36 @@ richness (the health sidecar owns verdicts — outside-process law).
   as `buckle.<thing>.zod.ts`; types are `z.output`, never hand-written.
   Codecs parse in/out at every boundary; failures are a `validation`
   problem, loud.
+- **No try/catch — typed Faults.** `src/fault.ts` is the ONLY catch
+  boundary (it classifies fetch/parse failures into the fault taxonomy;
+  `src/settings.ts` readToken/listDir likewise). Every other module
+  composes typed `Fault` values through `Outcome` unions — seams log
+  them (`logFault`) and map them to problem+json naming the kind
+  (`engine timeout`, `peer b2 refused`). check-laws fails any other
+  `catch` in `src/`.
+- **Knobs have one home: the settings schema.** `process.env` is read
+  ONLY by the settings loader (`src/settings.ts`, argv/env paths).
+  Every bounded wait and url knob lives in `BuckleSettings`
+  (`timeouts.*`, `engine.url`, `telemetry.otlp_url`, `hub.ports`) —
+  a module-local constant or a scattered env read fails check-laws.
+  Tests derive knobs from `mergeSettings(...).timeouts.hop_ms`, never
+  re-declare them.
+- **Unit worlds are hermetic by construction.** `src/kit.ts` composes
+  `defaults ⊕ world opts` — never the b1 demo file. A world's
+  providers/hubs are EXACTLY its stubs: nothing real, nothing docker,
+  nothing inherited. (A world inheriting b1 once reached the live
+  stack through /etc/hosts and leaked real openrouter rows into unit
+  assertions.)
 - **Composed capability folders.** A capability is a FOLDER
   (`federation/`, `catalog/`, `proxy/`, `access/`, `live/`…) with
   single-job files `buckle.<thing>.<role>.ts`, colocated
   `<file>.test.ts` (bun test), `fixtures/`, and a thin `index.ts`
-  barrel. Nothing imports past another folder's barrel.
+  barrel. Nothing imports past another folder's barrel. The DAG:
+  `schemas ← fault ← {problem, settings} ← {access, admission,
+  federation, live.trace} ← {catalog, live} ← proxy ← main`.
+  Composition roots live FLAT in `src/` (`main.ts`, `settings.ts`,
+  `kit.ts`, `fault.ts`, `problem.ts`, `pick.ts`) — check-laws exempts
+  them from folder naming.
 - **One job per file.** If you cannot name the file's `<role>`, split
   it. Variants are files (`.fetch.anthropic.ts`), not `if` branches.
 - **Line caps**: warn at 400 (you are composing wrong), stop at 1200,

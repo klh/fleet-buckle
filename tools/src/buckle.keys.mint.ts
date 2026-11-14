@@ -7,7 +7,7 @@
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadSettings } from "../../src/server/buckle.server.settings.ts";
+import { loadSettings } from "../../src/settings.ts";
 
 export function mintKey(value = "bksk_"): string {
   const bytes = crypto.getRandomValues(new Uint8Array(24));

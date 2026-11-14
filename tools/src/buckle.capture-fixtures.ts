@@ -17,7 +17,6 @@ import {
   type KnownProviderLabel,
 } from "../../src/schemas/buckle.provider.registry.zod.ts";
 
-const RUNTIME = process.env["FLEET_RUNTIME_HOME"] ?? join(homedir(), ".claude/local-llm");
 /** registry key_file is `~/...` — tilde expands to the REAL home
  *  (os.homedir), never the runtime dir; FLEET_RUNTIME_HOME only
  *  relocates the runtime itself */

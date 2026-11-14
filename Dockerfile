@@ -8,4 +8,4 @@ WORKDIR /app
 RUN bun add zod@4.6.7
 COPY src ./src
 EXPOSE 4111
-CMD ["bun", "src/server/buckle.server.main.ts"]
+CMD ["bun", "src/main.ts"]

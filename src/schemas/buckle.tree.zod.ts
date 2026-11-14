@@ -9,6 +9,7 @@
 // peer-of-peer SUMMARIES. Full inference, fail-loud at every level.
 import { z } from "zod";
 import { BuckleModelWire } from "./buckle.model.wire.zod.ts";
+import { BucklePrincipalKind } from "./buckle.principal.zod.ts";
 
 const BuckleLabel = z.object({ label: z.string().min(1), url: z.url().optional() }).strict();
 
@@ -22,6 +23,7 @@ const BuckleStats = z
 const BuckleConnection = z
   .object({
     principal: z.string().min(1),
+    kind: BucklePrincipalKind.optional(),
     machine: z.string().optional(),
     inflight: z.number().int().min(0),
     connected_since: z.number().int().min(0),

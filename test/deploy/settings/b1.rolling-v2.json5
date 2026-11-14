@@ -7,6 +7,9 @@
 // compose (the shared default layer's keys.dir does not ride here).
 {
   hub: { version: "v2-rolling" },
+  // the rolling demo's shared engine + telemetry (docker topology)
+  engine: { url: "http://litellm1:4000" },
+  telemetry: { otlp_url: "http://jaeger:4318" },
   keys: {
     root: "/etc/buckle/keys/root.key",
     engine: "/etc/buckle/keys/engine.key",

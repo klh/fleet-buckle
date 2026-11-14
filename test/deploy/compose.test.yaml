@@ -54,7 +54,6 @@ services:
     build: https://github.com/klh/fleet-health.git#v1.0.0
     environment:
       HEALTH_SETTINGS: /etc/health/settings.json5
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
     volumes:
       - ./health/h1.settings.json5:/etc/health/settings.json5:ro
     ports:
@@ -65,9 +64,7 @@ services:
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
-      BUCKLE_ENGINE_URL: http://litellm1:4000
       BUCKLE_SETTINGS_OVER: /etc/buckle/over.json5
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
     volumes:
       - ../../deploy/settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
       - ./settings/b1.settings.json5:/etc/buckle/settings.json:ro
@@ -87,7 +84,6 @@ services:
     build: https://github.com/klh/fleet-health.git#v1.0.0
     environment:
       HEALTH_SETTINGS: /etc/health/settings.json5
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
     volumes:
       - ./health/h2.settings.json5:/etc/health/settings.json5:ro
     ports:
@@ -98,9 +94,7 @@ services:
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
-      BUCKLE_ENGINE_URL: http://litellm2:4000
       BUCKLE_SETTINGS_OVER: /etc/buckle/over.json5
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
     volumes:
       - ../../deploy/settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
       - ./settings/b2.settings.json5:/etc/buckle/settings.json:ro
@@ -120,7 +114,6 @@ services:
     build: https://github.com/klh/fleet-health.git#v1.0.0
     environment:
       HEALTH_SETTINGS: /etc/health/settings.json5
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
     volumes:
       - ./health/h3.settings.json5:/etc/health/settings.json5:ro
     ports:
@@ -131,9 +124,7 @@ services:
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
-      BUCKLE_ENGINE_URL: http://litellm3:4000
       BUCKLE_SETTINGS_OVER: /etc/buckle/over.json5
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
     volumes:
       - ../../deploy/settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
       - ./settings/b3.settings.json5:/etc/buckle/settings.json:ro

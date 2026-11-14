@@ -1,0 +1,29 @@
+// b1.rolling-v1.json5 — the rolling demo's CURRENT version (v1). The
+// real single-hub file (deploy/settings/b1.settings.json5) must never
+// carry docker urls — the ROLLING topology is this file's business:
+// shared engine + stub, one hub, the fleet identity principals.
+{
+  keys: { engine: "/etc/buckle/keys/engine.master.key" },
+  hub: { label: "b1" },
+  engine: { url: "http://litellm1:4000" },
+  telemetry: { otlp_url: "http://jaeger:4318" },
+  access: {
+    principals: [
+      { id: "alice@fleet", kind: "human", groups: [] },
+      { id: "carol@fleet", kind: "developer", groups: ["platform"] },
+    ],
+    grants: [
+      {
+        principal: "alice@fleet",
+        scopes: ["models.list", "models.use"],
+        limits: { max_rpm: 40 },
+      },
+      { principal: "carol@fleet", scopes: ["models.list", "models.use"] },
+    ],
+  },
+  providers: {
+    // url/dialect default from the provider registry (the REAL endpoint);
+    // chat rides the engine — the demo's engine answers from the stub
+    openrouter: { key: "/etc/buckle/keys/openrouter.key" },
+  },
+}

@@ -1,0 +1,85 @@
+// proxy/buckle.proxy.engine.ts — the ENGINE leg of the forward loop: the
+// one place buckle talks to its litellm. Provider-origin models ride
+// here: body bytes verbatim, the W3C trace CONTINUED, bounded waits.
+// Outcome is a zod-typed union the caller maps into client responses;
+// every type here is zod-derived (the type law).
+import { z } from "zod";
+import { Fault } from "../schemas/buckle.fault.zod.ts";
+import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
+import { bodyText, httpSend, parseJson } from "../fault.ts";
+import type { TokenReader } from "../federation/buckle.federation.peer.ts";
+import { continueTraceparent } from "../live/buckle.live.trace.ts";
+
+/** the engine base url — ONE home: settings.engine.url */
+export function engineUrl(settings: BuckleSettings): string {
+  return settings.engine.url;
+}
+
+/** the engine outcome, mapped by the caller into client responses.
+ *  served carries servedBy — provenance is named AT THE SOURCE so the
+ *  pipeline's served mapping is ONE surface for both legs. */
+export const EngineOutcome = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("served"),
+      status: z.number().int(),
+      text: z.string(),
+      contentType: z.string(),
+      servedBy: z.string(),
+    })
+    .strict(),
+  z.object({ kind: z.literal("fault"), fault: Fault }).strict(),
+]);
+export type EngineOutcome = z.output<typeof EngineOutcome>;
+
+/** total_tokens out of an upstream chat body (0 when absent/unparseable) */
+const UsageBody = z
+  .object({ usage: z.object({ total_tokens: z.number() }).optional() })
+  .passthrough();
+
+export function usageOf(text: string): number {
+  // non-JSON upstream body: no token count, still a passthrough
+  const json = parseJson(text);
+  if (!json.ok) return 0;
+  const parsed = UsageBody.safeParse(json.data);
+  return parsed.success ? (parsed.data.usage?.total_tokens ?? 0) : 0;
+}
+
+/** POST a chat to the engine, verbatim body, trace continued.
+ *  When keys.engine is configured AND readable, the gate is ON: the
+ *  engine (litellm master_key) refuses anonymous and wrong-key calls.
+ *  A missing/unreadable file means NO header (stub engines are open). */
+export async function engineChat(
+  settings: BuckleSettings,
+  raw: string,
+  traceparent: string,
+  tokenOf: TokenReader,
+): Promise<EngineOutcome> {
+  const engine = `${engineUrl(settings).replace(/\/$/, "")}/v1/chat/completions`;
+  const engineToken = settings.keys?.engine !== undefined
+    ? tokenOf(settings.keys.engine)
+    : null;
+  const sent = await httpSend(
+    engine,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        traceparent: continueTraceparent(traceparent),
+        ...(engineToken !== null ? { authorization: `Bearer ${engineToken}` } : {}),
+      },
+      body: raw,
+    },
+    settings.timeouts.engine_ms,
+  );
+  if (!sent.ok) return { kind: "fault", fault: sent.fault };
+  const body = await bodyText(sent);
+  if (!body.ok) return { kind: "fault", fault: body.fault };
+  return {
+    kind: "served",
+    status: sent.response.status,
+    text: body.text,
+    contentType: sent.response.headers.get("content-type") ?? "application/json",
+    servedBy: settings.hub.label,
+  };
+}

@@ -122,11 +122,11 @@ export const BuckleSettings = z
         url: z.url().optional(),
         ports: z
           .object({
-            buckle: z.number().int().min(1).max(65535).optional(),
-            ready: z.number().int().min(1).max(65535).optional(),
+            buckle: z.number().int().min(1).max(65535).default(4111),
+            ready: z.number().int().min(1).max(65535).default(4114),
           })
           .strict()
-          .optional(),
+          .prefault({}),
         allow_cloud: z.boolean().optional(),
         ready_model: z.string().min(1).optional(),
       })
@@ -144,17 +144,42 @@ export const BuckleSettings = z
       })
       .strict()
       .optional(),
-    /** the unit's litellm engine — the forward target of the MITM loop. */
+    /** the unit's litellm engine — the forward target of the MITM
+     *  loop. ONE home: this url (no env override exists). */
     engine: z
-      .object({ url: z.url() })
+      .object({ url: z.url().default("http://127.0.0.1:4000") })
       .strict()
-      .optional(),
+      .prefault({}),
     /** per-buckle access registry (this buckle's OWN "AD domain"). */
     access: BuckleAccessRegistry.optional(),
     /** c — providers configured on this hub (registry-resolved). */
     providers: BuckleProviders.optional(),
     /** d — downstream peers. */
     hubs: z.record(z.string(), BucklePeer).optional(),
+    /** e — every bounded wait + cache TTL. ONE home: the knobs that
+     *  were once scattered constants live here, zod-defaulted so a
+     *  parsed settings object is always complete. */
+    timeouts: z
+      .object({
+        /** provider catalog pulls (upstream /models) */
+        provider_fetch_ms: z.number().int().min(100).default(1500),
+        /** downstream peer pulls (catalog/tree/stats faces) */
+        peer_pull_ms: z.number().int().min(100).default(1500),
+        /** the engine leg of the forward loop */
+        engine_ms: z.number().int().min(1000).default(120_000),
+        /** the hop leg (peer buckle chat forward) */
+        hop_ms: z.number().int().min(1000).default(120_000),
+        /** upstream catalog cache freshness */
+        catalog_cache_ms: z.number().int().min(0).default(2000),
+      })
+      .strict()
+      .prefault({}),
+    /** f — telemetry sinks. Absent url = export off (traces still
+     *  flow on the wire headers). */
+    telemetry: z
+      .object({ otlp_url: z.url().optional() })
+      .strict()
+      .prefault({}),
   })
   .strict();
 export type BuckleSettings = z.output<typeof BuckleSettings>;

@@ -29,10 +29,9 @@ services:
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
-      BUCKLE_ENGINE_URL: http://litellm1:4000
     volumes:
       - ../../deploy/settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
-      - ../../deploy/settings/b1.settings.json5:/etc/buckle/settings.json:ro
+      - ./settings/b1.rolling-v1.json5:/etc/buckle/settings.json:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:
       - "4821:4111"
@@ -43,7 +42,6 @@ services:
     environment:
       BUCKLE_SETTINGS: /etc/buckle/settings.json
       BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
-      BUCKLE_ENGINE_URL: http://litellm1:4000
     volumes:
       # v2 = default ⊕ b1 ⊕ {version}: the unit inherits b1's label,
       # provider and registry wholesale — only the version stamps new
