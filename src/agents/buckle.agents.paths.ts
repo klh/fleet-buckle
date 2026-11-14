@@ -3,7 +3,6 @@
 // path is VALIDATED, never chmod'd; symlinks refuse; the atomic
 // 0600 writer lives here (one construction site for the agents tree).
 import { lstat, mkdir, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
 import { errnoOr } from "../fault.ts";
 
 export async function existingEntry(path: string) {
@@ -30,5 +29,4 @@ export async function atomicWrite0600(path: string, content: string): Promise<vo
   const tmp = `${path}.tmp-${process.pid}-${Date.now()}`;
   await writeFile(tmp, content, { mode: 0o600 });
   await rename(tmp, path);
-  void dirname(path);
 }

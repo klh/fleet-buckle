@@ -10,9 +10,10 @@
 //     the executor's EXACT key order (insertion order is the contract;
 //     do not alphabetize) — start refuses a spec stamped with a
 //     different digest.
-import { createHash, randomBytes } from "node:crypto";
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { atomicWrite0600 } from "./buckle.agents.paths.ts";
 import {
   SeedManifestSchema,
   type SeedManifest,
@@ -62,12 +63,11 @@ export const canonicalPolicyDigest = (policy: SeedPolicy): string =>
 export const parseSeedManifest = (raw: unknown) => SeedManifestSchema.safeParse(raw);
 
 /** Atomic 0600 manifest write — the manifest binds identity digests and
- *  must not be world-readable mid-write. */
+ *  must not be world-readable mid-write. Rides the ONE atomic writer
+ *  (agents.paths owns the tmp+rename construction). */
 export const writeSeedManifest = async (dest: string, manifest: SeedManifest): Promise<void> => {
   await mkdir(dirname(dest), { recursive: true });
-  const tmp = `${dest}.${randomBytes(4).toString("hex")}.tmp`;
-  await writeFile(tmp, `${JSON.stringify(manifest, null, "\t")}\n`, { mode: 0o600 });
-  await rename(tmp, dest);
+  await atomicWrite0600(dest, `${JSON.stringify(manifest, null, "\t")}\n`);
 };
 
 export type { SeedManifest };
