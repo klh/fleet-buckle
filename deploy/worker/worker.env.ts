@@ -21,7 +21,9 @@ export const env = {
   buckle: process.env.BUCKLE_URL ?? "http://buckle3:4111",
   buckleKey: readSecret(process.env.BUCKLE_KEY_FILE ?? "/run/secrets/buckle_key", "BUCKLE_KEY"),
   lane: process.env.WORKER_LANE ?? "b3-repoagent-v1-calculon",
-  statePath: process.env.WORKER_STATE ?? "/state/worker.json",
+  // the durable store (pi-durable SQLite journal; a compose volume):
+  // the sweep loop's task graph + the repoagent.state doc live here
+  storePath: process.env.WORKER_STORE ?? "/state/worker.sqlite",
   pollSeconds: Number(process.env.WORKER_POLL_SECONDS ?? 20),
   dockerSock: process.env.DOCKER_SOCK ?? "/var/run/docker.sock",
   pagesUrl: process.env.WORKER_PAGES_URL ?? `https://icomdev.github.io/calculon/`,

@@ -185,7 +185,7 @@ services:
       WORKER_GH_URL: http://gh-stub:8080
       BUCKLE_URL: http://buckle3:4111
       WORKER_LANE: b3-repoagent-v1-calculon
-      WORKER_STATE: /state/worker.json
+      WORKER_STORE: /state/worker.sqlite
       WORKER_POLL_SECONDS: 30
       WORKER_ISSUE_PREFIX: "[agent]"
       WORKER_WAKE_ADDR: 0.0.0.0:8090

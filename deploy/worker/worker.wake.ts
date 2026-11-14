@@ -1,27 +1,13 @@
-// worker.wake.ts — the WAKE compartment: the only hand-rolled timing
-// in the service. A verified webhook POST resolves the sleep early;
-// the poll tick stays the backstop (wakes are at-least-once, sweeps
-// are idempotent). A wake DURING a sweep (no pending sleep) sets the
-// flag — the next sleepOrWake returns immediately, no event lost.
-// THE DURABLE REWORK REPLACES THIS ENTIRE MODULE: sleepUntil +
-// onWake/resume() own the timing, this file shrinks to the signature
-// verification, and nothing else in the service changes.
-import { createHmac, timingSafeEqual } from "node:crypto";
+// worker.wake.ts — the WAKE face: a verified webhook POST becomes a
+// durable kick task (worker.durable.ts). The hand-rolled
+// sleepOrWake loop this module used to own is gone — sleepUntil +
+// the harness scheduler own the timing; the poll task stays the
+// reconciliation backstop (wakes are at-least-once, sweeps are
+// idempotent). Only the signature is authoritative; the payload is
+// advisory — the sweep re-reads REST truth.
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { env } from "./worker.env.ts";
-
-let wakePending = false;
-let wakeResolve: (() => void) | null = null;
-
-export const sleepOrWake = (): Promise<void> =>
-  new Promise<void>((resolve) => {
-    wakeResolve = resolve;
-    if (wakePending) {
-      wakePending = false;
-      resolve();
-      return;
-    }
-    setTimeout(resolve, env.pollSeconds * 1000);
-  });
+import { kick, KickInputSchema, type DurableRuntime } from "./worker.durable.ts";
 
 const signed = (req: Request, raw: string): boolean => {
   if (env.webhookSecret === "") return false;
@@ -45,29 +31,24 @@ const advisoryAction = (raw: string): string => {
   return "";
 };
 
-const fireWake = (): void => {
-  if (wakeResolve !== null) {
-    const fire = wakeResolve;
-    wakeResolve = null;
-    fire();
-    return;
-  }
-  wakePending = true;
-};
-
-const wakeResponse = async (req: Request): Promise<Response> => {
+const wakeResponse = async (harness: DurableRuntime, req: Request): Promise<Response> => {
   const raw = await req.text();
   if (!signed(req, raw)) return new Response("bad signature", { status: 403 });
   const event = req.headers.get("x-github-event") ?? "wake";
   console.log(`[worker] wake: ${event} ${advisoryAction(raw)}`);
-  fireWake();
+  const input = KickInputSchema.safeParse({
+    requestId: createHash("sha256").update(raw).digest("hex"),
+    event,
+  });
+  if (!input.success) return new Response("bad input", { status: 400 });
+  await kick(harness, input.data);
   return Response.json({ ok: true });
 };
 
-/** boot the wake face when WAKE_ADDR is set (host:port). The payload
- *  shape is advisory — the sweep re-reads REST truth; only the
- *  signature is authoritative. */
-export function serveWake(): void {
+/** boot the wake face when WAKE_ADDR is set (host:port). Each signed
+ *  POST admits one durable kick task; a wake during a running sweep
+ *  waits at the gate — never interrupts a sweep mid-flight. */
+export function serveWake(harness: DurableRuntime): void {
   if (env.wakeAddr === "") return;
   const [hostname, portText] = env.wakeAddr.split(":");
   Bun.serve({
@@ -76,7 +57,7 @@ export function serveWake(): void {
     fetch: async (req) => {
       if (req.method !== "POST" || new URL(req.url).pathname !== "/wake")
         return new Response("not found", { status: 404 });
-      return await wakeResponse(req);
+      return await wakeResponse(harness, req);
     },
   });
 }
