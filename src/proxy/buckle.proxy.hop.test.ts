@@ -46,19 +46,24 @@ const HEAD_ACCESS: AccessRegistry = BuckleAccessRegistry.parse({
 
 /** the hop world: head b1 (bob peers b3, alice own-only) + peer b3
  *  behind a transparent recorder, over its own provider + engine stubs. */
-async function bootHopWorld(dir: string, peerGrants: {
-  scopes: string[];
-  limits?: { max_rpm: number };
-}) {
+async function bootHopWorld(
+  dir: string,
+  peerGrants: {
+    scopes: string[];
+    limits?: { max_rpm: number };
+  },
+) {
   const engine = stubEngine();
   const peerProvider = stubProvider([{ id: "glm-5.3" }]);
   const peerAccess: AccessRegistry = BuckleAccessRegistry.parse({
     principals: [{ id: "federation@fleet", kind: "service", groups: [] }],
-    grants: [{
-      principal: "federation@fleet",
-      scopes: peerGrants.scopes,
-      ...(peerGrants.limits === undefined ? {} : { limits: peerGrants.limits }),
-    }],
+    grants: [
+      {
+        principal: "federation@fleet",
+        scopes: peerGrants.scopes,
+        ...(peerGrants.limits === undefined ? {} : { limits: peerGrants.limits }),
+      },
+    ],
     tiers: [],
   });
   const peer = await bootBuckle({

@@ -38,6 +38,10 @@ services:
     build: ../kit/stub
     volumes:
       - ../deploy/fixtures/zai.models.json:/etc/stub/models.json:ro
+    # host face for the EVIDENCE ring — specs assert the lane pin and
+    # injection from /_seen (what the stub SAW), never hand-typed ids
+    ports:
+      - "4742:8080"
 
   # ── unit 1 ──
   litellm1:
@@ -47,13 +51,15 @@ services:
     # not a secret — provider keys are PATHS in settings.json5.
     # the CLI registers ONE model (last --model wins); it is the model
     # the demo chats. The catalog's extra rows come from the STUB fixture.
-    command:
-      [
-        "--config", "/etc/engine/openrouter.litellm.yaml",
-        "--port", "4000",
+    command: [
+        "--config",
+        "/etc/engine/openrouter.litellm.yaml",
+        "--port",
+        "4000",
         # the Prometheus face runs as its OWN process (litellm law):
         # the API port serves no /metrics
-        "--prometheus_metrics_port", "4002",
+        "--prometheus_metrics_port",
+        "4002",
       ]
     volumes:
       - ./engine/openrouter.litellm.yaml:/etc/engine/openrouter.litellm.yaml:ro
@@ -86,9 +92,12 @@ services:
     image: ghcr.io/berriai/litellm:v1.103.0
     command:
       [
-        "--config", "/etc/engine/mscopilot.litellm.yaml",
-        "--port", "4000",
-        "--prometheus_metrics_port", "4002",
+        "--config",
+        "/etc/engine/mscopilot.litellm.yaml",
+        "--port",
+        "4000",
+        "--prometheus_metrics_port",
+        "4002",
       ]
     volumes:
       - ./engine/mscopilot.litellm.yaml:/etc/engine/mscopilot.litellm.yaml:ro
@@ -121,9 +130,12 @@ services:
     image: ghcr.io/berriai/litellm:v1.103.0
     command:
       [
-        "--config", "/etc/engine/zai.litellm.yaml",
-        "--port", "4000",
-        "--prometheus_metrics_port", "4002",
+        "--config",
+        "/etc/engine/zai.litellm.yaml",
+        "--port",
+        "4000",
+        "--prometheus_metrics_port",
+        "4002",
       ]
     volumes:
       - ./engine/zai.litellm.yaml:/etc/engine/zai.litellm.yaml:ro
@@ -150,3 +162,52 @@ services:
     ports:
       - "4731:4111"
     depends_on: [litellm3, zai-stub, jaeger]
+
+  # ── the worker plane (compartmentalized: gh face, wake seam, lane) ──
+  # the GitHub stub: the worker's repo face + the webhook deliverer
+  # (signed wake POSTs to the worker on issue/comment create)
+  gh-stub:
+    build: ../kit/ghstub
+    environment:
+      GHSTUB_WEBHOOK_URL: http://worker3:8090/wake
+      GHSTUB_WEBHOOK_SECRET: hermetic-wake-secret
+    ports:
+      - "4741:8080"
+
+  # the DURABLE WORKER on b3 (the chain's tail): tends icomdev/calculon
+  # (issues in, PRs out), rides the /w/b3-repoagent-v1-calculon launch lane, spawns
+  # microworkers over the mounted docker socket. State volume =
+  # durability; compose restart resumes the phase machine.
+  worker3:
+    build: ../../deploy/worker
+    environment:
+      WORKER_REPO: icomdev/calculon
+      WORKER_GH_URL: http://gh-stub:8080
+      BUCKLE_URL: http://buckle3:4111
+      WORKER_LANE: b3-repoagent-v1-calculon
+      WORKER_STATE: /state/worker.json
+      WORKER_POLL_SECONDS: 30
+      WORKER_ISSUE_PREFIX: "[agent]"
+      WORKER_WAKE_ADDR: 0.0.0.0:8090
+      WORKER_WEBHOOK_SECRET: hermetic-wake-secret
+      BUCKLE_KEY_FILE: /run/secrets/buckle_key
+    ports:
+      - "4743:8090"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - worker3-state:/state
+    secrets:
+      - source: worker_token
+        target: worker_token
+      - source: buckle_key
+        target: buckle_key
+    depends_on: [buckle3, gh-stub]
+
+volumes:
+  worker3-state:
+
+secrets:
+  worker_token:
+    file: ./keys/.gen/worker.github.token
+  buckle_key:
+    file: ./keys/.gen/principal.dave@fleet.key

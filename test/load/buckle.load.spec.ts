@@ -9,8 +9,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-const KEY = (p: string) =>
-  readFileSync(join(ROOT, `test/deploy/keys/.gen/${p}`), "utf8").trim();
+const KEY = (p: string) => readFileSync(join(ROOT, `test/deploy/keys/.gen/${p}`), "utf8").trim();
 const alice = KEY("principal.alice@fleet.key");
 const carol = KEY("principal.carol@fleet.key");
 const B1 = "http://127.0.0.1:4711";
@@ -28,9 +27,7 @@ const chat = (token: string) =>
 test.describe("load waves — 429 is a CONTRACT, not a crash", () => {
   for (const wave of [1, 2, 3]) {
     test(`wave ${wave}: burst of 12 → capped with Retry-After, no 5xx`, async () => {
-      const rs = await Promise.all(
-        Array.from({ length: 12 }, () => chat(alice)),
-      );
+      const rs = await Promise.all(Array.from({ length: 12 }, () => chat(alice)));
       const statuses = rs.map((r) => r.status).sort();
       // never a 5xx — the limiter answers, the server stays up
       for (const st of statuses) expect(st < 500).toBe(true);

@@ -8,8 +8,7 @@
 // (file PATH).
 import { readFileSync } from "node:fs";
 
-const fixturePath =
-  process.env["STUB_FIXTURE"] ?? "/etc/stub/models.json";
+const fixturePath = process.env["STUB_FIXTURE"] ?? "/etc/stub/models.json";
 
 let rows: unknown = { data: [] };
 try {
@@ -20,6 +19,75 @@ try {
 
 let chats = 0;
 
+/** the AGENT-CONTRACT oracle: the durable worker asks three STRICT
+ *  JSON questions (classify / pin-down / implement). The provider stub
+ *  answers them deterministically so the worker cycle is provable
+ *  hermetically. A contract answer is AUTHORITATIVE — checked before
+ *  and never overridden by the CONTEXT-MARK oracle (a lane rule may
+ *  inject a system stanza into the very same request; the worker must
+ *  still get its JSON). */
+const seen: {
+  at: number;
+  face: string;
+  model: string;
+  systemMark: boolean;
+  system: string | null;
+  contract: string | null;
+}[] = [];
+
+function recordSeen(
+  face: string,
+  model: string,
+  systemMark: boolean,
+  contract: string | null,
+  system: string | null,
+): void {
+  seen.push({ at: Date.now(), face, model, systemMark, system, contract });
+  if (seen.length > 100) seen.splice(0, seen.length - 100);
+}
+
+function agentContractAnswer(messages: readonly unknown[]): { text: string; kind: string } | null {
+  const texts: string[] = [];
+  for (const m of messages) {
+    if (
+      typeof m === "object" &&
+      m !== null &&
+      "content" in m &&
+      typeof (m as { content: unknown }).content === "string"
+    )
+      texts.push((m as { content: string }).content);
+  }
+  const joined = texts.join("\n");
+  if (joined.includes("Classify this GitHub issue"))
+    return { text: JSON.stringify({ kind: "feature" }), kind: "classify" };
+  if (joined.includes("Ask the 1-4 pin-down questions"))
+    return {
+      text: JSON.stringify({
+        questions: [
+          "What should the marker page title be?",
+          "Should it link back to the issue that asked for it?",
+        ],
+      }),
+      kind: "questions",
+    };
+  if (joined.includes("You are implementing a GitHub issue")) {
+    const n = /issue #(\d+)/.exec(joined)?.[1] ?? "0";
+    return {
+      text: JSON.stringify({
+        summary: "Add the agent e2e marker page",
+        files: [
+          {
+            path: `docs/agent-e2e-${n}.md`,
+            content: `# Agent e2e marker\n\nWritten by the durable worker cycle (issue #${n}).\n`,
+          },
+        ],
+      }),
+      kind: "implement",
+    };
+  }
+  return null;
+}
+
 const server = Bun.serve({
   hostname: "0.0.0.0",
   port: 8080,
@@ -27,6 +95,11 @@ const server = Bun.serve({
     const { pathname } = new URL(req.url);
     if (req.method === "GET" && pathname === "/models")
       return Response.json(rows, { headers: { "cache-control": "no-store" } });
+    // the EVIDENCE ring: what this stub actually SAW (the worker e2e
+    // asserts the lane pin + context injection from here — never from
+    // hand-typed expectations)
+    if (req.method === "GET" && pathname === "/_seen")
+      return Response.json({ seen }, { headers: { "cache-control": "no-store" } });
     if (req.method === "POST" && pathname === "/v1/chat/completions") {
       chats += 1;
       // the oracle: injection is visible in the ANSWER — a
@@ -34,29 +107,191 @@ const server = Bun.serve({
       // everything else answers "plain". Castless structural
       // narrowing (in-guards): the stub image carries no deps
       let answer = "plain";
+      let model = "stub-chat";
+      let contract: string | null = null;
+      let systemMark = false;
+      let systemHead: string | null = null;
       try {
         const body: unknown = JSON.parse(await req.text());
         if (
-          typeof body === "object" && body !== null && "messages" in body &&
+          typeof body === "object" &&
+          body !== null &&
+          "messages" in body &&
           Array.isArray(body.messages)
         ) {
+          const hit = agentContractAnswer(body.messages);
+          if (hit !== null) {
+            answer = hit.text;
+            contract = hit.kind;
+          }
           const first: unknown = body.messages[0];
           if (
-            typeof first === "object" && first !== null &&
-            "role" in first && "content" in first &&
-            first.role === "system" && typeof first.content === "string" &&
-            first.content.includes("CONTEXT-MARK")
-          )
-            answer = "injected";
+            typeof first === "object" &&
+            first !== null &&
+            "role" in first &&
+            "content" in first &&
+            first.role === "system" &&
+            typeof first.content === "string"
+          ) {
+            systemHead = first.content.slice(0, 100);
+            if (first.content.includes("CONTEXT-MARK")) systemMark = true;
+          }
+          // the mark answer only when NO contract claimed it (the
+          // worker must always get its JSON back)
+          if (systemMark && contract === null) answer = "injected";
         }
+        // the LANE-PIN oracle: the model the engine actually received
+        // (the pin wins over the body — the response echoes it)
+        if (
+          typeof body === "object" &&
+          body !== null &&
+          "model" in body &&
+          typeof body.model === "string"
+        )
+          model = body.model;
       } catch {
         // non-JSON body: still a passthrough stub
       }
+      recordSeen("chat", model, systemMark, contract, systemHead);
       return Response.json({
         id: "stub-chat",
         object: "chat.completion",
+        model,
         choices: [{ index: 0, message: { role: "assistant", content: answer } }],
         usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      });
+    }
+    // the ANTHROPIC dialect oracle: top-level `system` carrying the
+    // mark answers "injected" (the /v1/messages injection seam)
+    if (req.method === "POST" && pathname === "/v1/messages") {
+      let answer = "plain";
+      let model = "stub-messages";
+      let contract: string | null = null;
+      let systemMark = false;
+      let systemHead: string | null = null;
+      try {
+        const body: unknown = JSON.parse(await req.text());
+        if (
+          typeof body === "object" &&
+          body !== null &&
+          "system" in body &&
+          typeof body.system === "string"
+        ) {
+          systemHead = body.system.slice(0, 100);
+          if (body.system.includes("CONTEXT-MARK")) systemMark = true;
+        }
+        if (
+          typeof body === "object" &&
+          body !== null &&
+          "model" in body &&
+          typeof body.model === "string"
+        )
+          model = body.model;
+        if (
+          typeof body === "object" &&
+          body !== null &&
+          "messages" in body &&
+          Array.isArray(body.messages)
+        ) {
+          const hit = agentContractAnswer(body.messages);
+          if (hit !== null) {
+            answer = hit.text;
+            contract = hit.kind;
+          }
+        }
+        if (systemMark && contract === null) answer = "injected";
+      } catch {
+        // non-JSON body: still a passthrough stub
+      }
+      recordSeen("messages", model, systemMark, contract, systemHead);
+      return Response.json({
+        id: "stub-msg",
+        type: "message",
+        role: "assistant",
+        model,
+        content: [{ type: "text", text: answer }],
+        usage: { input_tokens: 1, output_tokens: 1 },
+      });
+    }
+    // the RESPONSES-API face: litellm translates the anthropic
+    // /v1/messages dialect onto the OpenAI /v1/responses wire for
+    // openai legs (instructions carries the injected system stanza) —
+    // without this face the dialect round trip cannot complete
+    if (req.method === "POST" && pathname === "/v1/responses") {
+      let answer = "plain";
+      let model = "stub-responses";
+      let contract: string | null = null;
+      let systemMark = false;
+      let systemHead: string | null = null;
+      try {
+        const body: unknown = JSON.parse(await req.text());
+        if (
+          typeof body === "object" &&
+          body !== null &&
+          "instructions" in body &&
+          typeof body.instructions === "string"
+        ) {
+          systemHead = body.instructions.slice(0, 100);
+          if (body.instructions.includes("CONTEXT-MARK")) systemMark = true;
+        }
+        if (
+          typeof body === "object" &&
+          body !== null &&
+          "model" in body &&
+          typeof body.model === "string"
+        )
+          model = body.model;
+        if (
+          typeof body === "object" &&
+          body !== null &&
+          "input" in body &&
+          Array.isArray(body.input)
+        ) {
+          const texts: unknown[] = [];
+          for (const item of body.input) {
+            if (
+              typeof item === "object" &&
+              item !== null &&
+              "content" in item &&
+              Array.isArray((item as { content: unknown }).content)
+            )
+              for (const part of (item as { content: unknown[] }).content)
+                if (
+                  typeof part === "object" &&
+                  part !== null &&
+                  "text" in part &&
+                  typeof (part as { text: unknown }).text === "string"
+                )
+                  texts.push((part as { text: string }).text);
+          }
+          const items = texts.map((t) => ({ role: "user", content: t }));
+          const hit = agentContractAnswer(items);
+          if (hit !== null) {
+            answer = hit.text;
+            contract = hit.kind;
+          }
+        }
+        if (systemMark && contract === null) answer = "injected";
+      } catch {
+        // non-JSON body: still a passthrough stub
+      }
+      recordSeen("responses", model, systemMark, contract, systemHead);
+      return Response.json({
+        id: "resp-stub",
+        object: "response",
+        created_at: 1,
+        status: "completed",
+        model,
+        output: [
+          {
+            type: "message",
+            id: "msg-stub",
+            role: "assistant",
+            status: "completed",
+            content: [{ type: "output_text", text: answer, annotations: [] }],
+          },
+        ],
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
       });
     }
     if (req.method === "GET" && pathname === "/metrics")
@@ -76,7 +311,19 @@ const server = Bun.serve({
       );
     if (req.method === "GET" && pathname === "/healthz")
       return Response.json({ ok: true, status: "up" });
-    return new Response("not found", { status: 404 });
+    // the PASS-THROUGH oracle: any unhandled face echoes verbatim —
+    // method + path + body riding back (the e2e proves buckle
+    // relayed it untouched, auth swapped at the gate)
+    const echoed = req.method === "GET" || req.method === "HEAD" ? null : await req.text();
+    return Response.json({
+      echoed: true,
+      method: req.method,
+      path: pathname,
+      ...(echoed !== null ? { body: echoed } : {}),
+      ...(req.headers.get("x-litellm-tags") !== null
+        ? { tags: req.headers.get("x-litellm-tags") }
+        : {}),
+    });
   },
 });
 console.log(`provider stub on ${server.url.href} (fixture: ${fixturePath})`);

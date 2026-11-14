@@ -6,10 +6,7 @@
 // logged at the seam, and the tree of record stays ours. Optional
 // sections are built with the ONE pick primitive (omit-when-absent) —
 // never a conditional-spread ternary.
-import type {
-  BucklePeer,
-  BuckleSettings,
-} from "../schemas/buckle.settings.zod.ts";
+import type { BucklePeer, BuckleSettings } from "../schemas/buckle.settings.zod.ts";
 import {
   BuckleTreeResponse,
   type BuckleTreeNode,
@@ -49,10 +46,7 @@ function summaryOf(sub: BuckleTreePeerSummary): BuckleTreePeerSummary {
   };
 }
 
-function peerNodeOf(
-  label: string,
-  node: BuckleTreeNode | null,
-): BuckleTreePeer {
+function peerNodeOf(label: string, node: BuckleTreeNode | null): BuckleTreePeer {
   if (node === null)
     // fail soft: the label is known from settings; models are not
     return { buckle: { label }, models: [], peers: [] };

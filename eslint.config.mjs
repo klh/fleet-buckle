@@ -12,10 +12,7 @@ export default [
       "no-useless-rename": "error",
       "no-duplicate-imports": "error",
       "max-depth": ["warn", 3],
-      "max-lines-per-function": [
-        "warn",
-        { max: 60, skipBlankLines: true, skipComments: true },
-      ],
+      "max-lines-per-function": ["warn", { max: 60, skipBlankLines: true, skipComments: true }],
       "max-statements": ["warn", 25],
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": [

@@ -7,10 +7,7 @@
 // one row per model id — a machine sitting under several hubs never
 // sees duplicates. Downstream only.
 import type { BucklePeer, BuckleSettings } from "../schemas/buckle.settings.zod.ts";
-import {
-  BuckleModelWire,
-  BuckleModelsResponse,
-} from "../schemas/buckle.model.wire.zod.ts";
+import { BuckleModelWire, BuckleModelsResponse } from "../schemas/buckle.model.wire.zod.ts";
 import { peerJson, type TokenReader } from "../federation/buckle.federation.peer.ts";
 import { buildCatalog } from "./buckle.catalog.fetch.ts";
 
@@ -18,20 +15,14 @@ import { buildCatalog } from "./buckle.catalog.fetch.ts";
  *  explicit list (including []) = exactly those labels */
 function admittedPeers(settings: BuckleSettings, principal: string): string[] {
   const configured = Object.keys(settings.hubs ?? {});
-  const grant = (settings.access?.grants ?? []).find(
-    (g) => g.principal === principal,
-  );
+  const grant = (settings.access?.grants ?? []).find((g) => g.principal === principal);
   return grant?.peers ?? configured;
 }
 
 /** the peer's row re-originated for OUR view: provenance becomes WHERE
  *  WE GOT IT (kind=buckle, label, url) — schema-validated, never
  *  hand-cast; a malformed row contributes nothing (logged upstream) */
-function hopRowOf(
-  row: BuckleModelWire,
-  label: string,
-  url: string,
-): BuckleModelWire | null {
+function hopRowOf(row: BuckleModelWire, label: string, url: string): BuckleModelWire | null {
   const hop = BuckleModelWire.safeParse({
     id: row.id,
     origin: { kind: "buckle", label, url },

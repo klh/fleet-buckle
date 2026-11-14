@@ -6,9 +6,7 @@ import { join } from "node:path";
 import { createLive } from "./buckle.metrics.tracker.ts";
 import { createStatsCache, statsBody } from "./buckle.metrics.stats.ts";
 import { mergeSettings } from "../schemas/buckle.settings.zod.ts";
-import {
-  BuckleStatsResponse,
-} from "../schemas/buckle.stats.zod.ts";
+import { BuckleStatsResponse } from "../schemas/buckle.stats.zod.ts";
 import { mintKeyDir, stubPeer } from "../kit.ts";
 import { readToken } from "../settings.ts";
 

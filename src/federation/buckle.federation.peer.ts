@@ -22,9 +22,7 @@ export function peerToken(peer: BucklePeer, tokenOf: TokenReader): string | null
   return peer.token_file !== undefined ? tokenOf(peer.token_file) : null;
 }
 
-type PeerJsonResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; fault: Fault };
+type PeerJsonResult<T> = { ok: true; data: T } | { ok: false; fault: Fault };
 
 /** the request headers for one peer pull: continued trace when the
  *  caller rides one, the peer's federation token when it has one */

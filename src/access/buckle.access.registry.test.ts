@@ -3,12 +3,7 @@
 // unknown key → 401 (never 403), key-without-grant → 403; healthz +
 // metrics stay OPEN (outside-process health law). Worlds ride the kit.
 import { describe, expect, test } from "bun:test";
-import {
-  bootBuckle,
-  mintKeyDir,
-  stubProvider,
-  type AccessRegistry,
-} from "../kit.ts";
+import { bootBuckle, mintKeyDir, stubProvider, type AccessRegistry } from "../kit.ts";
 import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
 import { BuckleModelsResponse } from "../schemas/buckle.model.wire.zod.ts";
 import { BuckleProblem } from "../schemas/buckle.problem.zod.ts";

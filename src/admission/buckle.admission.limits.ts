@@ -8,10 +8,7 @@
 // anywhere = admit. The 60s window is DEFINITIONAL (it is what
 // "per minute" means), not a tunable.
 import { z } from "zod";
-import type {
-  BuckleGrant,
-  BuckleTier,
-} from "../schemas/buckle.access.zod.ts";
+import type { BuckleGrant, BuckleTier } from "../schemas/buckle.access.zod.ts";
 
 const WINDOW_MS = 60_000;
 
@@ -28,9 +25,7 @@ const RateVerdict = z.discriminatedUnion("allowed", [
 ]);
 type RateVerdict = z.output<typeof RateVerdict>;
 
-export function createLimiter(
-  now: () => number = Date.now,
-): {
+export function createLimiter(now: () => number = Date.now): {
   admit(principal: string, maxRpm: number): RateVerdict;
 } {
   const hits = new Map<string, number[]>();
@@ -40,10 +35,7 @@ export function createLimiter(
       const t = now();
       const window = (hits.get(principal) ?? []).filter((at) => t - at < WINDOW_MS);
       if (window.length >= maxRpm) {
-        const retryAfterS = Math.max(
-          1,
-          Math.ceil((window[0]! + WINDOW_MS - t) / 1000),
-        );
+        const retryAfterS = Math.max(1, Math.ceil((window[0]! + WINDOW_MS - t) / 1000));
         return RateVerdict.parse({ allowed: false, retryAfterS });
       }
       window.push(t);

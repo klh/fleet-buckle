@@ -38,9 +38,7 @@ const FULL_ROW = {
   },
 };
 
-async function bootedWithProviders(
-  providers: Record<string, WorldProvider>,
-) {
+async function bootedWithProviders(providers: Record<string, WorldProvider>) {
   const world = await bootBuckle({
     label: "b1",
     dir: DIR,
@@ -59,10 +57,9 @@ describe("the catalog cache entry (the fetch cache's contract)", () => {
     });
     expect(entry.success).toBe(true);
     // the ROW is the contract: a model without its origin never caches
-    expect(
-      CacheEntrySchema.safeParse({ at: 1, rows: [{ id: "zai/glm-5.3" }] })
-        .success,
-    ).toBe(false);
+    expect(CacheEntrySchema.safeParse({ at: 1, rows: [{ id: "zai/glm-5.3" }] }).success).toBe(
+      false,
+    );
   });
 });
 

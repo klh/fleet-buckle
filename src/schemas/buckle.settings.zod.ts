@@ -4,10 +4,7 @@
 // deep-merged, then safeParse'd here — fail loud, never limp along.
 import { z } from "zod";
 import { BuckleAccessRegistry } from "./buckle.access.zod.ts";
-import {
-  KNOWN_PROVIDERS,
-  type KnownProviderLabel,
-} from "./buckle.provider.registry.zod.ts";
+import { KNOWN_PROVIDERS, type KnownProviderLabel } from "./buckle.provider.registry.zod.ts";
 
 /** A path to a 0600 secret file. The value never rides any artifact. */
 export const KeyPath = z.string().min(1);
@@ -95,23 +92,52 @@ export type BucklePeer = z.output<typeof BucklePeer>;
  *  whose shipped form consumes exactly this policy. Every declared
  *  dimension must match (AND); a stanza is text XOR file (files are
  *  read ONCE at boot — fail loud on unreadable). */
-const ContextRuleDimensions = {
-  /** Model group filters; absent = every model. */
-  models: z.array(z.string().min(1)).optional(),
-  /** exact principal id; absent = every principal */
-  principal: z.string().min(1).optional(),
-  /** a substring the BODY START must carry; absent = any body */
-  bodyContains: z.string().min(1).optional(),
-};
-export const BuckleContextRule = z.union([
-  z.object({ file: z.string().min(1), ...ContextRuleDimensions }).strict(),
-  z.object({ text: z.string().min(1), ...ContextRuleDimensions }).strict(),
-]);
-export const BuckleContextPolicy = z
-  .object({ inject: z.array(BuckleContextRule).min(1) })
+/** the MATCH half — every dimension optional (AND semantics; an
+ *  absent `match` is the deliberate catch-all). Dimensions may only
+ *  name facts the judge actually receives (ContextFacts). */
+const ContextMatch = z
+  .object({
+    /** exact principal id */
+    principal: z.string().min(1).optional(),
+    /** a principal GROUP the caller must carry */
+    group: z.string().min(1).optional(),
+    /** the ingress dialect this rule fires on (chat | messages) */
+    route: z.enum(["chat", "messages"]).optional(),
+    /** model group filters: exact or prefix */
+    models: z.array(z.string().min(1)).optional(),
+    /** a substring the BODY START must carry */
+    bodyContains: z.string().min(1).optional(),
+    /** the fleet CLI hook's repo stamp (x-fleet-repo) */
+    repo: z.string().min(1).optional(),
+    /** the lane label (x-fleet-lane) */
+    lane: z.string().min(1).optional(),
+    /** the work item id (x-fleet-work) */
+    work: z.string().min(1).optional(),
+  })
   .strict();
+
+/** one rule: a stanza (text XOR file — files read ONCE at boot) +
+ *  the match that fires it. The id is the observability label (the
+ *  injection counter + the never-silent response header). */
+export const BuckleContextRule = z.union([
+  z
+    .object({ id: z.string().min(1), match: ContextMatch.optional(), file: z.string().min(1) })
+    .strict(),
+  z
+    .object({ id: z.string().min(1), match: ContextMatch.optional(), text: z.string().min(1) })
+    .strict(),
+]);
+export const BuckleContextPolicy = z.object({ rules: z.array(BuckleContextRule).min(1) }).strict();
 export type BuckleContextRule = z.output<typeof BuckleContextRule>;
 export type BuckleContextPolicy = z.output<typeof BuckleContextPolicy>;
+
+/** a LANE row — the /w/<slug> launch URL's target: the slug pins the
+ *  MODEL (the pin wins over the body; the hub falls out of the
+ *  federated catalog — a peer-origin model rides the hop). The
+ *  simple URL agents/skills/MCP CLIs launch on. */
+export const BuckleLane = z.object({ id: z.string().min(1), model: z.string().min(1) }).strict();
+export const BuckleLaneTable = z.array(BuckleLane);
+export type BuckleLane = z.output<typeof BuckleLane>;
 
 /** One buckle's settings — the merged file content. */
 export const BuckleSettings = z
@@ -138,6 +164,12 @@ export const BuckleSettings = z
     /** a — generalized caps for the whole hub. */
     limits: BuckleLimits.optional(),
     context_policy: BuckleContextPolicy.optional(),
+    /** the /w/<slug> launch table: slug pins the model (the pin wins
+     *  over the body; the hub falls out of the federated catalog).
+     *  FROZEN SCOPE: admission/authz stay here ONLY until the
+     *  litellm-auth collapse lands (docs/target-architecture.md) —
+     *  new principal/budget/surface kinds stop at this line. */
+    lanes: BuckleLaneTable.optional(),
     /** b — general security: key PATHS, never values. */
     keys: z
       .object({
@@ -155,10 +187,7 @@ export const BuckleSettings = z
      *  metrics_url: litellm serves Prometheus on a SEPARATE process
      *  (--prometheus_metrics_port); absent = scrape the engine url
      *  itself (engines without the face answer empty, never throw) */
-    engine: z
-      .object({ url: z.url(), metrics_url: z.url().optional() })
-      .strict()
-      .optional(),
+    engine: z.object({ url: z.url(), metrics_url: z.url().optional() }).strict().optional(),
     /** per-buckle access registry (this buckle's OWN "AD domain"). */
     access: BuckleAccessRegistry.optional(),
     /** c — providers configured on this hub (registry-resolved). */
@@ -188,10 +217,7 @@ export const BuckleSettings = z
       .prefault({}),
     /** f — telemetry sinks. Absent url = export off (traces still
      *  flow on the wire headers). */
-    telemetry: z
-      .object({ otlp_url: z.url().optional() })
-      .strict()
-      .prefault({}),
+    telemetry: z.object({ otlp_url: z.url().optional() }).strict().prefault({}),
   })
   .strict();
 export type BuckleSettings = z.output<typeof BuckleSettings>;
@@ -203,10 +229,7 @@ export type BuckleSettingsFile = z.output<typeof BuckleSettingsFile>;
 
 /** Deep-merge default ⊕ specific (objects merge, scalars/arrays replace),
  *  then parse. The ONE way settings load. */
-export function mergeSettings(
-  base: unknown,
-  override: unknown,
-): BuckleSettings {
+export function mergeSettings(base: unknown, override: unknown): BuckleSettings {
   const merged = deepMerge(base, override);
   return BuckleSettings.parse(merged);
 }

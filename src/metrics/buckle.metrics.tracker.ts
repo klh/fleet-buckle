@@ -66,10 +66,7 @@ function principalRowOf(
 }
 
 /** tokens banked inside the rolling window (pure fold) */
-function windowTokensOf(
-  events: { at: number; tokens: number }[],
-  now: number,
-): number {
+function windowTokensOf(events: { at: number; tokens: number }[], now: number): number {
   let tokens = 0;
   for (const e of events) if (now - e.at <= TPS_WINDOW_MS) tokens += e.tokens;
   return tokens;
@@ -114,8 +111,7 @@ function sessionsOf(
   let longestRunningS = 0;
   const top = [...principals.entries()]
     .map(([principal, p]) => {
-      if (p.kind !== undefined)
-        byKind.set(p.kind, (byKind.get(p.kind) ?? 0) + 1);
+      if (p.kind !== undefined) byKind.set(p.kind, (byKind.get(p.kind) ?? 0) + 1);
       longestRunningS = Math.max(longestRunningS, (now - p.connected_since) / 1000);
       return {
         principal,
@@ -147,11 +143,7 @@ function openOn(
 }
 
 /** the model row's close half: inflight down, requests + tokens banked */
-function closeModelOn(
-  state: LiveState,
-  model: string,
-  tokens: number,
-): void {
+function closeModelOn(state: LiveState, model: string, tokens: number): void {
   const m = state.models.get(model);
   if (m === undefined) return;
   if (m.inflight > 0) m.inflight -= 1;
@@ -161,11 +153,7 @@ function closeModelOn(
 
 /** the session row's close half: inflight down, requests + tokens
  *  banked, last_seen stamped */
-function closeSessionOn(
-  state: LiveState,
-  principal: string,
-  tokens: number,
-): void {
+function closeSessionOn(state: LiveState, principal: string, tokens: number): void {
   const p = state.principals.get(principal);
   if (p === undefined) return;
   if (p.inflight > 0) p.inflight -= 1;
@@ -175,12 +163,7 @@ function closeSessionOn(
 }
 
 /** close: usage tokens banked (model + session + window), requests bumped */
-function closeOn(
-  state: LiveState,
-  principal: string,
-  model: string,
-  tokens: number,
-): void {
+function closeOn(state: LiveState, principal: string, model: string, tokens: number): void {
   closeModelOn(state, model, tokens);
   closeSessionOn(state, principal, tokens);
   if (tokens > 0) state.tokenEvents.push({ at: Date.now(), tokens });
@@ -219,8 +202,10 @@ export function createLive(hub: string) {
  *  closeOn(0). O(1) in-memory bookkeeping (the non-blocking contract). */
 export function subscribeTracker(bus: EventBus, live: LiveTracker): void {
   const collect: EventSubscriber = (event: BuckleEvent): void => {
-    if (event.kind === "request.opened") live.open(event.principal, event.principalKind, event.model);
-    else if (event.kind === "request.served") live.close(event.principal, event.model, event.tokens);
+    if (event.kind === "request.opened")
+      live.open(event.principal, event.principalKind, event.model);
+    else if (event.kind === "request.served")
+      live.close(event.principal, event.model, event.tokens);
     else live.close(event.principal, event.model, 0);
   };
   bus.subscribe(collect);

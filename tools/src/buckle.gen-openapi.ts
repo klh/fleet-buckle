@@ -8,9 +8,7 @@ const doc = JSON.stringify(buildOpenApi(), null, 2) + "\n";
 if (process.argv.includes("--check")) {
   const committed = await Bun.file(path).text();
   if (committed !== doc) {
-    console.error(
-      "openapi.json has drifted from the wire schemas — run `bun run gen:openapi`",
-    );
+    console.error("openapi.json has drifted from the wire schemas — run `bun run gen:openapi`");
     process.exit(1);
   }
   console.log("openapi.json is in sync");

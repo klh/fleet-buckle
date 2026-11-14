@@ -14,8 +14,8 @@ import { bodyText as readBody, httpSend, logFault } from "../fault.ts";
 import {
   HOP_DEADLINE_HEADER,
   HOP_PATH_HEADER,
-  type HopPeer,
-  type HopRide,
+  HopPeerSchema,
+  HopRideSchema,
   SERVED_BY_HEADER,
 } from "../federation/buckle.federation.protocol.ts";
 import { continueTraceparent } from "../trace/buckle.trace.export.ts";
@@ -56,8 +56,7 @@ function respondOf(self: string, sent: Response, text: string): HopOutcome {
     const retryAfterS = Number(sent.headers.get("retry-after") ?? "1");
     return HopOutcome.parse({
       kind: "rate-limited",
-      retryAfterS:
-        Number.isFinite(retryAfterS) && retryAfterS > 0 ? retryAfterS : 1,
+      retryAfterS: Number.isFinite(retryAfterS) && retryAfterS > 0 ? retryAfterS : 1,
       detail: text.slice(0, 200),
     });
   }
@@ -67,11 +66,12 @@ function respondOf(self: string, sent: Response, text: string): HopOutcome {
       detail: `status ${String(sent.status)} — ${text.slice(0, 200)}`,
     });
   // serving order is head-first: OUR label, then whoever served below us
-  const chain = sent.headers
-    .get(SERVED_BY_HEADER)
-    ?.split(",")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0) ?? [];
+  const chain =
+    sent.headers
+      .get(SERVED_BY_HEADER)
+      ?.split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0) ?? [];
   return HopOutcome.parse({
     kind: "served",
     status: sent.status,
@@ -87,15 +87,20 @@ function respondOf(self: string, sent: Response, text: string): HopOutcome {
  *  the path plus OUR label, and a null origin deadline gets stamped
  *  here. `timeoutMs` is settings.timeouts.hop_ms — the chain budget
  *  can only TIGHTEN it. */
-export async function hopChat(
-  self: string,
-  peer: HopPeer,
-  ride: HopRide,
-  timeoutMs: number,
-): Promise<HopOutcome> {
+/** one hop ask, bundled — the peer, the ride, the budget, the face */
+export const HopChatCall = z.object({
+  self: z.string(),
+  peer: HopPeerSchema,
+  ride: HopRideSchema,
+  timeoutMs: z.number(),
+  urlPath: z.string(),
+});
+export type HopChatCall = z.output<typeof HopChatCall>;
+
+export async function hopChat(call: HopChatCall): Promise<HopOutcome> {
+  const { self, peer, ride, timeoutMs, urlPath } = call;
   const budget = ride.deadline === null ? timeoutMs : ride.deadline - Date.now();
-  if (budget <= 0)
-    return { kind: "refused", detail: "hop deadline exhausted" };
+  if (budget <= 0) return { kind: "refused", detail: "hop deadline exhausted" };
   const deadline = ride.deadline ?? Date.now() + timeoutMs;
   const headers: Record<string, string> = {
     "content-type": "application/json",
@@ -106,7 +111,7 @@ export async function hopChat(
   if (peer.token !== null) headers["authorization"] = `Bearer ${peer.token}`;
 
   const sent = await httpSend(
-    `${peer.url.replace(/\/$/, "")}/v1/chat/completions`,
+    `${peer.url.replace(/\/$/, "")}${urlPath}`,
     {
       method: "POST",
       headers,

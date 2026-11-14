@@ -36,7 +36,10 @@ import { authenticate, bearerOf, holdsScope } from "./access/buckle.access.regis
 import { createLimiter, resolveRpmCap } from "./admission/buckle.admission.limits.ts";
 import { buildFederatedCatalog } from "./catalog/buckle.catalog.view.ts";
 import { buildTree } from "./catalog/buckle.catalog.topology.ts";
-import { createForwardCtx, forwardChat, problemResponse } from "./proxy/buckle.proxy.pipeline.ts";
+import { createForwardCtx } from "./proxy/buckle.proxy.ctx.ts";
+import { forwardChat, problemResponse, type ChatRoute } from "./proxy/buckle.proxy.pipeline.ts";
+import { passThrough } from "./proxy/buckle.proxy.passthrough.ts";
+import { lanePrefixOf } from "./lane.ts";
 import { pick } from "./pick.ts";
 
 /** the server-scoped state every face shares — composed once at boot.
@@ -60,7 +63,22 @@ type ServerState = ReturnType<typeof createServerState>;
 /** the per-request bundle — the face's whole input beyond the server
  *  state: the raw request, the continued trace, the authenticated
  *  principal (null = anonymous). */
-type Face = (srv: ServerState, rq: { req: Request; tp: string; principal: string | null }) => Promise<Response>;
+type Face = (
+  srv: ServerState,
+  rq: {
+    req: Request;
+    tp: string;
+    principal: string | null;
+    /** the bare (lane-stripped) path */
+    path: string;
+    /** the raw query string (`?…`, or "" — pass-through relays it) */
+    search: string;
+    /** the chat dialect for the two handled LLM faces */
+    route: ChatRoute;
+    /** the /w/<slug> slug riding this request ("" on bare paths) */
+    laneSlug: string;
+  },
+) => Promise<Response>;
 
 /** the scope guard: null = admitted, else the refusal response */
 function requireScope(
@@ -68,39 +86,25 @@ function requireScope(
   principal: string | null,
   scope: BuckleScope,
 ): Response | null {
-  if (principal === null)
-    return problemResponse("unauthenticated", "a principal key is required");
+  if (principal === null) return problemResponse("unauthenticated", "a principal key is required");
   if (!holdsScope(srv.settings, principal, scope))
-    return problemResponse(
-      "forbidden",
-      `${principal} lacks ${scope} on this buckle`,
-    );
+    return problemResponse("forbidden", `${principal} lacks ${scope} on this buckle`);
   return null;
 }
 
 /** the admission check for the chat face: null = admitted, else the
  *  rpm refusal (Retry-After rides the client verdict) */
-function admitPrincipal(
-  srv: ServerState,
-  principal: string | null,
-): Response | null {
+function admitPrincipal(srv: ServerState, principal: string | null): Response | null {
   if (principal === null) return null; // already refused by the guard
-  const grant = (srv.settings.access?.grants ?? []).find(
-    (g) => g.principal === principal,
-  );
-  const kind = srv.settings.access?.principals.find(
-    (p) => p.id === principal,
-  )?.kind;
+  const grant = (srv.settings.access?.grants ?? []).find((g) => g.principal === principal);
+  const kind = srv.settings.access?.principals.find((p) => p.id === principal)?.kind;
   const cap = resolveRpmCap(grant, kind, srv.settings.access?.tiers ?? []);
   const verdict = srv.limiter.admit(principal, cap);
   return verdict.allowed
     ? null
-    : problemResponse(
-        "rate-limited",
-        "rpm cap reached",
-        `${cap}/min on this buckle`,
-        { "retry-after": String(verdict.retryAfterS) },
-      );
+    : problemResponse("rate-limited", "rpm cap reached", `${cap}/min on this buckle`, {
+        "retry-after": String(verdict.retryAfterS),
+      });
 }
 
 const noStore = { "cache-control": "no-store" };
@@ -120,6 +124,7 @@ const chatFace: Face = async (srv, rq) => {
     }),
     rq.req,
     rq.tp,
+    { route: rq.route as ChatRoute, laneSlug: rq.laneSlug },
   );
 };
 
@@ -127,12 +132,7 @@ const modelsFace: Face = async (srv, rq) => {
   const denied = requireScope(srv, rq.principal, "models.list");
   if (denied !== null) return denied;
   return Response.json(
-    await buildFederatedCatalog(
-      srv.settings,
-      rq.principal as string,
-      srv.tokenOf,
-      rq.tp,
-    ),
+    await buildFederatedCatalog(srv.settings, rq.principal as string, srv.tokenOf, rq.tp),
     { headers: noStore },
   );
 };
@@ -140,19 +140,17 @@ const modelsFace: Face = async (srv, rq) => {
 const statsFace: Face = async (srv, rq) => {
   const denied = requireScope(srv, rq.principal, "stats.read");
   if (denied !== null) return denied;
-  return Response.json(
-    await statsBody(srv.settings, srv.live, srv.stats, srv.engine),
-    { headers: noStore },
-  );
+  return Response.json(await statsBody(srv.settings, srv.live, srv.stats, srv.engine), {
+    headers: noStore,
+  });
 };
 
 const treeFace: Face = async (srv, rq) => {
   const denied = requireScope(srv, rq.principal, "tree.read");
   if (denied !== null) return denied;
-  return Response.json(
-    await buildTree(srv.settings, srv.live, srv.tokenOf, rq.tp),
-    { headers: noStore },
-  );
+  return Response.json(await buildTree(srv.settings, srv.live, srv.tokenOf, rq.tp), {
+    headers: noStore,
+  });
 };
 
 const healthzFace: Face = async (srv, rq) =>
@@ -172,9 +170,13 @@ const metricsFace: Face = async (srv) =>
     headers: { "content-type": "text/plain; version=0.0.4" },
   });
 
-/** THE route table — one row per face; the 404 is the fallback */
+/** THE route table — one row per face; anything NOT here rides the
+ *  VERBATIM pass-through leg to the engine (the catch-all: every
+ *  litellm face stays reachable through buckle exactly as litellm
+ *  serves it — /v1/responses, count_tokens, guardrails, the UI…) */
 const routes: Record<string, Face> = {
   "POST /v1/chat/completions": chatFace,
+  "POST /v1/messages": chatFace,
   "GET /v1/models": modelsFace,
   "GET /v1/stats": statsFace,
   "GET /v1/tree": treeFace,
@@ -182,7 +184,11 @@ const routes: Record<string, Face> = {
   "GET /metrics": metricsFace,
 };
 
-const notFoundFace: Face = async () => new Response("not found", { status: 404 });
+const passThroughFace: Face = async (srv, rq) => {
+  const refused = admitPrincipal(srv, rq.principal);
+  if (refused !== null) return refused;
+  return passThrough(srv.settings, rq.req, `${rq.path}${rq.search ?? ""}`, srv.tokenOf);
+};
 
 export function bootServer(input: { settings: BuckleSettings; port?: number }) {
   // the EVENT BUS: the pipeline's one write seam; collectors
@@ -215,22 +221,31 @@ export function bootServer(input: { settings: BuckleSettings; port?: number }) {
     fetch: async (req) => {
       const startedAt = Date.now();
       const tp = continueTraceparent(req.headers.get("traceparent"));
-      const face =
-        routes[`${req.method} ${new URL(req.url).pathname}`] ?? notFoundFace;
+      // the /w/<slug> LANE PREFIX: attribution + launch pin from the
+      // URL itself — stripped BEFORE dispatch (faces and the engine
+      // both see the bare path; the slug rides as a fact + echo)
+      const url = new URL(req.url);
+      const { lane: laneSlug, path } = lanePrefixOf(url.pathname);
+      const face = routes[`${req.method} ${path}`] ?? passThroughFace;
       const res = await face(srv, {
         req,
         tp,
         principal: authenticate(settings, bearerOf(req)),
+        path,
+        search: url.search,
+        route: path === "/v1/messages" ? "messages" : "chat",
+        laneSlug,
       });
       exportSpan(
         {
-          name: `${req.method} ${new URL(req.url).pathname}`,
+          name: `${req.method} ${path}`,
           traceparent: tp,
           startedAt,
           endedAt: Date.now(),
           attributes: {
             "http.status": res.status,
             "buckle.label": settings.hub.label,
+            ...pick("buckle.lane", laneSlug === "" ? undefined : laneSlug),
           },
         },
         settings,
@@ -244,9 +259,7 @@ async function main(paths: SettingsPaths & { port?: number }) {
   const settings = await loadSettings(paths);
   const port = paths.port ?? settings.hub.ports.buckle;
   bootServer({ settings, port });
-  console.log(
-    `fleet-buckle ${settings.hub.label} on :${port} (trace id ${newTraceId()})`,
-  );
+  console.log(`fleet-buckle ${settings.hub.label} on :${port} (trace id ${newTraceId()})`);
 }
 
 if (import.meta.main) {

@@ -12,10 +12,10 @@ import { pick } from "../pick.ts";
 
 /** the fault KINDS (the taxonomy's discriminants, mirrored here as
  *  the event payload — the named set the pipeline can report) */
-export const FaultKind = z.enum(["timeout", "unreachable", "denied", "malformed", "io"]);
+const FaultKind = z.enum(["timeout", "unreachable", "denied", "malformed", "io"]);
 
 /** which leg carried the request */
-export const LegKind = z.enum(["engine", "hop"]);
+const LegKind = z.enum(["engine", "hop"]);
 
 /** what actually happens on the forward path — three named event
  *  schemas (the constructors derive from THESE, never a hand-typed
@@ -54,11 +54,22 @@ const FailedEventSchema = z
     latencyMs: z.number().int().min(0),
   })
   .strict();
+const InjectedEventSchema = z
+  .object({
+    kind: z.literal("context.injected"),
+    at: z.number().int(),
+    principal: z.string().min(1),
+    model: z.string().min(1),
+    /** the fired rule's id — the observability label */
+    rule: z.string().min(1),
+  })
+  .strict();
 
 export const BuckleEvent = z.discriminatedUnion("kind", [
   OpenedEventSchema,
   ServedEventSchema,
   FailedEventSchema,
+  InjectedEventSchema,
 ]);
 export type BuckleEvent = z.output<typeof BuckleEvent>;
 export type FaultKindValue = z.output<typeof FaultKind>;
@@ -117,4 +128,10 @@ export function failedEventOf(input: FailedEventInput): BuckleEvent {
     ...rest,
     ...pick("peer", peer),
   });
+}
+
+type InjectedEventInput = Omit<z.output<typeof InjectedEventSchema>, "kind">;
+
+export function injectedEventOf(input: InjectedEventInput): BuckleEvent {
+  return InjectedEventSchema.parse({ kind: "context.injected", ...input });
 }

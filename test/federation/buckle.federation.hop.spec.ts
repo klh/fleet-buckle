@@ -17,7 +17,9 @@ const keyOf = (principal: string): string =>
   readFileSync(join(ROOT, `test/deploy/keys/.gen/principal.${principal}.key`), "utf8").trim();
 
 // the engine/stub chat echo + our models face — parsed, never hand-cast
-const EngineEcho = z.object({ id: z.string(), usage: z.object({ total_tokens: z.number() }).optional() }).passthrough();
+const EngineEcho = z
+  .object({ id: z.string(), usage: z.object({ total_tokens: z.number() }).optional() })
+  .passthrough();
 const ModelsBody = z.object({ models: z.array(z.object({ id: z.string() })) }).passthrough();
 
 const B1 = "http://127.0.0.1:4711";
@@ -118,9 +120,7 @@ test("the federated catalog is a SET — a machine may sit under several hubs, t
     ["b1", atB1],
     ["b2", atB2],
   ] as const) {
-    expect(new Set(ids).size, `${label}: duplicate ids in federated view`).toBe(
-      ids.length,
-    );
+    expect(new Set(ids).size, `${label}: duplicate ids in federated view`).toBe(ids.length);
   }
   // derived from the fixture stores: glm-5.3 is zai-only — it rides
   // BOTH views exactly once (b1→b3, b2→b3), never twice

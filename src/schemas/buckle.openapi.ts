@@ -31,8 +31,7 @@ const healthzPath = () => ({
 
 const metricsPath = () => ({
   get: {
-    summary:
-      "Prometheus export: requests, inflight, tok/s per model/provider/buckle",
+    summary: "Prometheus export: requests, inflight, tok/s per model/provider/buckle",
     responses: {
       200: { content: { "text/plain": { schema: { type: "string" } } } },
     },

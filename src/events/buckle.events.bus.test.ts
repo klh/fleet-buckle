@@ -21,7 +21,13 @@ describe("EventBus", () => {
     bus.emit(openedEventOf({ at: 1, principal: "carol", model: "m1" }));
     bus.emit(
       servedEventOf({
-        at: 2, principal: "carol", model: "m1", leg: "engine", status: 200, tokens: 5, latencyMs: 10,
+        at: 2,
+        principal: "carol",
+        model: "m1",
+        leg: "engine",
+        status: 200,
+        tokens: 5,
+        latencyMs: 10,
       }),
     );
     expect(seen1).toEqual(["request.opened", "request.served"]);
@@ -31,23 +37,43 @@ describe("EventBus", () => {
   test("emit validates through the schema — drift fails loud", () => {
     const bus = createEventBus();
     expect(() =>
-      bus.emit({ kind: "request.served", at: 1, principal: "", model: "m", leg: "engine", status: 200, tokens: 0, latencyMs: 0 }),
+      bus.emit({
+        kind: "request.served",
+        at: 1,
+        principal: "",
+        model: "m",
+        leg: "engine",
+        status: 200,
+        tokens: 0,
+        latencyMs: 0,
+      }),
     ).toThrow();
   });
 
   test("constructors omit absent optionals and keep present ones", () => {
-    expect(
-      openedEventOf({ at: 1, principal: "carol", model: "m1" }),
-    ).toEqual({
-      kind: "request.opened", at: 1, principal: "carol", model: "m1",
+    expect(openedEventOf({ at: 1, principal: "carol", model: "m1" })).toEqual({
+      kind: "request.opened",
+      at: 1,
+      principal: "carol",
+      model: "m1",
     });
     expect(
       openedEventOf({ at: 1, principal: "carol", principalKind: "human", model: "m1" }),
     ).toEqual({
-      kind: "request.opened", at: 1, principal: "carol", principalKind: "human", model: "m1",
+      kind: "request.opened",
+      at: 1,
+      principal: "carol",
+      principalKind: "human",
+      model: "m1",
     });
     const failed = failedEventOf({
-      at: 3, principal: "carol", model: "m1", leg: "hop", peer: "b2", fault: "timeout", latencyMs: 9,
+      at: 3,
+      principal: "carol",
+      model: "m1",
+      leg: "hop",
+      peer: "b2",
+      fault: "timeout",
+      latencyMs: 9,
     });
     expect(BuckleEvent.parse(failed).kind).toBe("request.failed");
   });
@@ -56,7 +82,8 @@ describe("EventBus", () => {
     // the wiring main does at boot, proven at the seam: opened →
     // inflight, served → banked tokens + counted model
     const { createLive, subscribeTracker } = await import("../metrics/buckle.metrics.tracker.ts");
-    const { createMetrics, subscribeExposition } = await import("../metrics/buckle.metrics.exposition.ts");
+    const { createMetrics, subscribeExposition } =
+      await import("../metrics/buckle.metrics.exposition.ts");
     const bus = createEventBus();
     const live = createLive("b1");
     const metrics = createMetrics("b1");
@@ -64,7 +91,15 @@ describe("EventBus", () => {
     subscribeExposition(bus, metrics);
     bus.emit(openedEventOf({ at: Date.now(), principal: "carol", model: "m1" }));
     bus.emit(
-      servedEventOf({ at: Date.now(), principal: "carol", model: "m1", leg: "engine", status: 200, tokens: 7, latencyMs: 3 }),
+      servedEventOf({
+        at: Date.now(),
+        principal: "carol",
+        model: "m1",
+        leg: "engine",
+        status: 200,
+        tokens: 7,
+        latencyMs: 3,
+      }),
     );
     const snap = live.snapshot();
     expect(snap.models.find((m) => m.model === "m1")?.tokens).toBe(7);

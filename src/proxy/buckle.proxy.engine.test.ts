@@ -4,13 +4,7 @@
 // anonymous (stub engines are open). Worlds ride the kit (never
 // hand-rolled) and assertions read what ARRIVED at the engine stub.
 import { describe, expect, test } from "bun:test";
-import {
-  bootBuckle,
-  mintKeyDir,
-  stubEngine,
-  stubProvider,
-  type AccessRegistry,
-} from "../kit.ts";
+import { bootBuckle, mintKeyDir, stubEngine, stubProvider, type AccessRegistry } from "../kit.ts";
 import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
 
 const DIR = mintKeyDir({

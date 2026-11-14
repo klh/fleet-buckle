@@ -9,20 +9,16 @@ export const COMPOSE_FILE = `${ROOT}/test/deploy/compose.test.yaml`;
 export const PROJECT = "fleet-buckle-test";
 
 export function compose(args: string): string {
-  return execSync(
-    `docker compose -f ${COMPOSE_FILE} -p ${PROJECT} ${args}`,
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-  );
+  return execSync(`docker compose -f ${COMPOSE_FILE} -p ${PROJECT} ${args}`, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
 }
 
 /** compose against ANOTHER stack (stage0, rolling): any file, any
  *  project — the specs that own their own topology reuse this driver
  *  instead of re-rolling execFileSync. */
-export function composeOn(
-  file: string,
-  project: string,
-  ...args: string[]
-): void {
+export function composeOn(file: string, project: string, ...args: string[]): void {
   execFileSync("docker", ["compose", "-f", file, "-p", project, ...args], {
     cwd: ROOT,
     stdio: "pipe",
@@ -30,17 +26,17 @@ export function composeOn(
 }
 
 export async function stackUp(): Promise<void> {
-  execSync(
-    `docker compose -f ${COMPOSE_FILE} -p ${PROJECT} up -d --build`,
-    { encoding: "utf8", stdio: "inherit" },
-  );
+  execSync(`docker compose -f ${COMPOSE_FILE} -p ${PROJECT} up -d --build`, {
+    encoding: "utf8",
+    stdio: "inherit",
+  });
 }
 
 export function stackDown(): void {
-  execSync(
-    `docker compose -f ${COMPOSE_FILE} -p ${PROJECT} down -v --remove-orphans`,
-    { encoding: "utf8", stdio: "inherit" },
-  );
+  execSync(`docker compose -f ${COMPOSE_FILE} -p ${PROJECT} down -v --remove-orphans`, {
+    encoding: "utf8",
+    stdio: "inherit",
+  });
 }
 
 /** compose ps as a service -> state map (json). */

@@ -51,17 +51,27 @@ export function usageOf(text: string): number {
  *  When keys.engine is configured AND readable, the gate is ON: the
  *  engine (litellm master_key) refuses anonymous and wrong-key calls.
  *  A missing/unreadable file means NO header (stub engines are open). */
-export async function engineChat(
-  settings: BuckleSettings,
-  raw: string,
-  traceparent: string,
-  tokenOf: TokenReader,
-): Promise<EngineOutcome> {
+/** the tag header litellm's request logs + policy engine read
+ *  (litellm_pre_call_utils x-litellm-tags): buckle's attribution,
+ *  stamped where the GUI can see it — lane + principal facts */
+const LITELLM_TAGS_HEADER = "x-litellm-tags";
+
+/** one engine call, bundled — the chat seam's whole ask */
+export const EngineCall = z.object({
+  settings: z.custom<BuckleSettings>(),
+  raw: z.string(),
+  traceparent: z.string(),
+  tokenOf: z.custom<TokenReader>(),
+  enginePath: z.string(),
+  fleetTags: z.string().default(""),
+});
+export type EngineCall = z.output<typeof EngineCall>;
+
+export async function engineChat(call: EngineCall): Promise<EngineOutcome> {
+  const { settings, raw, traceparent, tokenOf, enginePath, fleetTags } = call;
   if (settings.engine === undefined) return noEngineOutcome();
-  const engine = `${settings.engine.url.replace(/\/$/, "")}/v1/chat/completions`;
-  const engineToken = settings.keys?.engine !== undefined
-    ? tokenOf(settings.keys.engine)
-    : null;
+  const engine = `${settings.engine.url.replace(/\/$/, "")}${enginePath}`;
+  const engineToken = settings.keys?.engine !== undefined ? tokenOf(settings.keys.engine) : null;
   const sent = await httpSend(
     engine,
     {
@@ -69,6 +79,7 @@ export async function engineChat(
       headers: {
         "content-type": "application/json",
         traceparent: continueTraceparent(traceparent),
+        ...(fleetTags !== "" ? { [LITELLM_TAGS_HEADER]: fleetTags } : {}),
         ...(engineToken !== null ? { authorization: `Bearer ${engineToken}` } : {}),
       },
       body: raw,

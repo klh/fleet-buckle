@@ -21,9 +21,7 @@ type Traceparent = z.output<typeof TraceparentSchema>;
 /** canonical parse: lowercase, all-zero ids rejected, version ff
  *  rejected, malformed input never propagates (null = root a fresh
  *  trace — garbage must not ride the wire) */
-function parseTraceparent(
-  inbound: string | null,
-): Traceparent | null {
+function parseTraceparent(inbound: string | null): Traceparent | null {
   if (inbound === null) return null;
   const parts = inbound.trim().toLowerCase().split("-");
   if (parts.length !== 4) return null;
@@ -65,9 +63,7 @@ const SpanEndSchema = z
     name: z.string().min(1),
     startedAt: z.number().int().min(0),
     endedAt: z.number().int().min(0),
-    attributes: z
-      .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
-      .optional(),
+    attributes: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
   })
   .strict();
 type SpanEnd = z.output<typeof SpanEndSchema>;
@@ -101,9 +97,10 @@ export function exportSpan(end: SpanEnd, settings: BuckleSettings): void {
                   kind: 1,
                   startTimeUnixNano: span.startedAt * 1_000_000,
                   endTimeUnixNano: span.endedAt * 1_000_000,
-                  attributes: Object.entries(span.attributes ?? {}).map(
-                    ([key, value]) => ({ key, value: { stringValue: String(value) } }),
-                  ),
+                  attributes: Object.entries(span.attributes ?? {}).map(([key, value]) => ({
+                    key,
+                    value: { stringValue: String(value) },
+                  })),
                 },
               ],
             },

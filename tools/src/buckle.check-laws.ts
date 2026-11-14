@@ -24,7 +24,9 @@ function checkNoCatch(ctx: LawsCtx, files: string[]): void {
     const base = f.split("/").pop() as string;
     if (base === "fault.ts" || base === "settings.ts") continue;
     if (/\} catch/.test(readFileSync(f, "utf8")))
-      ctx.errors.push(`${f}: bare catch — the only catch boundary is fault.ts (+ settings.ts readToken/listDir); compose typed Faults instead`);
+      ctx.errors.push(
+        `${f}: bare catch — the only catch boundary is fault.ts (+ settings.ts readToken/listDir); compose typed Faults instead`,
+      );
   }
 }
 
@@ -35,7 +37,9 @@ function checkEnvBoundary(ctx: LawsCtx, files: string[]): void {
   for (const f of srcModules(files)) {
     if (f === SRC + "settings.ts") continue;
     if (/process\.env/.test(readFileSync(f, "utf8")))
-      ctx.errors.push(`${f}: process.env outside the loader (src/settings.ts) — the knob belongs in the settings schema`);
+      ctx.errors.push(
+        `${f}: process.env outside the loader (src/settings.ts) — the knob belongs in the settings schema`,
+      );
   }
 }
 
@@ -46,7 +50,9 @@ function checkTimeoutKnobs(ctx: LawsCtx, files: string[]): void {
   for (const f of srcModules(files)) {
     if (f.endsWith("buckle.settings.zod.ts")) continue;
     if (/TIMEOUT_MS\s*=/.test(readFileSync(f, "utf8")))
-      ctx.errors.push(`${f}: module-local TIMEOUT constant — the knob belongs in settings.timeouts (one home, zod-defaulted)`);
+      ctx.errors.push(
+        `${f}: module-local TIMEOUT constant — the knob belongs in settings.timeouts (one home, zod-defaulted)`,
+      );
   }
 }
 
@@ -67,7 +73,8 @@ function checkLineCaps(ctx: LawsCtx, files: string[]): void {
   for (const f of files.filter((f) => f.endsWith(".ts"))) {
     const lines = readFileSync(f, "utf8").split("\n").length;
     if (lines > 1500) ctx.errors.push(`${f}: ${lines} lines — hard cap 1500`);
-    else if (lines > 400) ctx.warnings.push(`${f}: ${lines} lines — you are composing wrong (warn at 400)`);
+    else if (lines > 400)
+      ctx.warnings.push(`${f}: ${lines} lines — you are composing wrong (warn at 400)`);
   }
 }
 

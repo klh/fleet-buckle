@@ -7,16 +7,12 @@ import { BuckleProblem } from "./schemas/buckle.problem.zod.ts";
 
 describe("the scrub guard — secrets never ride errors", () => {
   test("key/token shapes redact, home paths tilde", () => {
-    expect(scrubDetail("key sk-abcdef1234567890 leaked")).toBe(
-      "key [redacted] leaked",
-    );
+    expect(scrubDetail("key sk-abcdef1234567890 leaked")).toBe("key [redacted] leaked");
     expect(scrubDetail("lane bksk_deadbeefdeadbeef")).toBe("lane [redacted]");
     expect(scrubDetail("pat ghp_AbCdEfGh1234567890")).toBe("pat [redacted]");
     expect(scrubDetail("aws AKIAIOSFODNN7EXAMPLE")).toBe("aws [redacted]");
     expect(scrubDetail("Bearer abcdefghijklmnop q")).toBe("[redacted] q");
-    expect(scrubDetail("at /Users/kk/secret then ok")).toBe(
-      "at ~/secret then ok",
-    );
+    expect(scrubDetail("at /Users/kk/secret then ok")).toBe("at ~/secret then ok");
     expect(scrubDetail("clean operator-facing text stays")).toBe(
       "clean operator-facing text stays",
     );

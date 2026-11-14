@@ -3,13 +3,7 @@
 // per-model usage; inflight is true DURING a slow engine call. Worlds
 // ride the kit; responses parse through BuckleStatsResponse.
 import { describe, expect, test } from "bun:test";
-import {
-  bootBuckle,
-  mintKeyDir,
-  stubEngine,
-  stubProvider,
-  type AccessRegistry,
-} from "../kit.ts";
+import { bootBuckle, mintKeyDir, stubEngine, stubProvider, type AccessRegistry } from "../kit.ts";
 import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
 import { BuckleStatsResponse } from "../schemas/buckle.stats.zod.ts";
 import { TrackedPrincipalState } from "./buckle.metrics.tracker.ts";
@@ -18,9 +12,7 @@ const DIR = mintKeyDir({ "principal.wire@fleet.test.key": "bksk_wire_test" });
 const AUTH = { authorization: "Bearer bksk_wire_test" };
 const ACCESS: AccessRegistry = BuckleAccessRegistry.parse({
   principals: [{ id: "wire@fleet.test", kind: "service", groups: [] }],
-  grants: [
-    { principal: "wire@fleet.test", scopes: ["models.list", "models.use", "stats.read"] },
-  ],
+  grants: [{ principal: "wire@fleet.test", scopes: ["models.list", "models.use", "stats.read"] }],
   tiers: [],
 });
 
@@ -68,7 +60,14 @@ describe("the tracked row (the tracker's contract)", () => {
     expect(TrackedPrincipalState.safeParse({ ...base, kind: "agent" }).success).toBe(true);
     expect(TrackedPrincipalState.safeParse({ ...base, kind: "robot" }).success).toBe(false);
     // tokens is always-known now (banked per session) — absent fails
-    expect(TrackedPrincipalState.safeParse({ inflight: 0, requests: 0, connected_since: 1, last_seen: 1 }).success).toBe(false);
+    expect(
+      TrackedPrincipalState.safeParse({
+        inflight: 0,
+        requests: 0,
+        connected_since: 1,
+        last_seen: 1,
+      }).success,
+    ).toBe(false);
     expect(TrackedPrincipalState.safeParse({ ...base, extra: 1 }).success).toBe(false);
   });
 });
@@ -96,9 +95,7 @@ describe("the live overview", () => {
       const stats = BuckleStatsResponse.parse(
         await (await fetch(`${base}/v1/stats`, { headers: AUTH })).json(),
       );
-      const row = stats.self.principals.find(
-        (p) => p.principal === "wire@fleet.test",
-      );
+      const row = stats.self.principals.find((p) => p.principal === "wire@fleet.test");
       expect(row?.requests).toBe(2);
       expect(row?.inflight).toBe(0);
       expect(row?.last_seen).toBeGreaterThan(0);
@@ -118,13 +115,10 @@ describe("the live overview", () => {
       const stats = BuckleStatsResponse.parse(
         await (await fetch(`${base}/v1/stats`, { headers: AUTH })).json(),
       );
-      expect(
-        stats.self.models.find((m) => m.model === "openai/live-test")?.inflight,
-      ).toBe(1);
-      expect(
-        stats.self.principals.find((p) => p.principal === "wire@fleet.test")
-          ?.inflight,
-      ).toBe(1);
+      expect(stats.self.models.find((m) => m.model === "openai/live-test")?.inflight).toBe(1);
+      expect(stats.self.principals.find((p) => p.principal === "wire@fleet.test")?.inflight).toBe(
+        1,
+      );
       expect((await inflight).status).toBe(200);
     } finally {
       stop();

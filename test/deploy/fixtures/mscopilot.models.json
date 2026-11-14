@@ -28,13 +28,7 @@
         "supports": {
           "adaptive_thinking": true,
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ],
+          "reasoning_effort": ["low", "medium", "high", "xhigh", "max"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -50,10 +44,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest Claude Haiku 5.5 model from Anthropic. [Learn more about how GitHub Copilot serves Claude Haiku 5.5](https://gh.io/copilot-claude-opus)."
       },
-      "supported_endpoints": [
-        "/v1/messages",
-        "/chat/completions"
-      ],
+      "supported_endpoints": ["/v1/messages", "/chat/completions"],
       "vendor": "Anthropic",
       "version": "claude-haiku-5.5"
     },
@@ -86,13 +77,7 @@
           "max_thinking_budget": 32000,
           "min_thinking_budget": 1024,
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ],
+          "reasoning_effort": ["low", "medium", "high", "xhigh", "max"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -108,10 +93,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest Claude Opus 4.8 model from Anthropic. [Learn more about how GitHub Copilot serves Claude Opus 4.8](https://gh.io/copilot-claude-opus)."
       },
-      "supported_endpoints": [
-        "/v1/messages",
-        "/chat/completions"
-      ],
+      "supported_endpoints": ["/v1/messages", "/chat/completions"],
       "vendor": "Anthropic",
       "version": "claude-opus-4.8"
     },
@@ -142,13 +124,7 @@
         "supports": {
           "adaptive_thinking": true,
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ],
+          "reasoning_effort": ["low", "medium", "high", "xhigh", "max"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -164,10 +140,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest Claude Opus 5.5 model from Anthropic. [Learn more about how GitHub Copilot serves Claude Opus 5.5](https://gh.io/copilot-claude-opus)."
       },
-      "supported_endpoints": [
-        "/v1/messages",
-        "/chat/completions"
-      ],
+      "supported_endpoints": ["/v1/messages", "/chat/completions"],
       "vendor": "Anthropic",
       "version": "claude-opus-5.5"
     },
@@ -200,13 +173,7 @@
           "max_thinking_budget": 32000,
           "min_thinking_budget": 1024,
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ],
+          "reasoning_effort": ["low", "medium", "high", "xhigh", "max"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -222,10 +189,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest Claude Opus 5 model from Anthropic. [Learn more about how GitHub Copilot serves Claude Opus 5](https://gh.io/copilot-claude-opus)."
       },
-      "supported_endpoints": [
-        "/v1/messages",
-        "/chat/completions"
-      ],
+      "supported_endpoints": ["/v1/messages", "/chat/completions"],
       "vendor": "Anthropic",
       "version": "claude-opus-5"
     },
@@ -256,13 +220,7 @@
         "supports": {
           "adaptive_thinking": true,
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ],
+          "reasoning_effort": ["low", "medium", "high", "xhigh", "max"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -278,10 +236,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest Claude model from Anthropic. [Learn more about how GitHub Copilot serves Claude](https://gh.io/copilot-claude-opus)."
       },
-      "supported_endpoints": [
-        "/v1/messages",
-        "/chat/completions"
-      ],
+      "supported_endpoints": ["/v1/messages", "/chat/completions"],
       "vendor": "Anthropic",
       "version": "claude-sonnet-5.5"
     },
@@ -314,13 +269,7 @@
           "max_thinking_budget": 32000,
           "min_thinking_budget": 1024,
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ],
+          "reasoning_effort": ["low", "medium", "high", "xhigh", "max"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -336,10 +285,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest Claude model from Anthropic. [Learn more about how GitHub Copilot serves Claude](https://gh.io/copilot-claude-opus)."
       },
-      "supported_endpoints": [
-        "/v1/messages",
-        "/chat/completions"
-      ],
+      "supported_endpoints": ["/v1/messages", "/chat/completions"],
       "vendor": "Anthropic",
       "version": "claude-sonnet-5"
     },
@@ -369,11 +315,7 @@
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high"
-          ],
+          "reasoning_effort": ["low", "medium", "high"],
           "streaming": true,
           "tool_calls": true,
           "vision": true
@@ -388,9 +330,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest Gemini 3.8 Flash model from Google. [Learn more about how GitHub Copilot serves Gemini 3.8 Flash](https://docs.github.com/en/copilot/reference/ai-models/model-hosting#google-models)."
       },
-      "supported_endpoints": [
-        "/chat/completions"
-      ],
+      "supported_endpoints": ["/chat/completions"],
       "vendor": "Google",
       "version": "gemini-3.8-flash"
     },
@@ -421,11 +361,7 @@
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high"
-          ],
+          "reasoning_effort": ["low", "medium", "high"],
           "streaming": true,
           "tool_calls": true,
           "vision": true
@@ -440,9 +376,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest Gemini 4 Argon model from Google. [Learn more about how GitHub Copilot serves Gemini 4 Argon](https://docs.github.com/en/copilot/reference/ai-models/model-hosting#google-models)."
       },
-      "supported_endpoints": [
-        "/chat/completions"
-      ],
+      "supported_endpoints": ["/chat/completions"],
       "vendor": "Google",
       "version": "gemini-4-argon"
     },
@@ -472,11 +406,7 @@
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high"
-          ],
+          "reasoning_effort": ["low", "medium", "high"],
           "streaming": true,
           "tool_calls": true,
           "vision": true
@@ -487,9 +417,7 @@
       "model_picker_category": "powerful",
       "name": "Gemini 4 Carbon",
       "object": "model",
-      "supported_endpoints": [
-        "/chat/completions"
-      ],
+      "supported_endpoints": ["/chat/completions"],
       "vendor": "Google",
       "version": "gemini-4-carbon"
     },
@@ -519,12 +447,7 @@
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high",
-            "xhigh"
-          ],
+          "reasoning_effort": ["low", "medium", "high", "xhigh"],
           "streaming": true,
           "tool_calls": true,
           "vision": true
@@ -535,9 +458,7 @@
       "model_picker_category": "versatile",
       "name": "Gemini 4 Hydrogen",
       "object": "model",
-      "supported_endpoints": [
-        "/chat/completions"
-      ],
+      "supported_endpoints": ["/chat/completions"],
       "vendor": "Google",
       "version": "gemini-4-hydrogen"
     },
@@ -566,12 +487,7 @@
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high",
-            "xhigh"
-          ],
+          "reasoning_effort": ["low", "medium", "high", "xhigh"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -583,10 +499,7 @@
       "model_picker_category": "powerful",
       "name": "GPT-5.3-Codex",
       "object": "model",
-      "supported_endpoints": [
-        "/responses",
-        "ws:/responses"
-      ],
+      "supported_endpoints": ["/responses", "ws:/responses"],
       "vendor": "OpenAI",
       "version": "gpt-5.3-codex"
     },
@@ -615,14 +528,7 @@
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "none",
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ],
+          "reasoning_effort": ["none", "low", "medium", "high", "xhigh", "max"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -638,10 +544,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest GPT-5.6 Luna model from OpenAI. [Learn more about how GitHub Copilot serves GPT-5.6 Luna](https://gh.io/copilot-openai)."
       },
-      "supported_endpoints": [
-        "/responses",
-        "ws:/responses"
-      ],
+      "supported_endpoints": ["/responses", "ws:/responses"],
       "vendor": "OpenAI",
       "version": "gpt-5.6-luna"
     },
@@ -670,14 +573,7 @@
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "none",
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ],
+          "reasoning_effort": ["none", "low", "medium", "high", "xhigh", "max"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -693,10 +589,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest GPT-5.6 Sol model from OpenAI. [Learn more about how GitHub Copilot serves GPT-5.6 Sol](https://gh.io/copilot-openai)."
       },
-      "supported_endpoints": [
-        "/responses",
-        "ws:/responses"
-      ],
+      "supported_endpoints": ["/responses", "ws:/responses"],
       "vendor": "OpenAI",
       "version": "gpt-5.6-sol"
     },
@@ -725,14 +618,7 @@
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "none",
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ],
+          "reasoning_effort": ["none", "low", "medium", "high", "xhigh", "max"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -748,10 +634,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest GPT-5.6 Terra model from OpenAI. [Learn more about how GitHub Copilot serves GPT-5.6 Terra](https://gh.io/copilot-openai)."
       },
-      "supported_endpoints": [
-        "/responses",
-        "ws:/responses"
-      ],
+      "supported_endpoints": ["/responses", "ws:/responses"],
       "vendor": "OpenAI",
       "version": "gpt-5.6-terra"
     },
@@ -780,13 +663,7 @@
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ],
+          "reasoning_effort": ["low", "medium", "high", "xhigh", "max"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -802,10 +679,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest GPT-6.1 Sol model from OpenAI. [Learn more about how GitHub Copilot serves GPT-6.1 Sol](https://gh.io/copilot-openai)."
       },
-      "supported_endpoints": [
-        "/responses",
-        "ws:/responses"
-      ],
+      "supported_endpoints": ["/responses", "ws:/responses"],
       "vendor": "OpenAI",
       "version": "gpt-6.1-sol"
     },
@@ -834,13 +708,7 @@
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ],
+          "reasoning_effort": ["low", "medium", "high", "xhigh", "max"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -852,10 +720,7 @@
       "model_picker_category": "versatile",
       "name": "GPT-6.1 Terra",
       "object": "model",
-      "supported_endpoints": [
-        "/responses",
-        "ws:/responses"
-      ],
+      "supported_endpoints": ["/responses", "ws:/responses"],
       "vendor": "OpenAI",
       "version": "gpt-6.1-terra"
     },
@@ -884,13 +749,7 @@
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ],
+          "reasoning_effort": ["low", "medium", "high", "xhigh", "max"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -906,10 +765,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest GPT-6 Astra model from OpenAI. [Learn more about how GitHub Copilot serves GPT-6 Astra](https://gh.io/copilot-openai)."
       },
-      "supported_endpoints": [
-        "/responses",
-        "ws:/responses"
-      ],
+      "supported_endpoints": ["/responses", "ws:/responses"],
       "vendor": "OpenAI",
       "version": "gpt-6-astra"
     },
@@ -938,14 +794,7 @@
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "none",
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ],
+          "reasoning_effort": ["none", "low", "medium", "high", "xhigh", "max"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -961,10 +810,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest GPT-6 Luna model from OpenAI. [Learn more about how GitHub Copilot serves GPT-6 Luna](https://gh.io/copilot-openai)."
       },
-      "supported_endpoints": [
-        "/responses",
-        "ws:/responses"
-      ],
+      "supported_endpoints": ["/responses", "ws:/responses"],
       "vendor": "OpenAI",
       "version": "gpt-6-luna"
     },
@@ -993,14 +839,7 @@
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "none",
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ],
+          "reasoning_effort": ["none", "low", "medium", "high", "xhigh", "max"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -1016,10 +855,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest GPT-6 Sol model from OpenAI. [Learn more about how GitHub Copilot serves GPT-6 Sol](https://gh.io/copilot-openai)."
       },
-      "supported_endpoints": [
-        "/responses",
-        "ws:/responses"
-      ],
+      "supported_endpoints": ["/responses", "ws:/responses"],
       "vendor": "OpenAI",
       "version": "gpt-6-sol"
     },
@@ -1036,21 +872,13 @@
           "vision": {
             "max_prompt_image_size": 3145728,
             "max_prompt_images": 1,
-            "supported_media_types": [
-              "image/jpeg",
-              "image/png"
-            ]
+            "supported_media_types": ["image/jpeg", "image/png"]
           }
         },
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high",
-            "xhigh"
-          ],
+          "reasoning_effort": ["low", "medium", "high", "xhigh"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -1062,9 +890,7 @@
       "model_picker_category": "versatile",
       "name": "Grok 4.6",
       "object": "model",
-      "supported_endpoints": [
-        "/responses"
-      ],
+      "supported_endpoints": ["/responses"],
       "vendor": "xAI",
       "version": "grok-4.6"
     },
@@ -1081,21 +907,13 @@
           "vision": {
             "max_prompt_image_size": 3145728,
             "max_prompt_images": 1,
-            "supported_media_types": [
-              "image/jpeg",
-              "image/png"
-            ]
+            "supported_media_types": ["image/jpeg", "image/png"]
           }
         },
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high",
-            "xhigh"
-          ],
+          "reasoning_effort": ["low", "medium", "high", "xhigh"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -1107,9 +925,7 @@
       "model_picker_category": "versatile",
       "name": "Grok 4.7",
       "object": "model",
-      "supported_endpoints": [
-        "/responses"
-      ],
+      "supported_endpoints": ["/responses"],
       "vendor": "xAI",
       "version": "grok-4.7"
     },
@@ -1138,11 +954,7 @@
         "object": "model_capabilities",
         "supports": {
           "parallel_tool_calls": true,
-          "reasoning_effort": [
-            "low",
-            "medium",
-            "high"
-          ],
+          "reasoning_effort": ["low", "medium", "high"],
           "streaming": true,
           "structured_outputs": true,
           "tool_calls": true,
@@ -1158,10 +970,7 @@
         "state": "enabled",
         "terms": ""
       },
-      "supported_endpoints": [
-        "/responses",
-        "ws:/responses"
-      ],
+      "supported_endpoints": ["/responses", "ws:/responses"],
       "vendor": "Microsoft",
       "version": "mai-code-1.1-flash"
     },
@@ -1179,12 +988,7 @@
           "vision": {
             "max_prompt_image_size": 3145728,
             "max_prompt_images": 5,
-            "supported_media_types": [
-              "image/jpeg",
-              "image/png",
-              "image/webp",
-              "application/pdf"
-            ]
+            "supported_media_types": ["image/jpeg", "image/png", "image/webp", "application/pdf"]
           }
         },
         "object": "model_capabilities",
@@ -1206,10 +1010,7 @@
         "state": "enabled",
         "terms": "Enable access to the latest Claude Haiku 4.5 model from Anthropic. [Learn more about how GitHub Copilot serves Claude Haiku 4.5](https://gh.io/copilot-anthropic)."
       },
-      "supported_endpoints": [
-        "/chat/completions",
-        "/v1/messages"
-      ],
+      "supported_endpoints": ["/chat/completions", "/v1/messages"],
       "vendor": "Anthropic",
       "version": "claude-haiku-4.5"
     }

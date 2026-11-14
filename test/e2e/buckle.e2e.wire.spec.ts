@@ -10,16 +10,30 @@ import { BuckleTreeResponse } from "../../src/schemas/buckle.tree.zod.ts";
 import { BuckleStatsResponse } from "../../src/schemas/buckle.stats.zod.ts";
 
 // the healthz face + the engine's chat echo — parsed, never hand-cast
-const HealthzBody = z.object({
-  ok: z.boolean().optional(),
-  status: z.string().optional(),
-  label: z.string().optional(),
-}).passthrough();
+const HealthzBody = z
+  .object({
+    ok: z.boolean().optional(),
+    status: z.string().optional(),
+    label: z.string().optional(),
+  })
+  .passthrough();
 const ProviderCatalog = z.object({ data: z.array(z.object({ id: z.string() })) });
-const ChatEcho = z.object({
-  id: z.string(),
-  choices: z.array(z.object({ message: z.object({ content: z.string().optional() }).optional() }).optional()).optional(),
-}).passthrough();
+const MessagesEcho = z
+  .object({
+    content: z.array(z.object({ text: z.string().optional() }).passthrough()).optional(),
+  })
+  .passthrough();
+const ChatEcho = z
+  .object({
+    id: z.string(),
+    model: z.string().optional(),
+    choices: z
+      .array(
+        z.object({ message: z.object({ content: z.string().optional() }).optional() }).optional(),
+      )
+      .optional(),
+  })
+  .passthrough();
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,9 +52,7 @@ const AUTH = { authorization: `Bearer ${CAROL_KEY}` };
 // spec edit (single source of truth)
 const fixtureIds = (provider: string): string[] =>
   ProviderCatalog.parse(
-    JSON.parse(
-      readFileSync(join(ROOT, "test/deploy/fixtures", `${provider}.models.json`), "utf8"),
-    ),
+    JSON.parse(readFileSync(join(ROOT, "test/deploy/fixtures", `${provider}.models.json`), "utf8")),
   ).data.map((m) => m.id);
 
 const UNITS = [
@@ -90,9 +102,7 @@ for (const unit of UNITS) {
 
     // catalog — fetched from the provider stub, hub label ours
     const catalog = BuckleModelsResponse.parse(
-      await (
-        await fetch(`${unit.base}/v1/models`, { headers: AUTH })
-      ).json(),
+      await (await fetch(`${unit.base}/v1/models`, { headers: AUTH })).json(),
     );
     expect(catalog.hub).toBe(unit.label);
     // carol's view FEDERATES: own ids always present (peers add rows)
@@ -102,15 +112,13 @@ for (const unit of UNITS) {
     for (const m of catalog.models) {
       // own rows carry provider origin; federated rows (carol's view)
       // carry buckle origin with the PEER's label + url
-      if (m.origin.kind === "provider")
-        expect(m.origin.label).toBe(unit.provider);
+      if (m.origin.kind === "provider") expect(m.origin.label).toBe(unit.provider);
     }
 
     // the MITM loop: chat → litellm engine → provider stub (echo).
     // Engines cold-start slowly after `up -d` — bounded warm-up poll
     // (total fn; throws are "connecting"), THEN one clean round trip.
-    const inbound =
-      "00-e2e1234567890abcdef1234567890abcdef-1234567890abcdef-01";
+    const inbound = "00-e2e1234567890abcdef1234567890abcdef-1234567890abcdef-01";
     const postChat = (): Promise<Response> =>
       fetch(`${unit.base}/v1/chat/completions`, {
         method: "POST",
@@ -179,8 +187,7 @@ for (const unit of UNITS) {
     expect(statsBody.self.engine?.reachable).toBe(true);
     expect(statsBody.self.hub).toBe(unit.label);
     expect(
-      statsBody.self.principals.find((p) => p.principal === "carol@fleet")
-        ?.requests ?? 0,
+      statsBody.self.principals.find((p) => p.principal === "carol@fleet")?.requests ?? 0,
     ).toBeGreaterThanOrEqual(1);
 
     // engine telemetry — litellm's OWN counters, surfaced (never
@@ -215,3 +222,93 @@ for (const unit of UNITS) {
     );
   });
 }
+
+// ── the second wave: dialects, launch lanes, pass-through ────────
+// b2 is the carrying unit (policy + lanes table); the stub oracles
+// answer from the body they SAW (CONTEXT-MARK / model echo)
+test.describe("b2: injection dialects + /w/ lanes + pass-through", () => {
+  const B2 = "http://127.0.0.1:4721";
+  const post = (path: string, body: unknown): Promise<Response> =>
+    fetch(`${B2}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...AUTH },
+      body: JSON.stringify(body),
+    });
+
+  test("POST /v1/messages (anthropic dialect) injects the TOP-LEVEL system", async () => {
+    const r = await post("/v1/messages", {
+      model: "gpt-6-astra",
+      max_tokens: 64,
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(r.status).toBe(200);
+    const body = MessagesEcho.parse(await r.json());
+    expect(body.content?.[0]?.text).toBe("injected"); // the mark rode system-first
+    expect(r.headers.get("x-fleet-buckle-context-rule")).toBe("b2-baseline");
+  });
+
+  test("the /w/review-lane launch URL fires the LANE rule (first-match wins)", async () => {
+    const r = await post("/w/review-lane/v1/chat/completions", {
+      model: "gpt-6-astra",
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(r.status).toBe(200);
+    const body = ChatEcho.parse(await r.json());
+    expect(body.choices?.[0]?.message?.content).toBe("injected");
+    expect(r.headers.get("x-fleet-buckle-context-rule")).toBe("lane-review");
+    // never-silent: the counter carries the rule id
+    await expect
+      .poll(
+        async () =>
+          (await (await fetch(`${B2}/metrics`)).text()).includes(
+            'buckle_context_injections_total{buckle="b2",rule="lane-review"}',
+          ),
+        { timeout: 10_000 },
+      )
+      .toBe(true);
+  });
+
+  test("the /w/pin-haiku lane PIN wins over the body model", async () => {
+    const r = await post("/w/pin-haiku/v1/chat/completions", {
+      model: "gpt-6-astra", // the body asks astra…
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(r.status).toBe(200);
+    const body = ChatEcho.parse(await r.json());
+    expect(body.model).toBe("claude-haiku-5.5"); // …the PIN rode
+    expect(r.headers.get("x-buckle-route")).toBe("pin-haiku");
+  });
+
+  test("a slug with NO row is pure attribution — rides unpinned, echo named", async () => {
+    const r = await post("/w/any-lane-name/v1/chat/completions", {
+      model: "gpt-6-astra",
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(r.status).toBe(200);
+    const body = ChatEcho.parse(await r.json());
+    expect(body.model).toBe("gpt-6-astra"); // no pin — body model rode
+    expect(r.headers.get("x-buckle-route")).toBe("any-lane-name");
+    expect(r.headers.get("x-fleet-buckle-context-rule")).toBe("b2-baseline");
+  });
+
+  test("unhandled faces pass through to the ENGINE verbatim", async () => {
+    // a real litellm face, reached THROUGH the buckle gate (auth
+    // consumed at the gate; the engine token rides)
+    const live = await fetch(`${B2}/health/liveliness`, { headers: AUTH });
+    expect(live.status).toBe(200);
+    expect(JSON.parse(await live.text())).toBe("I'm alive!");
+    // the engine's own verdict relays byte-identical — an unknown
+    // path answers with LITELLM'S 404, not a buckle one
+    const unknown = await fetch(`${B2}/v1/no/such/face`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...AUTH },
+      body: "{}",
+    });
+    expect(unknown.status).toBe(404);
+    const body = z
+      .object({ detail: z.string().optional() })
+      .passthrough()
+      .parse(await unknown.json());
+    expect(body.detail).toBe("Not Found");
+  });
+});

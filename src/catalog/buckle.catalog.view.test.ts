@@ -3,17 +3,9 @@
 // filtered per principal by grant.peers (absent = every configured
 // peer — the matrix's carol). Downstream only. The catalog is a SET.
 import { describe, expect, test } from "bun:test";
-import {
-  bootBuckle,
-  mintKeyDir,
-  stubProvider,
-  type AccessRegistry,
-} from "../kit.ts";
+import { bootBuckle, mintKeyDir, stubProvider, type AccessRegistry } from "../kit.ts";
 import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
-import {
-  BuckleModelWire,
-  BuckleModelsResponse,
-} from "../schemas/buckle.model.wire.zod.ts";
+import { BuckleModelWire, BuckleModelsResponse } from "../schemas/buckle.model.wire.zod.ts";
 
 /** the matrix's grant population, on one key dir */
 const ACCESS: AccessRegistry = BuckleAccessRegistry.parse({
@@ -121,19 +113,15 @@ describe("the federated catalog (the matrix views)", () => {
       expect(alice.map((m) => m.id)).toEqual(["openai/own-model"]);
 
       const bob = await view("bksk_bob");
-      expect(bob.map((m) => m.id).sort()).toEqual([
-        "openai/own-model",
-        "openai/peer-model",
-      ]);
-      expect(
-        bob.find((m) => m.id === "openai/peer-model")?.origin,
-      ).toEqual({ kind: "buckle", label: "b3", url: peer.base });
+      expect(bob.map((m) => m.id).sort()).toEqual(["openai/own-model", "openai/peer-model"]);
+      expect(bob.find((m) => m.id === "openai/peer-model")?.origin).toEqual({
+        kind: "buckle",
+        label: "b3",
+        url: peer.base,
+      });
 
       const carol = await view("bksk_carol");
-      expect(carol.map((m) => m.id).sort()).toEqual([
-        "openai/own-model",
-        "openai/peer-model",
-      ]);
+      expect(carol.map((m) => m.id).sort()).toEqual(["openai/own-model", "openai/peer-model"]);
     } finally {
       self.stop();
       peer.stop();
@@ -172,11 +160,10 @@ describe("the federated catalog (the matrix views)", () => {
         { id: "openai/peer-model" },
       ],
     });
-    const self = await bootHead(
-      dir,
-      { b2: b2.base, b3: b3.base },
-      [{ id: "openai/own-model" }, { id: "openai/own-shared" }],
-    );
+    const self = await bootHead(dir, { b2: b2.base, b3: b3.base }, [
+      { id: "openai/own-model" },
+      { id: "openai/own-shared" },
+    ]);
     try {
       const r = await fetch(`${self.base}/v1/models`, {
         headers: { authorization: "Bearer bksk_carol" }, // carol: every peer
@@ -193,13 +180,14 @@ describe("the federated catalog (the matrix views)", () => {
         "openai/peer-shared",
       ]);
       // own beats peers: never hop for what we serve
-      expect(
-        body.models.find((m) => m.id === "openai/own-shared")?.origin,
-      ).toMatchObject({ kind: "provider" });
+      expect(body.models.find((m) => m.id === "openai/own-shared")?.origin).toMatchObject({
+        kind: "provider",
+      });
       // among peers, hubs-declaration order (b2 before b3) wins
-      expect(
-        body.models.find((m) => m.id === "openai/peer-shared")?.origin,
-      ).toMatchObject({ kind: "buckle", label: "b2" });
+      expect(body.models.find((m) => m.id === "openai/peer-shared")?.origin).toMatchObject({
+        kind: "buckle",
+        label: "b2",
+      });
     } finally {
       self.stop();
       b2.stop();

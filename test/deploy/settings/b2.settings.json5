@@ -10,11 +10,25 @@
   engine: { url: "http://litellm2:4000", metrics_url: "http://litellm2:4002" },
 
   // CONTEXT INJECTION (e2e unit): b2 is the policy-carrying unit —
-  // every originating chat gets the stanza FIRST; the stub's oracle
-  // answer proves the mutation rode through litellm verbatim
+  // first-match-wins; the baseline stanza rides every originating
+  // chat, the lane rule fires only on the /w/review-lane launch URL
+  // (the stub's oracle answer proves the mutation rode through)
   context_policy: {
-    inject: [{ text: "CONTEXT-MARK b2 fleet stanza (e2e oracle)" }],
+    rules: [
+      {
+        id: "lane-review",
+        match: { lane: "review-lane" },
+        text: "CONTEXT-MARK lane stanza (e2e oracle)",
+      },
+      {
+        id: "b2-baseline",
+        text: "CONTEXT-MARK b2 fleet stanza (e2e oracle)",
+      },
+    ],
   },
+  // the /w/<slug> launch table (e2e): slug pins the model — the pin
+  // wins over the body; the hub falls out of the federated catalog
+  lanes: [{ id: "pin-haiku", model: "claude-haiku-5.5" }],
   telemetry: { otlp_url: "http://jaeger:4318" },
   access: {
     principals: [

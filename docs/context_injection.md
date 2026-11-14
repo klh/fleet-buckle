@@ -9,7 +9,7 @@ the parked sections remain the port target for the fuller cuts.
 ## Landed shape (the first cut — amendment)
 
 - **The seam is a callback**: `ContextJudge = (facts: ContextFacts)
-  => true | { system: stanza }`. TRUE is the default (inert — the
+=> true | { system: stanza }`. TRUE is the default (inert — the
   body rides byte-identical). `bootServer` builds the judge ONCE
   from settings (stanzas resolved at boot, fail loud); a custom
   judge can ride the same seam.
@@ -18,8 +18,8 @@ the parked sections remain the port target for the fuller cuts.
   judging window, never the whole body), `repo?` (`x-fleet-repo`).
   Absent header ⇒ absent fact ⇒ repo rules cannot fire.
 - **Policy** (settings block, config-over-code): `context_policy:
-  { inject: [{ text XOR file, principal?, models?, bodyContains? }]
-  }`. Dimensions match with AND semantics; `models` is exact-or-
+{ inject: [{ text XOR file, principal?, models?, bodyContains? }]
+}`. Dimensions match with AND semantics; `models` is exact-or-
   prefix; first match wins; no dimensions = catch-all.
 - **Mechanics**: ORIGINATING requests only (an empty hop path proves
   origin); the stanza is prepended as the FIRST system message
@@ -32,9 +32,10 @@ the parked sections remain the port target for the fuller cuts.
   carries a policy, b1/b3 prove byte-identical rides).
 
 Parked for the fuller cuts: `lane`/`work`/`hub` facts, `repo_file`
-+ ssh-key custody, per-rule ids + OTel span attrs + the
-`buckle_context_injections_total` counter, dialect-aware merging
-(the first cut targets the openai chat shape the fleet rides).
+
+- ssh-key custody, per-rule ids + OTel span attrs + the
+  `buckle_context_injections_total` counter, dialect-aware merging
+  (the first cut targets the openai chat shape the fleet rides).
 
 ## The law this serves
 
@@ -49,15 +50,15 @@ can always see THAT something was injected (never the content).
 Per request, buckle composes a typed `RequestFacts` (zod-derived,
 one shape, no hand-written types):
 
-| fact | source | notes |
-|---|---|---|
-| `request` | the route itself | `chat`, `embed`, … — server-side truth |
-| `principal` | the bearer key | id + kind + groups from the registry |
-| `repo` | `x-fleet-repo` header | stamped by the fleet CLI hook (we control the CLI wiring; trust = we minted both ends + key identifies caller) |
-| `lane` | `x-fleet-lane` header | lane label, same provenance |
-| `work` | `x-fleet-work` header | work item id, optional |
-| `model` | request body | the requested model id |
-| `hub` | routing | unit label + resolved provider |
+| fact        | source                | notes                                                                                                          |
+| ----------- | --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `request`   | the route itself      | `chat`, `embed`, … — server-side truth                                                                         |
+| `principal` | the bearer key        | id + kind + groups from the registry                                                                           |
+| `repo`      | `x-fleet-repo` header | stamped by the fleet CLI hook (we control the CLI wiring; trust = we minted both ends + key identifies caller) |
+| `lane`      | `x-fleet-lane` header | lane label, same provenance                                                                                    |
+| `work`      | `x-fleet-work` header | work item id, optional                                                                                         |
+| `model`     | request body          | the requested model id                                                                                         |
+| `hub`       | routing               | unit label + resolved provider                                                                                 |
 
 No request signing: the fleet controls the CLI hook layer that adds
 the headers, and the principal key already authenticates the caller.
@@ -135,7 +136,7 @@ buckle's control:
 - OTel span attribute `context.rule=<id>` on every injected request;
   absent when inert. Content is NEVER in spans/logs/metrics.
 - `/metrics` counter per rule id: `buckle_context_injections_total
-  {rule="<id>"}` — the lane can reconcile what it rode.
+{rule="<id>"}` — the lane can reconcile what it rode.
 
 ## Test shape (write failing first, per the plan discipline)
 

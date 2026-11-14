@@ -49,13 +49,16 @@ export function checkTypeLaw(ctx: LawsCtx, files: string[]): void {
 //     live bug it hid was the stats fold double-nesting peer bodies.
 export function checkHandCasts(ctx: LawsCtx, files: string[]): void {
   for (const f of tsFiles(files)) {
-    if (f.endsWith("buckle.check-laws.ts") || f.endsWith("buckle.laws.shapes.ts"))
-      continue; // the law-definers quote their own patterns
+    if (f.endsWith("buckle.check-laws.ts") || f.endsWith("buckle.laws.shapes.ts")) continue; // the law-definers quote their own patterns
     const src = readFileSync(f, "utf8");
     if (/\)\s*as\s*\{/.test(src))
-      ctx.errors.push(`${f}: hand-cast object literal (\`as { … }\`) — parse through the zod wire schema`);
+      ctx.errors.push(
+        `${f}: hand-cast object literal (\`as { … }\`) — parse through the zod wire schema`,
+      );
     if (/\.json\(\)\s*\)?\s*as\s+[A-Z]/.test(src))
-      ctx.errors.push(`${f}: named-type cast on a response body (\`.json() as X\`) — safeParse it through the wire schema`);
+      ctx.errors.push(
+        `${f}: named-type cast on a response body (\`.json() as X\`) — safeParse it through the wire schema`,
+      );
   }
 }
 
@@ -64,7 +67,13 @@ export function checkHandCasts(ctx: LawsCtx, files: string[]): void {
 export function checkKitOwnership(ctx: LawsCtx, files: string[]): void {
   for (const f of srcTests(files)) {
     const src = readFileSync(f, "utf8");
-    for (const owned of ["function stubProvider", "function stubEngine", "function recorder", "function mintKeyDir", "function keyDir("]) {
+    for (const owned of [
+      "function stubProvider",
+      "function stubEngine",
+      "function recorder",
+      "function mintKeyDir",
+      "function keyDir(",
+    ]) {
       if (src.includes(owned))
         ctx.errors.push(`${f}: hand-rolled ${owned.slice(9)}( — import it from kit.ts`);
     }
@@ -76,7 +85,10 @@ export function checkKitOwnership(ctx: LawsCtx, files: string[]): void {
 function shapeKeysOf(src: string): string[] {
   const keys: string[] = [];
   for (const m of src.matchAll(/z\.object\(\s*\{([^}]+)\}\s*\)/g)) {
-    const fields = [...m[1]!.matchAll(/^\s*([a-z_][a-z0-9_]*):/gm)].map((x) => x[1]).sort().join(",");
+    const fields = [...m[1]!.matchAll(/^\s*([a-z_][a-z0-9_]*):/gm)]
+      .map((x) => x[1])
+      .sort()
+      .join(",");
     if (fields.split(",").length >= 2) keys.push(fields);
   }
   return keys;
@@ -87,7 +99,9 @@ function shapeKeysOf(src: string): string[] {
 //     (the BuckleLimits precedent: the limits triple once lived 5×).
 export function checkSchemaDuplication(ctx: LawsCtx, files: string[]): void {
   const shapeCounts = new Map<string, string[]>();
-  for (const f of files.filter((f) => /\/schemas\/.*\.zod\.ts$/.test(f) && !f.endsWith(".test.ts"))) {
+  for (const f of files.filter(
+    (f) => /\/schemas\/.*\.zod\.ts$/.test(f) && !f.endsWith(".test.ts"),
+  )) {
     for (const fields of shapeKeysOf(readFileSync(f, "utf8"))) {
       const list = shapeCounts.get(fields) ?? [];
       list.push(f.split("/").pop()!);
@@ -96,7 +110,9 @@ export function checkSchemaDuplication(ctx: LawsCtx, files: string[]): void {
   }
   for (const [fields, where] of shapeCounts) {
     if (where.length >= 3)
-      ctx.errors.push(`schema duplication: {${fields}} declared ${where.length}× (${where.join(", ")}) — compose ONE canonical shape`);
+      ctx.errors.push(
+        `schema duplication: {${fields}} declared ${where.length}× (${where.join(", ")}) — compose ONE canonical shape`,
+      );
   }
 }
 
@@ -106,6 +122,8 @@ export function checkTestMirrors(ctx: LawsCtx, files: string[]): void {
   for (const f of srcTests(files)) {
     const module = f.replace(".test.ts", ".ts");
     if (!files.includes(module))
-      ctx.errors.push(`${f.split("/").pop()}: no sibling module ${module.split("/").pop()} — test names mirror modules`);
+      ctx.errors.push(
+        `${f.split("/").pop()}: no sibling module ${module.split("/").pop()} — test names mirror modules`,
+      );
   }
 }

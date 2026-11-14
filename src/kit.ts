@@ -11,10 +11,7 @@ import { z } from "zod";
 import { bootServer } from "./main.ts";
 import { loadSettings } from "./settings.ts";
 import { BuckleAccessRegistry } from "./schemas/buckle.access.zod.ts";
-import {
-  mergeSettings,
-  type BuckleSettings,
-} from "./schemas/buckle.settings.zod.ts";
+import { mergeSettings, type BuckleSettings } from "./schemas/buckle.settings.zod.ts";
 import {
   HOP_DEADLINE_HEADER,
   HOP_PATH_HEADER,
@@ -75,8 +72,7 @@ export function stubProvider(rows: { id: string }[]): {
   const server = Bun.serve({
     port: 0,
     fetch: (req) => {
-      if (new URL(req.url).pathname === "/models")
-        return Response.json({ data: rows });
+      if (new URL(req.url).pathname === "/models") return Response.json({ data: rows });
       return new Response("not found", { status: 404 });
     },
   });
@@ -85,9 +81,11 @@ export function stubProvider(rows: { id: string }[]): {
 
 /** the engine stub: answers /v1/chat/completions with a well-formed
  *  body (id/usage/sleep parameterizable) and records the ride */
-export function stubEngine(
-  opts: { id?: string; totalTokens?: number; sleepMs?: number } = {},
-): { port: number; stop: () => void; seen: SawRequest[] } {
+export function stubEngine(opts: { id?: string; totalTokens?: number; sleepMs?: number } = {}): {
+  port: number;
+  stop: () => void;
+  seen: SawRequest[];
+} {
   const seen: SawRequest[] = [];
   const server = Bun.serve({
     port: 0,
@@ -125,7 +123,13 @@ export function stubPeer(body: unknown): { port: number; stop: () => void; hits:
       return Response.json(body);
     },
   });
-  return { port: server.port ?? 0, stop: () => server.stop(true), get hits() { return hits; } };
+  return {
+    port: server.port ?? 0,
+    stop: () => server.stop(true),
+    get hits() {
+      return hits;
+    },
+  };
 }
 
 /** a transparent recorder: forwards every request VERBATIM to the
@@ -166,7 +170,8 @@ async function loadDefaultsOnly(): Promise<BuckleSettings> {
 /** a world provider: bare url (recognized labels resolve url+dialect
  *  from the registry) or the full entry — an UNKNOWN label needs its
  *  dialect explicit (the registry law: fail loud, never guess) */
-export type WorldProvider = string | { url: string; dialect: "openai" | "anthropic" | "github_copilot" };
+export type WorldProvider =
+  string | { url: string; dialect: "openai" | "anthropic" | "github_copilot" };
 
 export async function bootBuckle(opts: {
   label: string;
@@ -203,9 +208,7 @@ export async function bootBuckle(opts: {
         typeof entry === "string" ? { url: entry } : entry,
       ]),
     ),
-    ...(opts.engineUrl === undefined
-      ? {}
-      : { engine: { url: opts.engineUrl } }),
+    ...(opts.engineUrl === undefined ? {} : { engine: { url: opts.engineUrl } }),
   });
   const server = bootServer({ settings, port: 0 });
   return {

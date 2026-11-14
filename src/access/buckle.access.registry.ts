@@ -24,11 +24,7 @@ function candidateKeys(settings: BuckleSettings): { dir: string; ids: string[] }
 
 /** the principal whose key file under dir holds exactly this bearer
  *  value (unreadable key = that principal cannot authenticate) */
-function principalHoldingKey(
-  dir: string,
-  ids: string[],
-  bearer: string,
-): string | null {
+function principalHoldingKey(dir: string, ids: string[], bearer: string): string | null {
   for (const id of ids) {
     const value = readToken(join(dir, `${KEY_PREFIX}${id}${KEY_SUFFIX}`));
     if (value === bearer) return id;
@@ -37,10 +33,7 @@ function principalHoldingKey(
 }
 
 /** authenticate a Bearer token → principal id (null = nobody). */
-export function authenticate(
-  settings: BuckleSettings,
-  bearer: string | null,
-): string | null {
+export function authenticate(settings: BuckleSettings, bearer: string | null): string | null {
   if (bearer === null || !bearer.startsWith("bksk_")) return null;
   const keys = candidateKeys(settings);
   if (keys === null) return null;
@@ -55,9 +48,7 @@ export function holdsScope(
 ): boolean {
   if (principal === null) return false;
   const grants = settings.access?.grants ?? [];
-  return grants.some(
-    (g) => g.principal === principal && g.scopes.includes(scope),
-  );
+  return grants.some((g) => g.principal === principal && g.scopes.includes(scope));
 }
 
 /** the Authorization bearer (null when absent/malformed). */

@@ -20,8 +20,7 @@ import {
 /** registry key_file is `~/...` — tilde expands to the REAL home
  *  (os.homedir), never the runtime dir; FLEET_RUNTIME_HOME only
  *  relocates the runtime itself */
-const expandTilde = (p: string): string =>
-  p.startsWith("~") ? join(homedir(), p.slice(1)) : p;
+const expandTilde = (p: string): string => (p.startsWith("~") ? join(homedir(), p.slice(1)) : p);
 
 /** capture-specific bits ONLY — url/headers/key file come from the
  *  provider registry (one home). path = the catalog endpoint variant
@@ -29,10 +28,7 @@ const expandTilde = (p: string): string =>
  *  "all" = every row the account sees, "pickable" = the provider's
  *  own servable flag (copilot model_picker_enabled, previews
  *  excluded). No id lists — curation by taste is the bug this fixes. */
-const RAW_SELECTION: Record<
-  KnownProviderLabel,
-  { path: string; filter: "all" | "pickable" }
-> = {
+const RAW_SELECTION: Record<KnownProviderLabel, { path: string; filter: "all" | "pickable" }> = {
   openrouter: { path: "/models/user", filter: "all" },
   mscopilot: { path: "/models", filter: "pickable" },
   zai: { path: "/models", filter: "all" },
@@ -44,7 +40,6 @@ const OUT_FILE: Record<KnownProviderLabel, string> = {
   zai: "zai.models.json",
 };
 
-
 import { z } from "zod";
 
 // The schema is the CONTRACT CHECK only (each row must carry an id) —
@@ -54,11 +49,13 @@ import { z } from "zod";
 // husks. Validate, then slice from the raw response.
 const ListSchema = z.object({
   data: z.array(
-    z.object({
-      id: z.string(),
-      model_picker_enabled: z.boolean().optional(),
-      preview: z.boolean().optional(),
-    }).passthrough(),
+    z
+      .object({
+        id: z.string(),
+        model_picker_enabled: z.boolean().optional(),
+        preview: z.boolean().optional(),
+      })
+      .passthrough(),
   ),
 });
 type Row = z.output<(typeof ListSchema)["shape"]["data"]["element"]>;
@@ -90,16 +87,11 @@ for (const [label, cfg] of Object.entries(RAW_SELECTION)) {
     continue;
   }
   const raw: unknown = await r.json();
-  const rows: Row[] = ListSchema.parse(raw).data.filter((m) =>
-    keepRow(m, cfg.filter),
-  );
+  const rows: Row[] = ListSchema.parse(raw).data.filter((m) => keepRow(m, cfg.filter));
   if (rows.length === 0) {
     console.error(`${file}: no rows survived the filter, SKIPPED`);
     continue;
   }
-  writeFileSync(
-    join(OUT, file),
-    `${JSON.stringify({ object: "list", data: rows }, null, 2)}\n`,
-  );
+  writeFileSync(join(OUT, file), `${JSON.stringify({ object: "list", data: rows }, null, 2)}\n`);
   console.log(`${file}: ${rows.length} real rows stored (${cfg.filter})`);
 }

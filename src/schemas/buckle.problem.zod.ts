@@ -15,10 +15,7 @@ export const BuckleProblemKind = z.enum([
 ]);
 export type BuckleProblemKind = z.output<typeof BuckleProblemKind>;
 
-export const BuckleProblemStatus: Record<
-  z.output<typeof BuckleProblemKind>,
-  number
-> = {
+export const BuckleProblemStatus: Record<z.output<typeof BuckleProblemKind>, number> = {
   validation: 422,
   unauthenticated: 401,
   forbidden: 403,

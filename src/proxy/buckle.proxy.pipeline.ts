@@ -10,7 +10,7 @@
 // the SERVED mapping is the ONE shared surface between them.
 import { z } from "zod";
 import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
-import { peerToken, type TokenReader } from "../federation/buckle.federation.peer.ts";
+import { peerToken } from "../federation/buckle.federation.peer.ts";
 import {
   HOP_DEADLINE_HEADER,
   HOP_PATH_HEADER,
@@ -27,16 +27,23 @@ import { hopChat, type HopOutcome } from "./buckle.proxy.hop.ts";
 import { engineChat, usageOf } from "./buckle.proxy.engine.ts";
 import {
   failedEventOf,
+  injectedEventOf,
   openedEventOf,
   servedEventOf,
-  type EventBus,
   type FaultKindValue,
   type Leg,
 } from "../events/buckle.events.bus.ts";
 import { parseJson } from "../fault.ts";
 import { pick } from "../pick.ts";
 import { problemResponse } from "../problem.ts";
-import { ContextFacts, inertJudge, type ContextJudge } from "../context/buckle.context.judge.ts";
+import { ContextFacts } from "../context/buckle.context.judge.ts";
+import { ENGINE_PATH, injectedBodyOf, pinnedBodyOf } from "../context/buckle.context.inject.ts";
+import type { ForwardCtx } from "./buckle.proxy.ctx.ts";
+import { LANE_ROUTE_HEADER } from "../lane.ts";
+
+/** the never-silent stamp: every injected response names the rule
+ *  that fired (id only — stanza content never surfaces) */
+const CONTEXT_RULE_HEADER = "x-fleet-buckle-context-rule";
 
 export { problemResponse };
 
@@ -67,55 +74,7 @@ export const ServedOutcomeSchema = z
   .strict();
 type ServedOutcome = z.output<typeof ServedOutcomeSchema>;
 
-/** a chat body we may prepend into: messages is an array, everything
- *  else rides passthrough (the engine owns its own face) */
-const InjectableChatBody = z.object({ messages: z.array(z.unknown()) }).passthrough();
-
-/** the ONE sanctioned body rewrite: the stanza becomes the FIRST
- *  system message (merged ahead of any existing system prefix). A
- *  non-chat-shaped body is returned untouched — injection never
- *  corrupts what it does not understand. */
-function injectedBodyOf(raw: string, stanza: string): string {
-  const json = parseJson(raw);
-  if (!json.ok) return raw;
-  const body = InjectableChatBody.safeParse(json.data);
-  if (!body.success) return raw;
-  body.data.messages.unshift({ role: "system", content: stanza });
-  return JSON.stringify(body.data);
-}
-
-function servedResponse(outcome: ServedOutcome): Response {
-  return new Response(outcome.text, {
-    status: outcome.status,
-    headers: {
-      "content-type": outcome.contentType,
-      "cache-control": "no-store",
-      [SERVED_BY_HEADER]: outcome.servedBy,
-    },
-  });
-}
-
-/** the FORWARDING CONTEXT — the request-independent half of every
- *  forward: who is asking, under which settings, with which
- *  observability and secret reader. The factory's real job: resolve
- *  the principal's KIND from the registry ONCE (absent row = no kind
- *  — the tracker renders the row without one). Factory-typed (the
- *  codebase idiom for live values: ReturnType of the one
- *  constructor — never a fake z.custom parse). */
-export function createForwardCtx(parts: {
-  settings: BuckleSettings;
-  bus: EventBus;
-  judge?: ContextJudge;
-  principal: string;
-  tokenOf: TokenReader;
-}) {
-  const kind = parts.settings.access?.principals.find(
-    (p) => p.id === parts.principal,
-  )?.kind;
-  // the judge defaults INERT: no injection unless a policy says so
-  return { judge: inertJudge, ...parts, kind } as const;
-}
-type ForwardCtx = ReturnType<typeof createForwardCtx>;
+export type { ChatRoute } from "../context/buckle.context.inject.ts";
 
 /** settle a SERVED outcome (the shared surface): the event rides the
  *  bus through the shared constructor (collectors bank usage +
@@ -128,6 +87,8 @@ function settleServed(
     leg: Leg;
     openedAt: number;
     peer?: string | undefined;
+    injectedRule?: string | undefined;
+    laneSlug?: string | undefined;
     outcome: ServedOutcome;
   },
 ): Response {
@@ -144,7 +105,7 @@ function settleServed(
       latencyMs: at - input.openedAt,
     }),
   );
-  return servedResponse(input.outcome);
+  return servedResponse(input.outcome, input.injectedRule, input.laneSlug);
 }
 
 /** settle a FAILED outcome (the shared half): the failed event rides
@@ -174,27 +135,51 @@ function settleFailed(
 }
 
 /** the opened half both legs share — the ONE emit site for the kind */
+
 function emitOpened(ctx: ForwardCtx, model: string, at: number): void {
-  ctx.bus.emit(
-    openedEventOf({ at, principal: ctx.principal, principalKind: ctx.kind, model }),
-  );
+  ctx.bus.emit(openedEventOf({ at, principal: ctx.principal, principalKind: ctx.kind, model }));
 }
 
-export async function forwardChat(
-  ctx: ForwardCtx,
-  req: Request,
-  traceparent: string,
-): Promise<Response> {
-  const { settings, principal, tokenOf } = ctx;
-  // 1 — the body must name a model (drift fails loud); the raw bytes
-  //     are read ONCE and ride untouched from here on
-  let raw = await req.text();
-  const model = modelOf(raw);
-  if (model === null)
-    return problemResponse("validation", "chat body missing model");
+function servedResponse(
+  outcome: ServedOutcome,
+  injectedRule?: string | undefined,
+  laneSlug = "",
+): Response {
+  return new Response(outcome.text, {
+    status: outcome.status,
+    headers: {
+      "content-type": outcome.contentType,
+      "cache-control": "no-store",
+      [SERVED_BY_HEADER]: outcome.servedBy,
+      ...pick(CONTEXT_RULE_HEADER, injectedRule),
+      ...pick(LANE_ROUTE_HEADER, laneSlug === "" ? undefined : laneSlug),
+    },
+  });
+}
 
-  // 2 — the loop guard fires BEFORE any peer traffic: a hub already on
-  //     the hop path refuses re-entry, no matter the model
+/** what the legs need beyond ctx+ride: the wire face asked + the
+ *  attribution that survived ingress (the fired rule's id, the lane
+ *  slug) — ONE bundle, no trailing parameter drift */
+export const LegStampSchema = z.object({
+  route: z.enum(["chat", "messages"]),
+  laneSlug: z.string(),
+  injectedRule: z.string().optional(),
+});
+type LegStamp = z.output<typeof LegStampSchema>;
+
+/** the LANE PIN: a /w/<slug> launch URL whose slug HAS a row pins
+ *  the model (the pin wins over the body). A slug with NO row is
+ *  pure W1 attribution — any slug rides, rows only pin */
+function lanePinnedBody(settings: BuckleSettings, laneSlug: string, body: string): string {
+  if (laneSlug === "") return body;
+  const row = settings["lanes"]?.find((l: { id: string; model: string }) => l.id === laneSlug);
+  return row === undefined ? body : pinnedBodyOf(body, row.model);
+}
+
+/** pre-body refusals that need NO catalog: loop guard, then the
+ *  chain budget — both fire BEFORE any peer traffic (a chain can
+ *  never outlive its origin's budget) */
+function earlyRefusal(settings: BuckleSettings, req: Request): Response | null {
   const inboundPath = hopPathOf(req.headers.get(HOP_PATH_HEADER));
   if (wouldLoop(inboundPath, settings.hub.label))
     return problemResponse(
@@ -202,29 +187,6 @@ export async function forwardChat(
       "federation loop refused",
       `${settings.hub.label} is already on ${HOP_PATH_HEADER}: ${inboundPath.join(",")}`,
     );
-
-  // 2.5 — CONTEXT INJECTION (the ONE sanctioned body mutation):
-  //      ORIGINATING requests only (a hop arrival already had its
-  //      chance at its own ingress — an empty path header proves
-  //      origin); the judge gets the facts needed to decide (who,
-  //      what they asked — the body's start — which model) and TRUE
-  //      is the default: the body rides byte-identical, verbatim
-  if (inboundPath.length === 0) {
-    const verdict = ctx.judge(
-      ContextFacts.parse({
-        route: "chat",
-        principal,
-        ...pick("principalKind", ctx.kind),
-        model,
-        bodyStart: raw.slice(0, 512),
-        ...pick("repo", req.headers.get("x-fleet-repo")),
-      }),
-    );
-    if (verdict !== true) raw = injectedBodyOf(raw, verdict.system);
-  }
-
-  // 3 — the chain budget: an already-exhausted deadline refuses before
-  //     ANY peer traffic — a chain can never outlive its origin's budget
   const deadline = hopDeadlineOf(req.headers.get(HOP_DEADLINE_HEADER));
   if (deadline !== null && Date.now() >= deadline)
     return problemResponse(
@@ -232,30 +194,93 @@ export async function forwardChat(
       "hop deadline exhausted",
       `${settings.hub.label} reached with ${HOP_DEADLINE_HEADER} in the past`,
     );
+  return null;
+}
 
-  // 4 — resolve in the principal's FEDERATED view: a peer model a
+/** CONTEXT INJECTION (the ONE sanctioned body mutation): ORIGINATING
+ *  requests only (a hop arrival already had its chance at its own
+ *  ingress — an empty path header proves origin); the judge gets the
+ *  facts needed to decide, TRUE is the default (verbatim ride). A
+ *  fired rule is NEVER silent: the event banks the counter, the
+ *  verdict's id stamps the response header */
+/** the ask under inspection: which model the body names + the raw
+ *  bytes (in and — possibly injected — back out) */
+export const BodyAskSchema = z.object({ model: z.string(), raw: z.string() });
+export const BodyRideSchema = z.object({ raw: z.string(), injectedRule: z.string().optional() });
+type BodyAsk = z.output<typeof BodyAskSchema>;
+type BodyRide = z.output<typeof BodyRideSchema>;
+
+function injectContext(ctx: ForwardCtx, req: Request, stamp: LegStamp, ask: BodyAsk): BodyRide {
+  if (hopPathOf(req.headers.get(HOP_PATH_HEADER)).length > 0) return { raw: ask.raw };
+  const verdict = ctx.judge(
+    ContextFacts.parse({
+      route: stamp.route,
+      principal: ctx.principal,
+      ...pick("principalKind", ctx.kind),
+      ...pick("groups", ctx.groups),
+      model: ask.model,
+      bodyStart: ask.raw.slice(0, 512),
+      ...pick("repo", req.headers.get("x-fleet-repo")),
+      // the PATH slug is the attribution contract; the header is the fallback
+      ...pick("lane", stamp.laneSlug || req.headers.get("x-fleet-lane")),
+      ...pick("work", req.headers.get("x-fleet-work")),
+    }),
+  );
+  if (verdict === true) return { raw: ask.raw };
+  ctx.bus.emit(
+    injectedEventOf({
+      at: Date.now(),
+      principal: ctx.principal,
+      model: ask.model,
+      rule: verdict.rule,
+    }),
+  );
+  return { raw: injectedBodyOf(ask.raw, verdict.system, stamp.route), injectedRule: verdict.rule };
+}
+
+export async function forwardChat(
+  ctx: ForwardCtx,
+  req: Request,
+  traceparent: string,
+  stamp: LegStamp,
+): Promise<Response> {
+  const { settings, principal, tokenOf } = ctx;
+  // 1 — the body must name a model (drift fails loud); the raw bytes
+  //     are read ONCE and ride untouched from here on
+  let raw = lanePinnedBody(settings, stamp.laneSlug, await req.text());
+  const model = modelOf(raw);
+  if (model === null) return problemResponse("validation", "chat body missing model");
+
+  // 2 — loop guard + chain budget, before any peer traffic; then the
+  //     ONE sanctioned body mutation on originating requests
+  const refused = earlyRefusal(settings, req);
+  if (refused !== null) return refused;
+  const injected = injectContext(ctx, req, stamp, { model, raw });
+  raw = injected.raw;
+  // the sealed stamp: whatever attribution survived ingress rides the
+  // legs and stamps the served response (never-silent injection)
+  const sealed: LegStamp = { ...stamp, injectedRule: injected.injectedRule };
+
+  // 3 — resolve in the principal's FEDERATED view: a peer model a
   //     grant does not admit is indistinguishable from an unknown
   //     model (no leak)
   const catalog = await buildFederatedCatalog(settings, principal, tokenOf, traceparent);
   const known = catalog.models.find((m) => m.id === model);
   if (known === undefined)
-    return problemResponse(
-      "not-found",
-      `model ${model} is not served by this buckle`,
-    );
+    return problemResponse("not-found", `model ${model} is not served by this buckle`);
 
-  // 5 — the leg: buckle-origin hops, provider-origin rides our engine.
+  // 4 — the leg: buckle-origin hops, provider-origin rides our engine.
   //     The RIDE is the request's protocol state, validated ONCE —
   //     body, continued trace, inbound path, chain budget
   const ride = HopRideSchema.parse({
     body: raw,
     traceparent,
-    path: inboundPath,
-    deadline,
+    path: hopPathOf(req.headers.get(HOP_PATH_HEADER)),
+    deadline: hopDeadlineOf(req.headers.get(HOP_DEADLINE_HEADER)),
   });
   return known.origin.kind === "buckle"
-    ? await serveHop(ctx, ride, known.origin.label, model)
-    : await serveEngine(ctx, ride, model);
+    ? await serveHop(ctx, ride, sealed, { peerLabel: known.origin.label, model })
+    : await serveEngine(ctx, ride, model, sealed);
 }
 
 /** a failed hop's client verdict — the outcome union mapped onto
@@ -270,11 +295,7 @@ function verdictOf(peerLabel: string, outcome: Exclude<HopOutcome, { kind: "serv
       { "retry-after": String(outcome.retryAfterS) },
     );
   if (outcome.kind === "refused")
-    return problemResponse(
-      "unavailable",
-      `peer ${peerLabel} refused the hop`,
-      outcome.detail,
-    );
+    return problemResponse("unavailable", `peer ${peerLabel} refused the hop`, outcome.detail);
   // outcome.kind === "fault" — the transport failed; the fault is
   // already logged at the seam, the client sees it NAMED, scrubbed
   return problemResponse(
@@ -288,16 +309,14 @@ function verdictOf(peerLabel: string, outcome: Exclude<HopOutcome, { kind: "serv
 async function serveHop(
   ctx: ForwardCtx,
   ride: HopRide,
-  peerLabel: string,
-  model: string,
+  stamp: LegStamp,
+  target: { peerLabel: string; model: string },
 ): Promise<Response> {
   const { settings, tokenOf } = ctx;
+  const { peerLabel, model } = target;
   const peer = settings.hubs?.[peerLabel];
   if (peer === undefined)
-    return problemResponse(
-      "unavailable",
-      `peer ${peerLabel} is no longer configured`,
-    );
+    return problemResponse("unavailable", `peer ${peerLabel} is no longer configured`);
   const hopPeer = HopPeerSchema.safeParse({
     label: peerLabel,
     url: peer.url,
@@ -312,18 +331,29 @@ async function serveHop(
 
   const openedAt = Date.now();
   emitOpened(ctx, model, openedAt);
-  const outcome = await hopChat(
-    settings.hub.label,
-    hopPeer.data,
+  const outcome = await hopChat({
+    self: settings.hub.label,
+    peer: hopPeer.data,
     ride,
-    settings.timeouts.hop_ms,
-  );
+    timeoutMs: settings.timeouts.hop_ms,
+    urlPath: ENGINE_PATH[stamp.route],
+  });
   if (outcome.kind === "served")
     return settleServed(ctx, {
-      model, leg: "hop", openedAt, peer: peerLabel, outcome,
+      model,
+      leg: "hop",
+      openedAt,
+      peer: peerLabel,
+      injectedRule: stamp.injectedRule,
+      laneSlug: stamp.laneSlug,
+      outcome,
     });
   settleFailed(ctx, {
-    model, leg: "hop", openedAt, peer: peerLabel, fault: faultKindOf(outcome),
+    model,
+    leg: "hop",
+    openedAt,
+    peer: peerLabel,
+    fault: faultKindOf(outcome),
   });
   return verdictOf(peerLabel, outcome);
 }
@@ -331,9 +361,7 @@ async function serveHop(
 /** a failed hop outcome narrowed into the taxonomy: the peer's 429
  *  RELAYS as a denial (retry-after rides the verdict), a refusal is
  *  a denial (status answered), a transport fault is itself */
-function faultKindOf(
-  outcome: Exclude<HopOutcome, { kind: "served" }>,
-): FaultKindValue {
+function faultKindOf(outcome: Exclude<HopOutcome, { kind: "served" }>): FaultKindValue {
   if (outcome.kind === "fault") return outcome.fault.kind;
   return "denied";
 }
@@ -343,14 +371,38 @@ async function serveEngine(
   ctx: ForwardCtx,
   ride: HopRide,
   model: string,
+  stamp: LegStamp,
 ): Promise<Response> {
   const openedAt = Date.now();
   emitOpened(ctx, model, openedAt);
-  const outcome = await engineChat(ctx.settings, ride.body, ride.traceparent, ctx.tokenOf);
+  // the GUI-legible attribution stamp (lane + principal) — the tags
+  // litellm request logs and the policy engine read
+  const fleetTags = [
+    ...(stamp.laneSlug !== "" ? [`lane:${stamp.laneSlug}`] : []),
+    `principal:${ctx.principal}`,
+  ].join(",");
+  const outcome = await engineChat({
+    settings: ctx.settings,
+    raw: ride.body,
+    traceparent: ride.traceparent,
+    tokenOf: ctx.tokenOf,
+    enginePath: ENGINE_PATH[stamp.route],
+    fleetTags,
+  });
   if (outcome.kind === "served")
-    return settleServed(ctx, { model, leg: "engine", openedAt, outcome });
+    return settleServed(ctx, {
+      model,
+      leg: "engine",
+      openedAt,
+      injectedRule: stamp.injectedRule,
+      laneSlug: stamp.laneSlug,
+      outcome,
+    });
   settleFailed(ctx, {
-    model, leg: "engine", openedAt, fault: outcome.fault.kind,
+    model,
+    leg: "engine",
+    openedAt,
+    fault: outcome.fault.kind,
   });
   // outcome.kind === "fault" — named, already logged at the seam
   return problemResponse(

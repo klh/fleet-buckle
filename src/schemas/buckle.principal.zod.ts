@@ -4,18 +4,11 @@
 import { z } from "zod";
 import { BuckleLimits } from "./buckle.limits.zod.ts";
 
-export const BucklePrincipalKind = z.enum([
-  "human",
-  "developer",
-  "agent",
-  "service",
-]);
+export const BucklePrincipalKind = z.enum(["human", "developer", "agent", "service"]);
 export type BucklePrincipalKind = z.output<typeof BucklePrincipalKind>;
 
 /** upn-shaped: "alice@fleet", "agent-07@fleet.local". */
-export const BucklePrincipalId = z
-  .string()
-  .regex(/^[a-z0-9][a-z0-9._-]*@[a-z0-9][a-z0-9.-]*$/);
+export const BucklePrincipalId = z.string().regex(/^[a-z0-9][a-z0-9._-]*@[a-z0-9][a-z0-9.-]*$/);
 export type BucklePrincipalId = z.output<typeof BucklePrincipalId>;
 
 export const BucklePrincipal = z

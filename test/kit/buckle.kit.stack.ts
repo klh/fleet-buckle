@@ -33,6 +33,9 @@ export const PORTS = {
   b3: 4731,
   b3Health: 4732,
   jaeger: 16686,
+  ghStub: 4741,
+  zaiSeen: 4742,
+  workerWake: 4743,
 } as const;
 
 export const SERVICES = [
@@ -49,4 +52,6 @@ export const SERVICES = [
   "buckle1",
   "buckle2",
   "buckle3",
+  "gh-stub",
+  "worker3",
 ] as const;

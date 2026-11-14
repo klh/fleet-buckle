@@ -23,9 +23,7 @@ test("b) the correct versions of the 3 buckles are running (full stack, this bui
   const ps = psMap();
   for (const svc of SERVICES) {
     expect(ps[svc], `service ${svc} in compose ps`).toBeDefined();
-    expect(ps[svc], `service ${svc} must be RUNNING (not exited)`).toBe(
-      "running",
-    );
+    expect(ps[svc], `service ${svc} must be RUNNING (not exited)`).toBe("running");
   }
   // built-from-this-source: 13 containers of OUR project; the 3 buckles
   // run OUR project's built images (not a registry pull)
@@ -62,25 +60,17 @@ test("c) verdict: ALL THREE buckles are up — the server serves", async () => {
     }
   };
   for (const port of [PORTS.b1Health, PORTS.b2Health, PORTS.b3Health]) {
-    await expect
-      .poll(() => verdictState(port), { timeout: 60_000 })
-      .toBe("up");
+    await expect.poll(() => verdictState(port), { timeout: 60_000 }).toBe("up");
   }
 });
 
 test("schema contracts hold (openapi in sync, fixtures parse, settings compose)", async () => {
   const { execSync: exec } = await import("node:child_process");
   exec("bun tools/src/buckle.gen-openapi.ts --check");
-  const { BuckleTreeResponse, mergeSettings } = await import(
-    "../../src/schemas/index.ts"
-  );
-  const { default: defaults } = await import(
-    "../../deploy/settings/default.settings.json5"
-  );
+  const { BuckleTreeResponse, mergeSettings } = await import("../../src/schemas/index.ts");
+  const { default: defaults } = await import("../../deploy/settings/default.settings.json5");
   const { default: b1 } = await import("../../test/deploy/settings/b1.settings.json5");
-  const { default: demoTree } = await import(
-    "../deploy/fixtures/tree.demo.json"
-  );
+  const { default: demoTree } = await import("../deploy/fixtures/tree.demo.json");
   const merged = mergeSettings(defaults, b1);
   expect(merged.hub.label).toBe("b1");
   expect(Object.keys(merged.hubs ?? {}).sort()).toEqual(["b2", "b3"]);

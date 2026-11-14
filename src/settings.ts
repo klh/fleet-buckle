@@ -28,27 +28,17 @@ export function resolveSettingsPaths(args: string[]): SettingsPaths {
     return i >= 0 ? args[i + 1] : undefined;
   };
   const defaults =
-    flag("defaults") ??
-    process.env["BUCKLE_DEFAULTS"] ??
-    "deploy/settings/default.settings.json5";
+    flag("defaults") ?? process.env["BUCKLE_DEFAULTS"] ?? "deploy/settings/default.settings.json5";
   const settings =
-    flag("settings") ??
-    process.env["BUCKLE_SETTINGS"] ??
-    "deploy/settings/b1.settings.json5";
+    flag("settings") ?? process.env["BUCKLE_SETTINGS"] ?? "deploy/settings/b1.settings.json5";
   const over = flag("over") ?? process.env["BUCKLE_SETTINGS_OVER"];
   // absent (empty string) = no overlay: real mode rides the registry
-  return over === undefined || over === ""
-    ? { defaults, settings }
-    : { defaults, settings, over };
+  return over === undefined || over === "" ? { defaults, settings } : { defaults, settings, over };
 }
 
-export async function loadSettings(
-  paths: SettingsPaths,
-): Promise<BuckleSettings> {
-  const base = (await import(paths.defaults, { with: { type: "json5" } }))
-    .default;
-  const unit = (await import(paths.settings, { with: { type: "json5" } }))
-    .default;
+export async function loadSettings(paths: SettingsPaths): Promise<BuckleSettings> {
+  const base = (await import(paths.defaults, { with: { type: "json5" } })).default;
+  const unit = (await import(paths.settings, { with: { type: "json5" } })).default;
   const merged = [base, unit];
   if (paths.over !== undefined)
     merged.push((await import(paths.over, { with: { type: "json5" } })).default);

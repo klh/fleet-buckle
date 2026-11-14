@@ -3,12 +3,7 @@
 // as summaries (bounded walk); a dead peer fails SOFT. Worlds ride
 // the kit; responses parse through BuckleTreeResponse.
 import { describe, expect, test } from "bun:test";
-import {
-  bootBuckle,
-  mintKeyDir,
-  stubProvider,
-  type AccessRegistry,
-} from "../kit.ts";
+import { bootBuckle, mintKeyDir, stubProvider, type AccessRegistry } from "../kit.ts";
 import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
 import { BuckleTreeResponse } from "../schemas/buckle.tree.zod.ts";
 
@@ -27,9 +22,7 @@ const DIR = mintKeyDir({
 const ACCESS = (id: string): AccessRegistry =>
   BuckleAccessRegistry.parse({
     principals: [{ id, kind: "service", groups: [] }],
-    grants: [
-      { principal: id, scopes: ["models.list", "models.use", "tree.read", "stats.read"] },
-    ],
+    grants: [{ principal: id, scopes: ["models.list", "models.use", "tree.read", "stats.read"] }],
     tiers: [],
   });
 

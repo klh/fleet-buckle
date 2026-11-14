@@ -11,12 +11,8 @@ import { z } from "zod";
 export const Fault = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("timeout") }).strict(),
   z.object({ kind: z.literal("unreachable") }).strict(),
-  z
-    .object({ kind: z.literal("denied"), status: z.number().int() })
-    .strict(),
-  z
-    .object({ kind: z.literal("malformed"), detail: z.string() })
-    .strict(),
+  z.object({ kind: z.literal("denied"), status: z.number().int() }).strict(),
+  z.object({ kind: z.literal("malformed"), detail: z.string() }).strict(),
   z.object({ kind: z.literal("io"), detail: z.string() }).strict(),
 ]);
 export type Fault = z.output<typeof Fault>;

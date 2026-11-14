@@ -46,10 +46,7 @@ function header(comment: string[]): string {
 function stubDeploymentsOf(provider: keyof typeof UNITS): string {
   const fixture: Fixture = FixtureSchema.parse(
     JSON.parse(
-      readFileSync(
-        join(ROOT, "test", "deploy", "fixtures", `${provider}.models.json`),
-        "utf8",
-      ),
+      readFileSync(join(ROOT, "test", "deploy", "fixtures", `${provider}.models.json`), "utf8"),
     ),
   );
   const lines = ["model_list:"];
@@ -101,8 +98,7 @@ async function pullCatalog(
 ): Promise<{ label: KnownProviderLabel; rows: string[] }> {
   const known = KNOWN_PROVIDERS[label];
   const keyPath =
-    process.env[`${label.toUpperCase()}_KEY_PATH`] ??
-    known.key_file.replace("~", homedir());
+    process.env[`${label.toUpperCase()}_KEY_PATH`] ?? known.key_file.replace("~", homedir());
   const key = (await Bun.file(keyPath).text()).trim();
   const r = await fetch(`${known.url}/models`, {
     headers: { authorization: `Bearer ${key}`, ...known.catalog_headers },
@@ -120,7 +116,8 @@ export async function genRealEngineConfigs(outDir: string): Promise<void> {
   for (const label of Object.keys(KNOWN_PROVIDERS) as KnownProviderLabel[]) {
     const known = KNOWN_PROVIDERS[label];
     const { rows } = await pullCatalog(label);
-    if (rows.length === 0) throw new Error(`${label}: live catalog empty — refusing to emit an empty engine`);
+    if (rows.length === 0)
+      throw new Error(`${label}: live catalog empty — refusing to emit an empty engine`);
     const lines = ["model_list:"];
     for (const id of rows) {
       lines.push(
@@ -136,11 +133,11 @@ export async function genRealEngineConfigs(outDir: string): Promise<void> {
         `at ${new Date().toISOString()} — never hand-edited.`,
         `Keys ride os.environ/${known.key_env} (never this file).`,
       ]) +
-      lines.join("\n") +
-      "\nlitellm_settings:\n  drop_params: true # tolerate Anthropic-only params the wires 400 on\n" +
-      // the engine gate: only a buckle holding keys/engine reaches the
-      // legs (anonymous + wrong key are 401 by litellm master_key)
-      "\ngeneral_settings:\n  master_key: os.environ/ENGINE_MASTER_KEY\n",
+        lines.join("\n") +
+        "\nlitellm_settings:\n  drop_params: true # tolerate Anthropic-only params the wires 400 on\n" +
+        // the engine gate: only a buckle holding keys/engine reaches the
+        // legs (anonymous + wrong key are 401 by litellm master_key)
+        "\ngeneral_settings:\n  master_key: os.environ/ENGINE_MASTER_KEY\n",
     );
     console.log(`${outDir}/${label}.litellm.yaml: ${rows.length} real legs (${known.dialect})`);
   }
@@ -149,18 +146,14 @@ export async function genRealEngineConfigs(outDir: string): Promise<void> {
 export function genEngineConfigs(): void {
   mkdirSync(OUT, { recursive: true });
   for (const provider of Object.keys(UNITS) as (keyof typeof UNITS)[]) {
-    writeFileSync(
-      join(OUT, `${provider}.litellm.yaml`),
-      stubDeploymentsOf(provider),
-    );
+    writeFileSync(join(OUT, `${provider}.litellm.yaml`), stubDeploymentsOf(provider));
     console.log(`test/deploy/engine/${provider}.litellm.yaml written`);
   }
 }
 
 if (import.meta.main) {
   const out = process.argv.includes("--real")
-    ? process.env["REAL_OUT"] ??
-      join(homedir(), ".config", "fleet-buckle", "engine")
+    ? (process.env["REAL_OUT"] ?? join(homedir(), ".config", "fleet-buckle", "engine"))
     : undefined;
   if (out === undefined) genEngineConfigs();
   else await genRealEngineConfigs(out);

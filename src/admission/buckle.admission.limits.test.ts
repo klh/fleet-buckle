@@ -3,13 +3,7 @@
 // timestamps age out, the ROUTE enforces (429 + Retry-After), and
 // tiers fall back by principal KIND. Worlds ride the kit.
 import { describe, expect, test } from "bun:test";
-import {
-  bootBuckle,
-  mintKeyDir,
-  stubEngine,
-  stubProvider,
-  type AccessRegistry,
-} from "../kit.ts";
+import { bootBuckle, mintKeyDir, stubEngine, stubProvider, type AccessRegistry } from "../kit.ts";
 import { createLimiter } from "./buckle.admission.limits.ts";
 import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
 import { BuckleProblem } from "../schemas/buckle.problem.zod.ts";
@@ -55,8 +49,7 @@ describe("the rate limiter (window math)", () => {
     expect(limiter.admit("p", 2).allowed).toBe(true);
     const denied = limiter.admit("p", 2);
     expect(denied.allowed).toBe(false);
-    if (!denied.allowed)
-      expect(denied.retryAfterS).toBeGreaterThanOrEqual(1);
+    if (!denied.allowed) expect(denied.retryAfterS).toBeGreaterThanOrEqual(1);
     // other principals ride their OWN window
     expect(limiter.admit("q", 2).allowed).toBe(true);
   });

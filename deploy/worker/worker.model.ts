@@ -1,0 +1,46 @@
+// worker.model.ts — the LLM leg compartment: every model ask rides
+// the buckle launch URL /w/<lane>/v1/chat/completions (the LANE pins
+// the model — the body model is a pin-PROOF, deliberately different
+// from the pin so stub /_seen evidence proves the pin won). The
+// durable rework keeps the seam; asks become generation tasks.
+import { z } from "zod";
+import { env } from "./worker.env.ts";
+
+export async function ask<T>(
+  schema: z.ZodType<T>,
+  instruction: string,
+  context: string,
+): Promise<T> {
+  const body = {
+    // pin-proof: the body model DIFFERS from the lane pin
+    // (glm-4.5-air) — a stub /_seen model of glm-4.5-air proves the
+    // lane pin won, not the body
+    model: "glm-4.5",
+    messages: [
+      {
+        role: "user",
+        content: `${instruction}\n\nReply with STRICT JSON only, no prose, no code fence.\n\n---\n${context}`,
+      },
+    ],
+  };
+  const r = await fetch(`${env.buckle}/w/${env.lane}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${env.buckleKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`buckle chat: ${r.status} ${await r.text()}`);
+  const chat = z
+    .object({ choices: z.array(z.object({ message: z.object({ content: z.string() }) })) })
+    .passthrough()
+    .parse(await r.json());
+  const text = chat.choices[0]?.message?.content ?? "";
+  const jsonStart = text.indexOf("{");
+  const jsonEnd = text.lastIndexOf("}");
+  const parsed = schema.safeParse(JSON.parse(text.slice(jsonStart, jsonEnd + 1)));
+  if (!parsed.success)
+    throw new Error(`llm contract: ${JSON.stringify(parsed.error.issues.slice(0, 3))}`);
+  return parsed.data;
+}

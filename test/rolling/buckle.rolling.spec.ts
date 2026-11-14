@@ -31,9 +31,7 @@ function flip(upstream: string): void {
 
 let carol = "";
 
-async function chat(
-  base: string,
-): Promise<{ status: number; upstream: string | null }> {
+async function chat(base: string): Promise<{ status: number; upstream: string | null }> {
   try {
     const r = await fetch(`${base}/v1/chat/completions`, {
       method: "POST",
@@ -54,18 +52,17 @@ async function healthzThroughFront(): Promise<BuckleHealthz> {
   return BuckleHealthz.parse(await r.json());
 }
 
-
 test.describe.serial("rolling deploy — unit b1 v1 → v2, no downtime", () => {
   test.beforeAll(async () => {
-    carol = (await Bun.file(`${ROOT}/test/deploy/keys/.gen/principal.carol@fleet.key`).text()).trim();
+    carol = (
+      await Bun.file(`${ROOT}/test/deploy/keys/.gen/principal.carol@fleet.key`).text()
+    ).trim();
     flip(V1); // the roll starts from v1
     compose("up", "-d", "--build");
   });
 
   test("v1 serves through the front", async () => {
-    await expect
-      .poll(async () => (await chat(FRONT)).status, { timeout: 30_000 })
-      .toBe(200);
+    await expect.poll(async () => (await chat(FRONT)).status, { timeout: 30_000 }).toBe(200);
     const r = await chat(FRONT);
     expect(r.upstream).toBe(V1);
     const h = await healthzThroughFront();
@@ -84,9 +81,7 @@ test.describe.serial("rolling deploy — unit b1 v1 → v2, no downtime", () => 
     // v2's own sidecar swears it up — direct, not through the front
     await expect.poll(() => face(4832), { timeout: 30_000 }).toBe("up");
     // v2 answers with the version stamp (visible before any switch)
-    const h = BuckleHealthz.parse(
-      await (await fetch("http://127.0.0.1:4831/healthz")).json(),
-    );
+    const h = BuckleHealthz.parse(await (await fetch("http://127.0.0.1:4831/healthz")).json());
     expect(h.label).toBe("b1");
     expect(h.version).toBe("v2-rolling");
     // v2 can chat (shared engine) — the new version is READY, not just alive

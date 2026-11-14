@@ -6,13 +6,7 @@
 // wire schema (never hand-cast).
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import {
-  bootBuckle,
-  mintKeyDir,
-  stubEngine,
-  stubProvider,
-  type AccessRegistry,
-} from "../kit.ts";
+import { bootBuckle, mintKeyDir, stubEngine, stubProvider, type AccessRegistry } from "../kit.ts";
 import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
 import { BuckleProblem } from "../schemas/buckle.problem.zod.ts";
 import { ServedOutcomeSchema } from "./buckle.proxy.pipeline.ts";
@@ -69,9 +63,7 @@ describe("the served surface (the legs' shared contract)", () => {
       servedBy: "b1",
     });
     expect(served.servedBy).toBe("b1");
-    expect(
-      ServedOutcomeSchema.safeParse({ ...served, extra: true }).success,
-    ).toBe(false);
+    expect(ServedOutcomeSchema.safeParse({ ...served, extra: true }).success).toBe(false);
   });
 });
 
@@ -123,9 +115,7 @@ describe("the MITM forward loop", () => {
       expect(m.status).toBe(200);
       expect(m.headers.get("content-type")).toContain("text/plain");
       const text = await m.text();
-      expect(text).toContain(
-        'buckle_requests_total{buckle="b1",model="openrouter/qwen3-coder"} 2',
-      );
+      expect(text).toContain('buckle_requests_total{buckle="b1",model="openrouter/qwen3-coder"} 2');
     } finally {
       world.stop();
       engine.stop();

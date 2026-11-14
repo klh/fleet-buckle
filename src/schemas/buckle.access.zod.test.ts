@@ -1,10 +1,7 @@
 // buckle.access.zod.test.ts — colocated unit (bun test): the registry
 // parses, kinds are the four Entra-mappable ones, scopes are closed.
 import { describe, expect, test } from "bun:test";
-import {
-  BuckleAccessRegistry,
-  type BuckleGrant,
-} from "./buckle.access.zod.ts";
+import { BuckleAccessRegistry, type BuckleGrant } from "./buckle.access.zod.ts";
 
 describe("BuckleAccessRegistry", () => {
   test("parses tiers, principals, grants", () => {

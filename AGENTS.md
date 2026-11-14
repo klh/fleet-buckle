@@ -133,7 +133,7 @@ richness (the health sidecar owns verdicts — outside-process law).
   deterministic — own provider rows win (never hop for what we serve),
   then peers in `hubs`-declaration order. Transit copies never re-enter:
   a hub pulls only the peer's DIRECT provider rows (`origin kind=
-  provider`), so a chain (b1→b2→b3) plus a direct edge (b1→b3) still
+provider`), so a chain (b1→b2→b3) plus a direct edge (b1→b3) still
   counts b3's models once.
   A peer model outside the requesting grant's `peers` is
   indistinguishable from an unknown model (404 — no topology leak).
@@ -174,8 +174,8 @@ richness (the health sidecar owns verdicts — outside-process law).
   `<file>.test.ts` (bun test), `fixtures/`, and a thin `index.ts`
   barrel. Nothing imports past another folder's barrel. The DAG:
   `schemas ← fault ← {problem, settings, pick} ← {access, admission,
-  federation, events, context, trace} ← {catalog, metrics} ← proxy ←
-  main`. The events bus is the pipeline's ONE write seam (emitters
+federation, events, context, trace} ← {catalog, metrics} ← proxy ←
+main`. The events bus is the pipeline's ONE write seam (emitters
   use the constructor family, never hand-assembled literals); the
   context judge is the ONE ingress decision seam (default inert).
   Composition roots live FLAT in `src/` (`main.ts`, `settings.ts`,

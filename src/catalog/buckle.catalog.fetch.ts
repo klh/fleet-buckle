@@ -9,14 +9,8 @@
 // a hub catalog CARRIES provenance (origin url per row) — it is not
 // a seat proxy hiding its candidates.
 import { z } from "zod";
-import {
-  BuckleProvider,
-  type BuckleSettings,
-} from "../schemas/buckle.settings.zod.ts";
-import {
-  BuckleModelWire,
-  type BuckleModelsResponse,
-} from "../schemas/buckle.model.wire.zod.ts";
+import { BuckleProvider, type BuckleSettings } from "../schemas/buckle.settings.zod.ts";
+import { BuckleModelWire, type BuckleModelsResponse } from "../schemas/buckle.model.wire.zod.ts";
 import {
   KNOWN_PROVIDERS,
   type KnownProviderLabel,
@@ -33,9 +27,7 @@ export const CacheEntrySchema = z.object({
 type CacheEntry = z.output<typeof CacheEntrySchema>;
 const cache = new Map<string, CacheEntry>();
 
-const ProviderCatalogSchema = z
-  .object({ data: z.array(z.unknown()).optional() })
-  .passthrough();
+const ProviderCatalogSchema = z.object({ data: z.array(z.unknown()).optional() }).passthrough();
 
 const ProviderRowSchema = z.object({ id: z.unknown() }).passthrough();
 
@@ -70,8 +62,7 @@ type FetchCall = ReturnType<typeof createFetchCall>;
 /** the fetch's request headers: continued trace, the seat's key when
  *  one is configured, plus any headers the registry demands */
 function headersOf(entry: ProviderEntry, call: FetchCall): Record<string, string> {
-  const secret =
-    entry.provider.key !== undefined ? call.tokenOf(entry.provider.key) : null;
+  const secret = entry.provider.key !== undefined ? call.tokenOf(entry.provider.key) : null;
   const known = KNOWN_PROVIDERS[entry.label as KnownProviderLabel];
   return {
     traceparent: continueTraceparent(call.traceparent),
@@ -87,10 +78,7 @@ function wireRowsOf(data: unknown[], entry: ProviderEntry): BuckleModelWire[] {
   for (const raw of data) {
     const row = ProviderRowSchema.safeParse(raw);
     const parsed = BuckleModelWire.safeParse({
-      id:
-        row.success && typeof row.data.id === "string"
-          ? row.data.id
-          : undefined,
+      id: row.success && typeof row.data.id === "string" ? row.data.id : undefined,
       origin: { kind: "provider", label: entry.label, url: entry.url },
       meta: raw,
     });
@@ -119,9 +107,7 @@ async function fetchRows(
       ok: false,
       fault: {
         kind: "malformed",
-        detail:
-          (catalog.error?.issues ?? []).map((i) => i.message).join("; ") ||
-          "no data rows",
+        detail: (catalog.error?.issues ?? []).map((i) => i.message).join("; ") || "no data rows",
       },
     };
   return { ok: true, rows: wireRowsOf(catalog.data.data, entry) };
@@ -135,16 +121,12 @@ function cacheEmpty(
   previous: CacheEntry | undefined,
   graceMs: number,
 ): BuckleModelWire[] {
-  if (previous !== undefined && Date.now() - previous.at < graceMs)
-    return previous.rows; // brief grace from the last good fetch
+  if (previous !== undefined && Date.now() - previous.at < graceMs) return previous.rows; // brief grace from the last good fetch
   cache.delete(key);
   return [];
 }
 
-async function fetchProvider(
-  entry: ProviderEntry,
-  call: FetchCall,
-): Promise<BuckleModelWire[]> {
+async function fetchProvider(entry: ProviderEntry, call: FetchCall): Promise<BuckleModelWire[]> {
   const key = `${entry.label}|${entry.url}`;
   const hit = cache.get(key);
   if (hit !== undefined && Date.now() - hit.at < call.ttlMs) return hit.rows;
@@ -166,10 +148,7 @@ export async function buildCatalog(
   const call = createFetchCall({ tokenOf, traceparent, timeouts: settings.timeouts });
   const batches = await Promise.all(
     Object.entries(settings.providers ?? {}).map(([label, provider]) =>
-      fetchProvider(
-        ProviderFetchSchema.parse({ label, url: provider.url, provider }),
-        call,
-      ),
+      fetchProvider(ProviderFetchSchema.parse({ label, url: provider.url, provider }), call),
     ),
   );
   return { hub: settings.hub.label, models: batches.flat() };

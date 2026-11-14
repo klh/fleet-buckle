@@ -53,11 +53,12 @@ paths 403 problem+json, federation tree depth-2 summaries, load waves.
 ## Stage 0 — the standing first-stage demo (`test/deploy/compose.stage0.yaml`)
 
 The stack's first smoke moment, kept forever: stubs + the three buckles
-+ sidecars, NO engines. The minimal buckle ANSWERS (`/healthz` — label
-per hub), so the sidecars swear all three `up` (the smoke that should
-NOT fail works); a chat round trip is honestly red — 503
-`application/problem+json` (the smoke that should fail, fails).
-Host ports 49xx; runs beside the full 47xx stack in one pass.
+
+- sidecars, NO engines. The minimal buckle ANSWERS (`/healthz` — label
+  per hub), so the sidecars swear all three `up` (the smoke that should
+  NOT fail works); a chat round trip is honestly red — 503
+  `application/problem+json` (the smoke that should fail, fails).
+  Host ports 49xx; runs beside the full 47xx stack in one pass.
 
 ## Rolling deploy (`test/deploy/compose.rolling.yaml` + `deploy/front/`)
 
@@ -70,6 +71,7 @@ makes a torn read harmless — it serves the previous version until a
 clean read lands).
 
 The rolling spec proves the sequence:
+
 1. v1 serves through the front (`x-buckle-upstream` observable)
 2. the unit-surface sidecar (polling the FRONT) is up — the contract
 3. the NEW version gates healthy BEFORE traffic flips: its own

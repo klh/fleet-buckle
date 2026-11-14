@@ -32,13 +32,13 @@ describe("BuckleSettings", () => {
       hub: { label: "x" },
       providers: { zai: { url: "https://api.z.ai/api", key: "/etc/k" } },
     });
-    expect(parsed.providers?.['zai']?.key).toBe("/etc/k");
+    expect(parsed.providers?.["zai"]?.key).toBe("/etc/k");
   });
 
   test("downstream peers are declared under hubs — never an upstream list", () => {
     const merged = mergeSettings(defaultSettings, b1Settings);
     // b1 declares b2,b3; nothing else exists in the file
-    expect(merged.hubs?.['b2']?.url).toMatch(/^http/);
+    expect(merged.hubs?.["b2"]?.url).toMatch(/^http/);
   });
 
   // the provider REGISTRY: recognized providers default from it
@@ -47,13 +47,13 @@ describe("BuckleSettings", () => {
       hub: { label: "x" },
       providers: { openrouter: { key: "/etc/k" } },
     });
-    expect(parsed.providers?.['openrouter']?.url).toBe("https://openrouter.ai/api/v1");
-    expect(parsed.providers?.['openrouter']?.dialect).toBe("openai");
+    expect(parsed.providers?.["openrouter"]?.url).toBe("https://openrouter.ai/api/v1");
+    expect(parsed.providers?.["openrouter"]?.dialect).toBe("openai");
     const copilot = BuckleSettings.parse({
       hub: { label: "x" },
       providers: { mscopilot: {} },
     });
-    expect(copilot.providers?.['mscopilot']?.dialect).toBe("github_copilot");
+    expect(copilot.providers?.["mscopilot"]?.dialect).toBe("github_copilot");
   });
 
   test("an explicit url overrides the registry default (the stub over-layer does this)", () => {
@@ -61,7 +61,7 @@ describe("BuckleSettings", () => {
       hub: { label: "x" },
       providers: { openrouter: { url: "http://openrouter-stub:8080" } },
     });
-    expect(parsed.providers?.['openrouter']?.url).toBe("http://openrouter-stub:8080");
+    expect(parsed.providers?.["openrouter"]?.url).toBe("http://openrouter-stub:8080");
   });
 
   test("an unknown provider without an explicit url/dialect fails loud as PARSE issues", () => {
@@ -84,7 +84,7 @@ describe("BuckleSettings", () => {
         myown: { url: "https://api.example.com/v1", dialect: "openai" },
       },
     });
-    expect(parsed.providers?.['myown']?.url).toBe("https://api.example.com/v1");
+    expect(parsed.providers?.["myown"]?.url).toBe("https://api.example.com/v1");
   });
 
   test("the over layer REPLACES a resolved registry url (real ⊕ stub merge)", () => {
@@ -92,6 +92,6 @@ describe("BuckleSettings", () => {
     const unit = { hub: { label: "x" }, providers: { zai: { key: "/k" } } };
     const over = { providers: { zai: { url: "http://zai-stub:8080" } } };
     const merged = mergeSettings(mergeSettings(defaultSettings, unit), over);
-    expect(merged.providers?.['zai']?.url).toBe("http://zai-stub:8080");
+    expect(merged.providers?.["zai"]?.url).toBe("http://zai-stub:8080");
   });
 });

@@ -10,8 +10,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-const KEY = (p: string) =>
-  readFileSync(join(ROOT, `test/deploy/keys/.gen/${p}`), "utf8").trim();
+const KEY = (p: string) => readFileSync(join(ROOT, `test/deploy/keys/.gen/${p}`), "utf8").trim();
 const alice = KEY("principal.alice@fleet.key");
 const bob = KEY("principal.bob@fleet.key");
 const carol = KEY("principal.carol@fleet.key");
@@ -42,18 +41,14 @@ async function ids(base: string, token: string): Promise<string[]> {
 const ProviderCatalog = z.object({ data: z.array(z.object({ id: z.string() })) });
 const cat = (provider: string): string[] =>
   ProviderCatalog.parse(
-    JSON.parse(
-      readFileSync(
-        join(ROOT, "test/deploy/fixtures", `${provider}.models.json`),
-        "utf8",
-      ),
-    ),
-  ).data.map((m) => m.id).sort();
+    JSON.parse(readFileSync(join(ROOT, "test/deploy/fixtures", `${provider}.models.json`), "utf8")),
+  )
+    .data.map((m) => m.id)
+    .sort();
 const OR = cat("openrouter");
 const CP = cat("mscopilot");
 const ZAI = cat("zai");
-const union = (...sets: string[][]): string[] =>
-  [...new Set(sets.flat())].sort();
+const union = (...sets: string[][]): string[] => [...new Set(sets.flat())].sort();
 
 test.describe("the federation matrix (Docker)", () => {
   // a key valid HERE sees the view the REGISTRY grants — per cell:

@@ -24,18 +24,18 @@ import {
   type KnownProviderLabel,
 } from "../../src/schemas/buckle.provider.registry.zod.ts";
 import { BuckleModelsResponse } from "../../src/schemas/buckle.model.wire.zod.ts";
-import {
-  mintIfAbsent,
-  mintKey,
-  mintTopologyKeys,
-  topologyUnits,
-} from "./buckle.keys.mint.ts";
+import { mintIfAbsent, mintKey, mintTopologyKeys, topologyUnits } from "./buckle.keys.mint.ts";
 import { genRealEngineConfigs } from "./buckle.gen-engine-config.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const REAL_HOME =
   process.env["FLEET_BUCKLE_REAL_HOME"] ?? join(homedir(), ".config", "fleet-buckle");
-const COMPOSE = ["-f", join(ROOT, "test/deploy/compose.real.yaml"), "--env-file", join(REAL_HOME, "real.env")];
+const COMPOSE = [
+  "-f",
+  join(ROOT, "test/deploy/compose.real.yaml"),
+  "--env-file",
+  join(REAL_HOME, "real.env"),
+];
 
 const HUBS = {
   b1: { port: 4711, health: 4712, provider: "openrouter" },
@@ -44,7 +44,11 @@ const HUBS = {
 } as const;
 
 function docker(...args: string[]): { ok: boolean; out: string } {
-  const r = Bun.spawnSync(["docker", "compose", ...COMPOSE, ...args], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
+  const r = Bun.spawnSync(["docker", "compose", ...COMPOSE, ...args], {
+    cwd: ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   const out = `${r.stdout.toString()}${r.stderr.toString()}`;
   if (r.exitCode !== 0) console.error(out);
   return { ok: r.exitCode === 0, out };
@@ -72,9 +76,8 @@ async function render(): Promise<void> {
   // value rides real.env so every litellm enforces it as master_key
   // NOTE: litellm only ENFORCES master keys with the sk- prefix —
   // a bksk_-style value silently disables engine auth
-  envValues["ENGINE_MASTER_KEY"] = await mintIfAbsent(
-    join(keys, "engine.master.key"),
-    () => mintKey("sk-engine-"),
+  envValues["ENGINE_MASTER_KEY"] = await mintIfAbsent(join(keys, "engine.master.key"), () =>
+    mintKey("sk-engine-"),
   );
 
   // provider keys: COPIED from the muramasa paths the registry names
@@ -82,8 +85,7 @@ async function render(): Promise<void> {
   for (const label of Object.keys(KNOWN_PROVIDERS) as KnownProviderLabel[]) {
     const known = KNOWN_PROVIDERS[label];
     const src =
-      process.env[`${label.toUpperCase()}_KEY_PATH`] ??
-      known.key_file.replace("~", homedir());
+      process.env[`${label.toUpperCase()}_KEY_PATH`] ?? known.key_file.replace("~", homedir());
     const dst = join(keys, `${label}.key`);
     if (statSync(src, { throwIfNoEntry: false }) === undefined)
       throw new Error(`${label}: key not found at ${src} (set ${label.toUpperCase()}_KEY_PATH)`);
@@ -113,7 +115,9 @@ async function render(): Promise<void> {
   // real.env: machine-local compose interpolation (0600)
   writeSecret(
     join(REAL_HOME, "real.env"),
-    Object.entries(envValues).map(([k, v]) => `${k}=${v}`).join("\n") + "\n",
+    Object.entries(envValues)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\n") + "\n",
   );
   console.log(`rendered: ${REAL_HOME} (keys, engine/, copilot-tokens/, real.env)`);
 }
@@ -124,14 +128,18 @@ async function waitHealth(port: number, ms = 60_000): Promise<boolean> {
     try {
       const r = await fetch(`http://127.0.0.1:${port}/healthz`);
       if (r.ok) return true;
-    } catch { /* not up yet */ }
+    } catch {
+      /* not up yet */
+    }
     await Bun.sleep(1000);
   }
   return false;
 }
 
 async function prove(): Promise<void> {
-  const federation = (await Bun.file(join(REAL_HOME, "keys", "principal.federation@fleet.key")).text()).trim();
+  const federation = (
+    await Bun.file(join(REAL_HOME, "keys", "principal.federation@fleet.key")).text()
+  ).trim();
   let failures = 0;
   for (const [name, hub] of Object.entries(HUBS)) {
     const healthy = await waitHealth(hub.health);

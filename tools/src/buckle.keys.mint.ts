@@ -37,9 +37,7 @@ export function topologyUnits(mode: "stub" | "real"): Record<string, UnitSetting
     units[label] = {
       defaults: join(ROOT, "deploy/settings/default.settings.json5"),
       settings: join(ROOT, `test/deploy/settings/${label}.settings.json5`),
-      ...(mode === "stub"
-        ? { over: join(ROOT, `test/deploy/settings/${label}.stub.json5`) }
-        : {}),
+      ...(mode === "stub" ? { over: join(ROOT, `test/deploy/settings/${label}.stub.json5`) } : {}),
     };
   }
   return units;
@@ -52,9 +50,8 @@ export async function mintTopologyKeys(
   dir: string,
   units: Record<string, UnitSettingsPaths>,
 ): Promise<void> {
-  const federation = await mintIfAbsent(
-    join(dir, "principal.federation@fleet.key"),
-    () => mintKey(),
+  const federation = await mintIfAbsent(join(dir, "principal.federation@fleet.key"), () =>
+    mintKey(),
   );
   for (const unit of Object.values(units)) {
     const settings = await loadSettings(unit);

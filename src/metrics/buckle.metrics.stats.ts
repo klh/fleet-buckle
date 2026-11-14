@@ -29,9 +29,11 @@ const BUCKET_OF: Record<string, "users" | "agents" | "services"> = {
 
 /** the kind buckets: users (human|developer), agents, everything
  *  else reports as services — pure fold over the hubs' by_kind */
-function sessionTotalsOf(
-  hubs: BuckleStatsSnapshot[],
-): { users: number; agents: number; services: number } {
+function sessionTotalsOf(hubs: BuckleStatsSnapshot[]): {
+  users: number;
+  agents: number;
+  services: number;
+} {
   const totals = { users: 0, agents: 0, services: 0 };
   for (const hub of hubs)
     for (const [kind, count] of Object.entries(hub.sessions.by_kind))
@@ -43,8 +45,7 @@ function sessionTotalsOf(
 function activeModelCountOf(hubs: BuckleStatsSnapshot[]): number {
   const active = new Set<string>();
   for (const hub of hubs)
-    for (const m of hub.models)
-      if (m.inflight > 0 || m.requests > 0) active.add(m.model);
+    for (const m of hub.models) if (m.inflight > 0 || m.requests > 0) active.add(m.model);
   return active.size;
 }
 
@@ -109,9 +110,8 @@ export function createStatsCache(settings: BuckleSettings, tokenOf: TokenReader)
   // the shared window primitive (metrics.window): TTL +
   // single-flight; the pull never rejects (peerJson folds faults
   // as nulls), so the cache can hold them — fresh verdicts each window
-  const window = createWindowCache(
-    settings.timeouts.stats_cache_ms,
-    () => pullPeers(settings, tokenOf),
+  const window = createWindowCache(settings.timeouts.stats_cache_ms, () =>
+    pullPeers(settings, tokenOf),
   );
   return { peers: (): Promise<Record<string, BuckleStatsSnapshot | null>> => window.get() };
 }
