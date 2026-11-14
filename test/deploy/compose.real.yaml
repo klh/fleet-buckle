@@ -35,6 +35,7 @@ services:
     command: ["--config", "/etc/engine/openrouter.litellm.yaml", "--port", "4000"]
     environment:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?}
+      ENGINE_MASTER_KEY: ${ENGINE_MASTER_KEY:?}
     volumes:
       - ${REAL_HOME}/engine/openrouter.litellm.yaml:/etc/engine/openrouter.litellm.yaml:ro
   health1:
@@ -69,6 +70,7 @@ services:
     command: ["--config", "/etc/engine/mscopilot.litellm.yaml", "--port", "4000"]
     environment:
       COPILOT_API_KEY: ${COPILOT_API_KEY:?}
+      ENGINE_MASTER_KEY: ${ENGINE_MASTER_KEY:?}
       GITHUB_COPILOT_TOKEN_DIR: /etc/copilot-tokens
     volumes:
       - ${REAL_HOME}/engine/mscopilot.litellm.yaml:/etc/engine/mscopilot.litellm.yaml:ro
@@ -104,6 +106,7 @@ services:
     command: ["--config", "/etc/engine/zai.litellm.yaml", "--port", "4000"]
     environment:
       ZAI_API_KEY: ${ZAI_API_KEY:?}
+      ENGINE_MASTER_KEY: ${ENGINE_MASTER_KEY:?}
     volumes:
       - ${REAL_HOME}/engine/zai.litellm.yaml:/etc/engine/zai.litellm.yaml:ro
   health3:

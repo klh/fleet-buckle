@@ -24,7 +24,7 @@ import {
   type KnownProviderLabel,
 } from "../../src/schemas/buckle.provider.registry.zod.ts";
 import { BuckleModelsResponse } from "../../src/schemas/buckle.model.wire.zod.ts";
-import { mintTopologyKeys } from "./buckle.keys.mint.ts";
+import { mintIfAbsent, mintKey, mintTopologyKeys } from "./buckle.keys.mint.ts";
 import { genRealEngineConfigs } from "./buckle.gen-engine-config.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -56,6 +56,7 @@ function writeSecret(file: string, contents: string): void {
 
 async function render(): Promise<void> {
   const keys = join(REAL_HOME, "keys");
+  const envValues: Record<string, string> = { REAL_HOME };
   // topology keys: principals + federation peer tokens, from the SAME
   // test/deploy settings the stub stack uses (identical policy; only
   // the provider urls differ — registry real vs stub over layer)
@@ -74,9 +75,18 @@ async function render(): Promise<void> {
     },
   });
 
+  // the ENGINE GATE: one master key minted into the mounted keys dir
+  // (the buckles read keys/engine from settings keys.engine); the SAME
+  // value rides real.env so every litellm enforces it as master_key
+  // NOTE: litellm only ENFORCES master keys with the sk- prefix —
+  // a bksk_-style value silently disables engine auth
+  envValues["ENGINE_MASTER_KEY"] = await mintIfAbsent(
+    join(keys, "engine.master.key"),
+    () => mintKey("sk-engine-"),
+  );
+
   // provider keys: COPIED from the muramasa paths the registry names
   // (env override <LABEL>_KEY_PATH), so the runtime home is complete
-  const envValues: Record<string, string> = { REAL_HOME };
   for (const label of Object.keys(KNOWN_PROVIDERS) as KnownProviderLabel[]) {
     const known = KNOWN_PROVIDERS[label];
     const src =
@@ -95,9 +105,8 @@ async function render(): Promise<void> {
   const tokens = join(REAL_HOME, "copilot-tokens");
   mkdirSync(tokens, { recursive: true });
   const pat = envValues[KNOWN_PROVIDERS.mscopilot.key_env];
-  writeFileSync(join(tokens, "access-token"), `${pat}\n`);
-  chmodSync(join(tokens, "access-token"), 0o600);
-  writeFileSync(
+  writeSecret(join(tokens, "access-token"), `${pat}\n`);
+  writeSecret(
     join(tokens, "api-key.json"),
     `${JSON.stringify({
       token: pat,
@@ -105,7 +114,6 @@ async function render(): Promise<void> {
       endpoints: { api: KNOWN_PROVIDERS.mscopilot.url },
     })}\n`,
   );
-  chmodSync(join(tokens, "api-key.json"), 0o600);
 
   // engine configs from the LIVE catalogs
   await genRealEngineConfigs(join(REAL_HOME, "engine"));
@@ -156,7 +164,10 @@ const verb = process.argv[2];
 if (verb === "render") await render();
 else if (verb === "up") {
   await render();
-  if (!docker("up", "-d", "--build").ok) process.exit(1);
+  // --force-recreate: a fresh render may only change the MOUNTED
+  // engine yaml — up -d alone would keep a running litellm on the
+  // stale config (bind mounts update live; litellm reads at boot)
+  if (!docker("up", "-d", "--build", "--force-recreate").ok) process.exit(1);
   await prove();
   console.log("real stack up: b1 4711 · b2 4721 · b3 4731 · jaeger 16686");
 } else if (verb === "status") {

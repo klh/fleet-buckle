@@ -17,7 +17,12 @@ import {
   type KnownProviderLabel,
 } from "../../src/schemas/buckle.provider.registry.zod.ts";
 
-const HOME = process.env["FLEET_RUNTIME_HOME"] ?? join(homedir(), ".claude/local-llm");
+const RUNTIME = process.env["FLEET_RUNTIME_HOME"] ?? join(homedir(), ".claude/local-llm");
+/** registry key_file is `~/...` — tilde expands to the REAL home
+ *  (os.homedir), never the runtime dir; FLEET_RUNTIME_HOME only
+ *  relocates the runtime itself */
+const expandTilde = (p: string): string =>
+  p.startsWith("~") ? join(homedir(), p.slice(1)) : p;
 
 /** capture-specific bits ONLY — url/headers/key file come from the
  *  provider registry (one home). path = the catalog endpoint variant
@@ -73,7 +78,7 @@ for (const [label, cfg] of Object.entries(RAW_SELECTION)) {
   const file = OUT_FILE[label as KnownProviderLabel];
   const bearer =
     process.env[`${label.toUpperCase()}_KEY_PATH`] ??
-    (await Bun.file(known.key_file.replace("~", HOME.replace("/.claude/local-llm", ""))).text());
+    (await Bun.file(expandTilde(known.key_file)).text());
   const r = await fetch(`${known.url}${cfg.path}`, {
     headers: {
       authorization: `Bearer ${bearer.trim()}`,

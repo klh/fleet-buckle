@@ -52,18 +52,27 @@ export type BuckleProvider = z.output<typeof BuckleProvider>;
  *  registry of recognized providers unless the file overrides. */
 export const BuckleProviders = z
   .record(z.string(), BuckleProviderEntry)
-  .transform((entries) => {
+  .transform((entries, ctx) => {
     const resolved: Record<string, BuckleProvider> = {};
     for (const [label, entry] of Object.entries(entries)) {
       const known = KNOWN_PROVIDERS[label as KnownProviderLabel];
-      const url = entry.url ?? (known?.url as string | undefined);
-      if (url === undefined)
-        throw new Error(
-          `provider "${label}" has no url and is not a recognized provider — give it an explicit url or use one of: ${Object.keys(KNOWN_PROVIDERS).join(", ")}`,
-        );
+      // fail loud as a PARSE issue (never a thrown exception through
+      // safeParse): unknown label without explicit url/dialect
+      if (entry.url === undefined && known === undefined)
+        ctx.addIssue({
+          code: "custom",
+          path: [label, "url"],
+          message: `provider "${label}" is not recognized — give it an explicit url or use one of: ${Object.keys(KNOWN_PROVIDERS).join(", ")}`,
+        });
+      if (entry.dialect === undefined && known === undefined)
+        ctx.addIssue({
+          code: "custom",
+          path: [label, "dialect"],
+          message: `provider "${label}" is not recognized — set dialect explicitly`,
+        });
+      const url = entry.url ?? known?.url;
       const dialect = entry.dialect ?? known?.dialect;
-      if (dialect === undefined)
-        throw new Error(`provider "${label}" has no dialect and is not recognized — set dialect explicitly`);
+      if (url === undefined || dialect === undefined) continue;
       resolved[label] = { ...entry, url, dialect };
     }
     return resolved;

@@ -5,6 +5,7 @@
 // every type here is zod-derived (the type law).
 import { z } from "zod";
 import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
+import type { TokenReader } from "./buckle.server.federated.ts";
 import { continueTraceparent } from "./buckle.server.telemetry.ts";
 
 /** bounded waits: a hung engine must not hold the client forever */
@@ -48,19 +49,27 @@ export function usageOf(text: string): number {
   }
 }
 
-/** POST a chat to the engine, verbatim body, trace continued */
+/** POST a chat to the engine, verbatim body, trace continued.
+ *  When keys.engine is configured AND readable, the gate is ON: the
+ *  engine (litellm master_key) refuses anonymous and wrong-key calls.
+ *  A missing/unreadable file means NO header (stub engines are open). */
 export async function engineChat(
   settings: BuckleSettings,
   raw: string,
   traceparent: string,
+  tokenOf: TokenReader,
 ): Promise<EngineOutcome> {
   const engine = `${engineUrl(settings).replace(/\/$/, "")}/v1/chat/completions`;
+  const engineToken = settings.keys?.engine !== undefined
+    ? tokenOf(settings.keys.engine)
+    : null;
   try {
     const upstream = await fetch(engine, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         traceparent: continueTraceparent(traceparent),
+        ...(engineToken !== null ? { authorization: `Bearer ${engineToken}` } : {}),
       },
       body: raw,
       signal: AbortSignal.timeout(ENGINE_TIMEOUT_MS),

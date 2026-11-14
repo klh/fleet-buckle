@@ -155,13 +155,19 @@ export async function bootBuckle(opts: {
   providers: Record<string, string>;
   hubs?: Record<string, string>;
   engineUrl?: string;
+  /** path to the engine master key file — when set, worlds exercise
+   *  the engine gate (litellm master_key auth on the engine leg) */
+  engineKeyFile?: string;
 }): Promise<{ base: string; port: number; stop: () => void }> {
   const base = await loadBaseSettings();
   // compose as a RAW overlay, re-parsed through the one loader — the
   // provider registry resolves url/dialect at parse, never by cast
   const settings = mergeSettings(base, {
     hub: { label: opts.label },
-    keys: { principals_dir: opts.dir },
+    keys: {
+      principals_dir: opts.dir,
+      ...(opts.engineKeyFile !== undefined ? { engine: opts.engineKeyFile } : {}),
+    },
     access: opts.access,
     hubs: Object.fromEntries(
       Object.entries(opts.hubs ?? {}).map(([label, url]) => [

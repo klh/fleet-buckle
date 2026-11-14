@@ -77,10 +77,38 @@ richness (the health sidecar owns verdicts — outside-process law).
 - **Compose is wiring only** — image, ports, mounts, env PATHS. No
   providers, no peers, no limits in compose.
 - **Settings compose by deep merge**: `default.settings.json5` ⊕
-  `<buckle>.settings.json5`, then `safeParse` — fail loud.
+  `<buckle>.settings.json5` ⊕ over-layer, then `safeParse` — fail
+  loud. The over layer (`--over` / `BUCKLE_SETTINGS_OVER`) is how ONE
+  settings file serves both modes: stub compose injects stub provider
+  urls as `test/deploy/settings/b*.stub.json5`; NO over = real mode
+  on registry defaults. Unit topology lives in
+  `test/deploy/settings/`; `deploy/settings/` is the real single hub.
+- **Provider registry** (`buckle.provider.registry.zod.ts`): the ONE
+  home for a recognized provider's real url/dialect/catalog headers/
+  key env+file. A settings entry may omit `url`/`dialect` (the
+  registry default applies); an unknown label without an explicit
+  url/dialect fails loud at parse (as zod ISSUES — never a thrown
+  exception through safeParse). The capture tool, the catalog pull,
+  and engine-gen all read it. All catalogs pull at `{url}/models`
+  (copilot needs its `copilot-integration-id` header and serves
+  `/models`, not `/v1/models`).
 - **Fetch, don't declare**: model lists are FETCHED from providers and
   peers. Settings declare providers, keys, peers, grants, limits, and
   per-model OVERRIDES only.
+- **Real mode**: `bun tools/src/buckle.real.ts render|up|status|down`
+  is the launcher. Render mints topology keys, copies muramasa
+  provider keys, pre-seeds the copilot PAT cache, generates engine
+  yamls from the LIVE catalogs (`os.environ` keys only — never values;
+  `drop_params` + per-leg `disable_background_health_check` are the
+  W3081 lessons), and writes 0600 `real.env`. Runtime home
+  `~/.config/fleet-buckle/`. `compose.real.yaml` shares the 47xx ports
+  with the stub stack — never both up.
+- **Engine gate**: settings `keys.engine` names a key file; when
+  readable the engine leg carries `Bearer` and every litellm enforces
+  it as `master_key` (litellm only ENFORCES `sk-`-prefixed values —
+  mint with `sk-engine-`). Absent/unreadable file = no header = open
+  engine (the stub mode is exactly this). Proven: anonymous 401,
+  wrong key refused, gated chats + hop green.
 
 ## Federation
 

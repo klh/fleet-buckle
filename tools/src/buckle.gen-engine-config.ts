@@ -137,7 +137,10 @@ export async function genRealEngineConfigs(outDir: string): Promise<void> {
         `Keys ride os.environ/${known.key_env} (never this file).`,
       ]) +
       lines.join("\n") +
-      "\nlitellm_settings:\n  drop_params: true # tolerate Anthropic-only params the wires 400 on\n",
+      "\nlitellm_settings:\n  drop_params: true # tolerate Anthropic-only params the wires 400 on\n" +
+      // the engine gate: only a buckle holding keys/engine reaches the
+      // legs (anonymous + wrong key are 401 by litellm master_key)
+      "\ngeneral_settings:\n  master_key: os.environ/ENGINE_MASTER_KEY\n",
     );
     console.log(`${outDir}/${label}.litellm.yaml: ${rows.length} real legs (${known.dialect})`);
   }

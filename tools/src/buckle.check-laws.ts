@@ -61,10 +61,11 @@ for (const f of files.filter(
 for (const f of files.filter(
   (f) => f.endsWith(".ts") && /(\/src\/|\/tools\/|\/test\/)/.test(f),
 )) {
+  if (f.endsWith("buckle.check-laws.ts")) continue; // the law-definer quotes its own patterns
   const src = readFileSync(f, "utf8");
   if (/\)\s*as\s*\{/.test(src))
     errors.push(`${f}: hand-cast object literal (\`as { … }\`) — parse through the zod wire schema`);
-  if (/\.json\(\)\s*\)\s*as\s+[A-Z]/.test(src))
+  if (/\.json\(\)\s*\)?\s*as\s+[A-Z]/.test(src))
     errors.push(`${f}: named-type cast on a response body (\`.json() as X\`) — safeParse it through the wire schema`);
 }
 

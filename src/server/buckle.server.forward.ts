@@ -94,7 +94,7 @@ export async function forwardChat(
   // 5 — the leg: buckle-origin hops, provider-origin rides our engine
   return known.origin.kind === "buckle"
     ? await serveHop(settings, metrics, live, principal, known.origin.label, raw, traceparent, inboundPath, deadline, tokenOf, model)
-    : await serveEngine(settings, metrics, live, principal, raw, traceparent, model);
+    : await serveEngine(settings, metrics, live, principal, raw, traceparent, model, tokenOf);
 }
 
 /** the peer leg: buckle-origin model → that peer, verbatim */
@@ -184,10 +184,11 @@ async function serveEngine(
   raw: string,
   traceparent: string,
   model: string,
+  tokenOf: TokenReader,
 ): Promise<Response> {
   const kind = settings.access?.principals.find((p) => p.id === principal)?.kind;
   live.open(principal, kind, model);
-  const outcome = await engineChat(settings, raw, traceparent);
+  const outcome = await engineChat(settings, raw, traceparent, tokenOf);
   if (outcome.kind === "served") {
     metrics.countRequest(model);
     live.close(principal, model, usageOf(outcome.text));

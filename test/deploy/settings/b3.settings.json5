@@ -1,5 +1,9 @@
 {
   // b3.settings.json5 — zai provider, no peers (the chain's tail).
+  // the engine gate: when this file exists the buckle authenticates to
+  // its litellm (master_key). Stub mode does NOT mint it (engines
+  // open); real mode mints it into the mounted keys dir.
+  keys: { engine: "/etc/buckle/keys/engine.master.key" },
   hub: { label: "b3" },
   access: {
     principals: [

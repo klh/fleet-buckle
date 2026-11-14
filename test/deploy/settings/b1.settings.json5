@@ -1,6 +1,10 @@
 {
   // b1.settings.json5 — the demo topology's head buckle: openrouter +
   // downstream peers b2, b3. Composed over default.settings.json5.
+  // the engine gate: when this file exists the buckle authenticates to
+  // its litellm (master_key). Stub mode does NOT mint it (engines
+  // open); real mode mints it into the mounted keys dir.
+  keys: { engine: "/etc/buckle/keys/engine.master.key" },
   hub: { label: "b1" },
   access: {
     principals: [
