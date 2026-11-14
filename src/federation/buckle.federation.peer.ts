@@ -10,7 +10,7 @@ import type { z } from "zod";
 import { Fault } from "../schemas/buckle.fault.zod.ts";
 import type { BucklePeer } from "../schemas/buckle.settings.zod.ts";
 import { bodyJson, httpSend, logFault } from "../fault.ts";
-import { continueTraceparent } from "../live/buckle.live.trace.ts";
+import { continueTraceparent } from "../trace/buckle.trace.export.ts";
 
 /** reads a key/token file (secrets are paths, never values); the ONE
  *  implementation lives in src/settings.ts (readToken) */

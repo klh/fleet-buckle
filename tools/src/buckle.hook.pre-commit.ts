@@ -31,6 +31,12 @@ execSync(`git add -- ${staged.join(" ")}`);
 
 // 2. show structural regressions in the staged change.
 run("qlty smells --upstream HEAD --no-upgrade-check");
+// knip rides the gate: dead code (unused exports/files/deps) cannot
+// land — the check is seconds and the knip.jsonc entries are the contract
+if (!run("qlty check --filter knip --no-upgrade-check")) {
+  console.error("pre-commit: knip (dead code) failed — commit aborted");
+  process.exitCode = 1;
+}
 
 // 3. lint staged files; Knip needs a whole-project audit and runs separately.
 if (!run(`qlty check --filter eslint --no-upgrade-check -- ${staged.join(" ")}`)) {

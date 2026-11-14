@@ -1,10 +1,10 @@
-// buckle.live.stats.test.ts — the stats fold's contract: the mem
+// buckle.metrics.stats.test.ts — the stats fold's contract: the mem
 // cache (TTL window, single-flight) and the fleet ROLLUP
 // (kind-split sessions, longest running, top token consumers).
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { createLive } from "./buckle.live.tracker.ts";
-import { createStatsCache, statsBody } from "./buckle.live.stats.ts";
+import { createLive } from "./buckle.metrics.tracker.ts";
+import { createStatsCache, statsBody } from "./buckle.metrics.stats.ts";
 import { mergeSettings } from "../schemas/buckle.settings.zod.ts";
 import {
   BuckleStatsResponse,

@@ -90,23 +90,27 @@ export const BucklePeer = z
   .strict();
 export type BucklePeer = z.output<typeof BucklePeer>;
 
-/** MITM law: blocks injected into matching requests at ingress. */
+/** MITM law: blocks injected into matching requests at ingress —
+ *  decided by the ONE judge callback (context/buckle.context.judge),
+ *  whose shipped form consumes exactly this policy. Every declared
+ *  dimension must match (AND); a stanza is text XOR file (files are
+ *  read ONCE at boot — fail loud on unreadable). */
+const ContextRuleDimensions = {
+  /** Model group filters; absent = every model. */
+  models: z.array(z.string().min(1)).optional(),
+  /** exact principal id; absent = every principal */
+  principal: z.string().min(1).optional(),
+  /** a substring the BODY START must carry; absent = any body */
+  bodyContains: z.string().min(1).optional(),
+};
+export const BuckleContextRule = z.union([
+  z.object({ file: z.string().min(1), ...ContextRuleDimensions }).strict(),
+  z.object({ text: z.string().min(1), ...ContextRuleDimensions }).strict(),
+]);
 export const BuckleContextPolicy = z
-  .object({
-    inject: z
-      .array(
-        z
-          .object({
-            file: z.string().min(1).optional(),
-            text: z.string().optional(),
-            /** Model group filters; absent = every model. */
-            models: z.array(z.string().min(1)).optional(),
-          })
-          .strict(),
-      )
-      .min(1),
-  })
+  .object({ inject: z.array(BuckleContextRule).min(1) })
   .strict();
+export type BuckleContextRule = z.output<typeof BuckleContextRule>;
 export type BuckleContextPolicy = z.output<typeof BuckleContextPolicy>;
 
 /** One buckle's settings — the merged file content. */
@@ -147,8 +151,14 @@ export const BuckleSettings = z
     /** the unit's litellm engine — the forward target of the MITM
      *  loop. ONE home: this url (no env override exists); the VALUE
      *  defaults in deploy/settings/default.settings.json5, never here.
-     *  Optional: a relay-only unit (pure federation hop) has none. */
-    engine: z.object({ url: z.url() }).strict().optional(),
+     *  Optional: a relay-only unit (pure federation hop) has none.
+     *  metrics_url: litellm serves Prometheus on a SEPARATE process
+     *  (--prometheus_metrics_port); absent = scrape the engine url
+     *  itself (engines without the face answer empty, never throw) */
+    engine: z
+      .object({ url: z.url(), metrics_url: z.url().optional() })
+      .strict()
+      .optional(),
     /** per-buckle access registry (this buckle's OWN "AD domain"). */
     access: BuckleAccessRegistry.optional(),
     /** c — providers configured on this hub (registry-resolved). */

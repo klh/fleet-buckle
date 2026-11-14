@@ -47,7 +47,14 @@ services:
     # not a secret — provider keys are PATHS in settings.json5.
     # the CLI registers ONE model (last --model wins); it is the model
     # the demo chats. The catalog's extra rows come from the STUB fixture.
-    command: ["--config", "/etc/engine/openrouter.litellm.yaml", "--port", "4000"]
+    command:
+      [
+        "--config", "/etc/engine/openrouter.litellm.yaml",
+        "--port", "4000",
+        # the Prometheus face runs as its OWN process (litellm law):
+        # the API port serves no /metrics
+        "--prometheus_metrics_port", "4002",
+      ]
     volumes:
       - ./engine/openrouter.litellm.yaml:/etc/engine/openrouter.litellm.yaml:ro
   health1:
@@ -77,7 +84,12 @@ services:
   # ── unit 2 ──
   litellm2:
     image: ghcr.io/berriai/litellm:v1.103.0
-    command: ["--config", "/etc/engine/mscopilot.litellm.yaml", "--port", "4000"]
+    command:
+      [
+        "--config", "/etc/engine/mscopilot.litellm.yaml",
+        "--port", "4000",
+        "--prometheus_metrics_port", "4002",
+      ]
     volumes:
       - ./engine/mscopilot.litellm.yaml:/etc/engine/mscopilot.litellm.yaml:ro
   health2:
@@ -107,7 +119,12 @@ services:
   # ── unit 3 ──
   litellm3:
     image: ghcr.io/berriai/litellm:v1.103.0
-    command: ["--config", "/etc/engine/zai.litellm.yaml", "--port", "4000"]
+    command:
+      [
+        "--config", "/etc/engine/zai.litellm.yaml",
+        "--port", "4000",
+        "--prometheus_metrics_port", "4002",
+      ]
     volumes:
       - ./engine/zai.litellm.yaml:/etc/engine/zai.litellm.yaml:ro
   health3:

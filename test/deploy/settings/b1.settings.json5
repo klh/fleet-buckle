@@ -8,7 +8,7 @@
   hub: { label: "b1" },
   // the compose network names this unit's engine + telemetry sink —
   // mode-independent facts (stub and real ride the same topology)
-  engine: { url: "http://litellm1:4000" },
+  engine: { url: "http://litellm1:4000", metrics_url: "http://litellm1:4002" },
   telemetry: { otlp_url: "http://jaeger:4318" },
   access: {
     principals: [

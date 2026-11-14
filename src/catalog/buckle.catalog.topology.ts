@@ -17,7 +17,7 @@ import {
   type BuckleTreePeerSummary,
 } from "../schemas/buckle.tree.zod.ts";
 import { peerJson, type TokenReader } from "../federation/buckle.federation.peer.ts";
-import type { LiveTracker } from "../live/buckle.live.tracker.ts";
+import type { LiveTracker } from "../metrics/buckle.metrics.tracker.ts";
 import { pick } from "../pick.ts";
 import { buildCatalog } from "./buckle.catalog.fetch.ts";
 

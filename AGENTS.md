@@ -168,12 +168,16 @@ richness (the health sidecar owns verdicts — outside-process law).
   stack through /etc/hosts and leaked real openrouter rows into unit
   assertions.)
 - **Composed capability folders.** A capability is a FOLDER
-  (`federation/`, `catalog/`, `proxy/`, `access/`, `live/`…) with
+  (`federation/`, `catalog/`, `proxy/`, `access/`, `metrics/`,
+  `events/`, `context/`, `trace/`…) with
   single-job files `buckle.<thing>.<role>.ts`, colocated
   `<file>.test.ts` (bun test), `fixtures/`, and a thin `index.ts`
   barrel. Nothing imports past another folder's barrel. The DAG:
-  `schemas ← fault ← {problem, settings} ← {access, admission,
-  federation, live.trace} ← {catalog, live} ← proxy ← main`.
+  `schemas ← fault ← {problem, settings, pick} ← {access, admission,
+  federation, events, context, trace} ← {catalog, metrics} ← proxy ←
+  main`. The events bus is the pipeline's ONE write seam (emitters
+  use the constructor family, never hand-assembled literals); the
+  context judge is the ONE ingress decision seam (default inert).
   Composition roots live FLAT in `src/` (`main.ts`, `settings.ts`,
   `kit.ts`, `fault.ts`, `problem.ts`, `pick.ts`) — check-laws exempts
   them from folder naming.

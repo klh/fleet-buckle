@@ -7,7 +7,14 @@
   hub: { label: "b2" },
   // the compose network names this unit's engine + telemetry sink —
   // mode-independent facts (stub and real ride the same topology)
-  engine: { url: "http://litellm2:4000" },
+  engine: { url: "http://litellm2:4000", metrics_url: "http://litellm2:4002" },
+
+  // CONTEXT INJECTION (e2e unit): b2 is the policy-carrying unit —
+  // every originating chat gets the stanza FIRST; the stub's oracle
+  // answer proves the mutation rode through litellm verbatim
+  context_policy: {
+    inject: [{ text: "CONTEXT-MARK b2 fleet stanza (e2e oracle)" }],
+  },
   telemetry: { otlp_url: "http://jaeger:4318" },
   access: {
     principals: [

@@ -1,4 +1,4 @@
-// buckle.live.stats.ts — the /v1/stats body: OUR snapshot (live,
+// buckle.metrics.stats.ts — the /v1/stats body: OUR snapshot (live,
 // always fresh) + every configured peer's SELF snapshot pulled
 // through the ONE seam (federation.peer), folded into the fleet
 // ROLLUP. The peer pull is MEM-CACHED (settings.timeouts.stats_cache_ms,
@@ -15,7 +15,9 @@ import {
 } from "../schemas/buckle.stats.zod.ts";
 import { pick } from "../pick.ts";
 import { peerJson, type TokenReader } from "../federation/buckle.federation.peer.ts";
-import type { LiveTracker } from "./buckle.live.tracker.ts";
+import type { LiveTracker } from "./buckle.metrics.tracker.ts";
+import { createWindowCache } from "./buckle.metrics.window.ts";
+import type { EngineTelemetrySource } from "./buckle.metrics.engine.ts";
 
 /** which bucket a session kind rolls into — data, not branches
  *  (the kinds are the principal enum's closed set) */
@@ -88,7 +90,7 @@ async function pullPeers(
   for (const [label, peer] of Object.entries(settings.hubs ?? {})) {
     // the peer answers OUR wire face; its SELF snapshot is what folds
     const pulled = await peerJson(peer, {
-      seam: "live.stats",
+      seam: "metrics.stats",
       path: "/v1/stats",
       schema: BuckleStatsResponse,
       tokenOf,
@@ -104,36 +106,27 @@ async function pullPeers(
  *  stats GETs share the in-flight pull; a fault folds nulls and the
  *  window still turns (fresh verdicts, never a stale-forever cache). */
 export function createStatsCache(settings: BuckleSettings, tokenOf: TokenReader) {
-  const ttlMs = settings.timeouts.stats_cache_ms;
-  let cached: { at: number; peers: Record<string, BuckleStatsSnapshot | null> } | null = null;
-  let pulling: Promise<Record<string, BuckleStatsSnapshot | null>> | null = null;
-  return {
-    async peers(): Promise<Record<string, BuckleStatsSnapshot | null>> {
-      if (cached !== null && Date.now() - cached.at < ttlMs) return cached.peers;
-      if (pulling === null) {
-        pulling = pullPeers(settings, tokenOf).then((peers) => {
-          cached = { at: Date.now(), peers };
-          return peers;
-        });
-      }
-      // single-flight: everyone awaiting rides the one pull; the
-      // pull never rejects (peerJson folds faults as nulls)
-      const p = pulling;
-      void p.then(() => {
-        if (pulling === p) pulling = null;
-      });
-      return p;
-    },
-  };
+  // the shared window primitive (metrics.window): TTL +
+  // single-flight; the pull never rejects (peerJson folds faults
+  // as nulls), so the cache can hold them — fresh verdicts each window
+  const window = createWindowCache(
+    settings.timeouts.stats_cache_ms,
+    () => pullPeers(settings, tokenOf),
+  );
+  return { peers: (): Promise<Record<string, BuckleStatsSnapshot | null>> => window.get() };
 }
 
-/** the stats body: own snapshot LIVE + cached peer fold + rollup */
+/** the stats body: own snapshot LIVE (engine telemetry on its own
+ *  window — surfaced, never re-counted) + cached peer fold + rollup */
 export async function statsBody(
   settings: BuckleSettings,
   live: LiveTracker,
   cache: ReturnType<typeof createStatsCache>,
+  engine?: EngineTelemetrySource,
 ): Promise<StatsResponse> {
-  const self = live.snapshot();
+  const telemetry =
+    settings.engine !== undefined && engine !== undefined ? await engine.get() : undefined;
+  const self = { ...live.snapshot(), ...pick("engine", telemetry) };
   const peers = await cache.peers();
   return BuckleStatsResponse.parse({ self, peers, rollup: rollupOf(self, peers) });
 }

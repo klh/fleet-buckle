@@ -5,10 +5,12 @@
 //
 //   ...pick("stats", node.stats)   // key present only when defined
 //
-// One primitive, one home — never a scattered conditional ternary.
+// Absent = undefined OR null (the two "nothing answered" shapes —
+// headers.get returns null; optionals carry undefined). One
+// primitive, one home — never a scattered conditional ternary.
 export function pick<K extends string, V>(
   key: K,
-  value: V | undefined,
+  value: V | null | undefined,
 ): { [P in K]: V } | Record<never, never> {
-  return value === undefined ? {} : { [key]: value };
+  return value === undefined || value === null ? {} : { [key]: value };
 }

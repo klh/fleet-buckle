@@ -51,6 +51,30 @@ export const BuckleStatSessions = z
   })
   .strict();
 
+/** the engine's OWN telemetry surfaced in our snapshot: litellm
+ *  counts requests/latency/spend — we surface, never re-count */
+export const BuckleEngineTelemetry = z
+  .object({
+    reachable: z.boolean(),
+    scraped_at: z.number().int().min(0),
+    /** the engine's Prometheus SCALARS, name (with labels) → value —
+     *  surfaced verbatim, capped; histograms ride their _sum/_count */
+    series: z.record(z.string(), z.number()),
+    /** the spend endpoints' answer: total + budget + per-model rows
+     *  (absent sections surface null/empty, never guessed) */
+    spend: z
+      .object({
+        total: z.number().min(0).nullable(),
+        max_budget: z.number().min(0).nullable(),
+        by_model: z.array(
+          z.object({ model: z.string().min(1), spend: z.number().min(0) }).strict(),
+        ),
+      })
+      .strict(),
+  })
+  .strict();
+export type BuckleEngineTelemetry = z.output<typeof BuckleEngineTelemetry>;
+
 export const BuckleStatsSnapshot = z
   .object({
     hub: z.string().min(1),
@@ -60,6 +84,9 @@ export const BuckleStatsSnapshot = z
     tps: z.number().min(0),
     principals: z.array(BuckleStatPrincipalRow),
     sessions: BuckleStatSessions,
+    /** present whenever the unit declares an engine (relay-only
+     *  units omit it) — collected on the stats cache window */
+    engine: BuckleEngineTelemetry.optional(),
   })
   .strict();
 export type BuckleStatsSnapshot = z.output<typeof BuckleStatsSnapshot>;

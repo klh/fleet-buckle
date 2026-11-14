@@ -23,7 +23,7 @@ import {
 } from "../schemas/buckle.provider.registry.zod.ts";
 import { bodyJson, httpSend, logFault } from "../fault.ts";
 import type { Fault } from "../schemas/buckle.fault.zod.ts";
-import { continueTraceparent } from "../live/buckle.live.trace.ts";
+import { continueTraceparent } from "../trace/buckle.trace.export.ts";
 import type { TokenReader } from "../federation/buckle.federation.peer.ts";
 
 export const CacheEntrySchema = z.object({

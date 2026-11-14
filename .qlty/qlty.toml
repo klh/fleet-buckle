@@ -83,6 +83,8 @@ default = true
 name = "knip"
 version = "5.88.1"
 mode = "comment"
+# entry/project contract = the committed knip.jsonc (auto-detected;
+# src+deploy+tools+test entries — never knip's defaults)
 
 [[plugin]]
 name = "biome"

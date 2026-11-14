@@ -18,7 +18,7 @@ import {
   type HopRide,
   SERVED_BY_HEADER,
 } from "../federation/buckle.federation.protocol.ts";
-import { continueTraceparent } from "../live/buckle.live.trace.ts";
+import { continueTraceparent } from "../trace/buckle.trace.export.ts";
 
 /** the hop outcome (zod union), mapped by the caller into
  *  client-facing responses — every type zod-derived (the type law);

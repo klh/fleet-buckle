@@ -93,7 +93,12 @@ export function stubEngine(
     port: 0,
     fetch: async (req) => {
       seen.push(sawOf(req, await req.text()));
-      if (opts.sleepMs !== undefined) await Bun.sleep(opts.sleepMs);
+      // the slow leg models a slow CHAT (the real engine answers
+      // telemetry scrapes instantly — sleeping those would stall the
+      // stats face's telemetry pull behind the chat it measures)
+      const path = new URL(req.url).pathname;
+      const isChat = path.endsWith("/chat/completions") || path.endsWith("/messages");
+      if (opts.sleepMs !== undefined && isChat) await Bun.sleep(opts.sleepMs);
       return Response.json({
         id: opts.id ?? "engine-echo",
         object: "chat.completion",

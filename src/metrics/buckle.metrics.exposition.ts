@@ -1,7 +1,18 @@
-// live/buckle.live.metrics.ts — the Prometheus face: a per-server registry
+// metrics/buckle.metrics.exposition.ts — the Prometheus face: a per-server registry
 // of counters per {buckle, model}, rendered in Prometheus text format.
 // Scraped, not pushed; /metrics serves exactly this render.
+import type { BuckleEvent, EventBus, EventSubscriber } from "../events/buckle.events.bus.ts";
+
 export type MetricsRegistry = ReturnType<typeof createMetrics>;
+
+/** the exposition as a BUS SUBSCRIBER — a served request counts its
+ *  model (failures surface through the problem faces, not here). */
+export function subscribeExposition(bus: EventBus, metrics: MetricsRegistry): void {
+  const collect: EventSubscriber = (event: BuckleEvent): void => {
+    if (event.kind === "request.served") metrics.countRequest(event.model);
+  };
+  bus.subscribe(collect);
+}
 
 export function createMetrics(buckle: string) {
   const requests = new Map<string, number>();

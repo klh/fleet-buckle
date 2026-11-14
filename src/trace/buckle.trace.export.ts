@@ -1,4 +1,4 @@
-// buckle.live.trace.ts — W3C trace context (ported from old buckle's
+// trace/buckle.trace.export.ts — W3C trace context (ported from old buckle's
 // trace.ts: correlation ONLY — a trace id is never identity, authz, or
 // a credential; malformed input NEVER propagates; every outbound leg
 // gets a FRESH span id inside the same trace). The OTLP export is

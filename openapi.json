@@ -1231,6 +1231,89 @@
                             "top_tokens"
                           ],
                           "additionalProperties": false
+                        },
+                        "engine": {
+                          "type": "object",
+                          "properties": {
+                            "reachable": {
+                              "type": "boolean"
+                            },
+                            "scraped_at": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "series": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "type": "number"
+                              }
+                            },
+                            "spend": {
+                              "type": "object",
+                              "properties": {
+                                "total": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number",
+                                      "minimum": 0
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "max_budget": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number",
+                                      "minimum": 0
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "by_model": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "model": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "spend": {
+                                        "type": "number",
+                                        "minimum": 0
+                                      }
+                                    },
+                                    "required": [
+                                      "model",
+                                      "spend"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "total",
+                                "max_budget",
+                                "by_model"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "reachable",
+                            "scraped_at",
+                            "series",
+                            "spend"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -1426,6 +1509,89 @@
                                   "by_kind",
                                   "longest_running_s",
                                   "top_tokens"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "engine": {
+                                "type": "object",
+                                "properties": {
+                                  "reachable": {
+                                    "type": "boolean"
+                                  },
+                                  "scraped_at": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "series": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    },
+                                    "additionalProperties": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "spend": {
+                                    "type": "object",
+                                    "properties": {
+                                      "total": {
+                                        "anyOf": [
+                                          {
+                                            "type": "number",
+                                            "minimum": 0
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "max_budget": {
+                                        "anyOf": [
+                                          {
+                                            "type": "number",
+                                            "minimum": 0
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "by_model": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "model": {
+                                              "type": "string",
+                                              "minLength": 1
+                                            },
+                                            "spend": {
+                                              "type": "number",
+                                              "minimum": 0
+                                            }
+                                          },
+                                          "required": [
+                                            "model",
+                                            "spend"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "total",
+                                      "max_budget",
+                                      "by_model"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "reachable",
+                                  "scraped_at",
+                                  "series",
+                                  "spend"
                                 ],
                                 "additionalProperties": false
                               }

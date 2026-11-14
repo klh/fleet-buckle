@@ -1,9 +1,40 @@
-# Context injection — parked design (approved direction A, not yet built)
+# Context injection — decision seam (direction A, first cut LANDED)
 
-Status: DESIGN ONLY. This is the port target for fleet-buckle (the
-standalone repo) from the fleet monorepo's W3081 `context-inject.ts`
-prior art, extended with the full decision matrix. Nothing here is
-implemented yet; do not wire until the plan is picked up deliberately.
+Status: FIRST CUT LANDED — the decision seam ships
+(`src/context/buckle.context.judge.ts` + the pipeline's step 2.5 +
+the settings `context_policy` block + docker e2e oracle). What
+landed vs what stays parked is recorded under "Landed shape" below;
+the parked sections remain the port target for the fuller cuts.
+
+## Landed shape (the first cut — amendment)
+
+- **The seam is a callback**: `ContextJudge = (facts: ContextFacts)
+  => true | { system: stanza }`. TRUE is the default (inert — the
+  body rides byte-identical). `bootServer` builds the judge ONCE
+  from settings (stanzas resolved at boot, fail loud); a custom
+  judge can ride the same seam.
+- **Facts** (zod-strict, one shape): `route`, `principal`,
+  `principalKind?`, `model`, `bodyStart` (first 512 bytes — the
+  judging window, never the whole body), `repo?` (`x-fleet-repo`).
+  Absent header ⇒ absent fact ⇒ repo rules cannot fire.
+- **Policy** (settings block, config-over-code): `context_policy:
+  { inject: [{ text XOR file, principal?, models?, bodyContains? }]
+  }`. Dimensions match with AND semantics; `models` is exact-or-
+  prefix; first match wins; no dimensions = catch-all.
+- **Mechanics**: ORIGINATING requests only (an empty hop path proves
+  origin); the stanza is prepended as the FIRST system message
+  through `InjectableChatBody` (zod, passthrough — everything else
+  rides verbatim; a non-chat body is never touched). Hop arrivals
+  are never re-judged.
+- **Tests**: unit matrix (inert default, AND dimensions, prefix
+  models, boot-custody file reads, facts drift) + the docker oracle
+  (the stub answers "injected"/"plain" from the body it SAW — b2
+  carries a policy, b1/b3 prove byte-identical rides).
+
+Parked for the fuller cuts: `lane`/`work`/`hub` facts, `repo_file`
++ ssh-key custody, per-rule ids + OTel span attrs + the
+`buckle_context_injections_total` counter, dialect-aware merging
+(the first cut targets the openai chat shape the fleet rides).
 
 ## The law this serves
 

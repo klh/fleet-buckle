@@ -137,6 +137,13 @@ for (const unit of UNITS) {
     const body = ChatEcho.parse(await chat.json());
     expect(body.id).toBe("stub-chat"); // engine passthrough, stub echo
 
+    // CONTEXT INJECTION oracle — the stub answers from the body it
+    // SAW: b2's policy stanza rides system-first ⇒ "injected";
+    // policy-free units ride byte-identical ⇒ "plain" (the default
+    // is NONE — inert unless a declared policy matches)
+    const answer = body.choices?.[0]?.message?.content ?? "";
+    expect(answer).toBe(unit.label === "b2" ? "injected" : "plain");
+
     // unknown model fails LOUD (problem+json, never the engine's 404)
     const unknown = await fetch(`${unit.base}/v1/chat/completions`, {
       method: "POST",
@@ -165,12 +172,37 @@ for (const unit of UNITS) {
     // live stats — grant-gated overview reflects the chatted traffic
     const stats = await fetch(`${unit.base}/v1/stats`, { headers: AUTH });
     expect(stats.status).toBe(200);
+    // engine telemetry SURFACED (litellm's own /metrics + spend —
+    // never re-counted): reachable with scalars banked; spend folds
+    // honestly when the engine has no DB (nulls, never guesses)
     const statsBody = BuckleStatsResponse.parse(await stats.json());
+    expect(statsBody.self.engine?.reachable).toBe(true);
     expect(statsBody.self.hub).toBe(unit.label);
     expect(
       statsBody.self.principals.find((p) => p.principal === "carol@fleet")
         ?.requests ?? 0,
     ).toBeGreaterThanOrEqual(1);
+
+    // engine telemetry — litellm's OWN counters, surfaced (never
+    // re-counted). The prometheus multiproc dir banks asynchronously
+    // after the rode traffic, so the series appear EVENTUALLY: a
+    // bounded total poll on the stats face (reachable now, series
+    // within seconds)
+    await expect
+      .poll(
+        async () => {
+          try {
+            const body = BuckleStatsResponse.parse(
+              await (await fetch(`${unit.base}/v1/stats`, { headers: AUTH })).json(),
+            );
+            return Object.keys(body.self.engine?.series ?? {}).length;
+          } catch {
+            return -1;
+          }
+        },
+        { timeout: 20_000 },
+      )
+      .toBeGreaterThan(0);
 
     // metrics — the traffic landed in the Prometheus face (warm-up
     // polls may have bumped the counter; assert the line with a

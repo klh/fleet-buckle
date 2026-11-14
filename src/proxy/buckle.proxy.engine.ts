@@ -8,7 +8,7 @@ import { Fault } from "../schemas/buckle.fault.zod.ts";
 import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
 import { bodyText, httpSend, parseJson } from "../fault.ts";
 import type { TokenReader } from "../federation/buckle.federation.peer.ts";
-import { continueTraceparent } from "../live/buckle.live.trace.ts";
+import { continueTraceparent } from "../trace/buckle.trace.export.ts";
 
 /** the engine outcome for a unit with no engine configured — the
  *  leg answers a typed fault, never a crash (relay-only units) */

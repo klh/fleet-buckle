@@ -25,10 +25,18 @@ import {
 import { buildFederatedCatalog } from "../catalog/buckle.catalog.view.ts";
 import { hopChat, type HopOutcome } from "./buckle.proxy.hop.ts";
 import { engineChat, usageOf } from "./buckle.proxy.engine.ts";
-import type { MetricsRegistry } from "../live/buckle.live.metrics.ts";
-import type { LiveTracker } from "../live/buckle.live.tracker.ts";
+import {
+  failedEventOf,
+  openedEventOf,
+  servedEventOf,
+  type EventBus,
+  type FaultKindValue,
+  type Leg,
+} from "../events/buckle.events.bus.ts";
 import { parseJson } from "../fault.ts";
+import { pick } from "../pick.ts";
 import { problemResponse } from "../problem.ts";
+import { ContextFacts, inertJudge, type ContextJudge } from "../context/buckle.context.judge.ts";
 
 export { problemResponse };
 
@@ -59,6 +67,23 @@ export const ServedOutcomeSchema = z
   .strict();
 type ServedOutcome = z.output<typeof ServedOutcomeSchema>;
 
+/** a chat body we may prepend into: messages is an array, everything
+ *  else rides passthrough (the engine owns its own face) */
+const InjectableChatBody = z.object({ messages: z.array(z.unknown()) }).passthrough();
+
+/** the ONE sanctioned body rewrite: the stanza becomes the FIRST
+ *  system message (merged ahead of any existing system prefix). A
+ *  non-chat-shaped body is returned untouched — injection never
+ *  corrupts what it does not understand. */
+function injectedBodyOf(raw: string, stanza: string): string {
+  const json = parseJson(raw);
+  if (!json.ok) return raw;
+  const body = InjectableChatBody.safeParse(json.data);
+  if (!body.success) return raw;
+  body.data.messages.unshift({ role: "system", content: stanza });
+  return JSON.stringify(body.data);
+}
+
 function servedResponse(outcome: ServedOutcome): Response {
   return new Response(outcome.text, {
     status: outcome.status,
@@ -79,36 +104,80 @@ function servedResponse(outcome: ServedOutcome): Response {
  *  constructor — never a fake z.custom parse). */
 export function createForwardCtx(parts: {
   settings: BuckleSettings;
-  metrics: MetricsRegistry;
-  live: LiveTracker;
+  bus: EventBus;
+  judge?: ContextJudge;
   principal: string;
   tokenOf: TokenReader;
 }) {
   const kind = parts.settings.access?.principals.find(
     (p) => p.id === parts.principal,
   )?.kind;
-  return { ...parts, kind } as const;
+  // the judge defaults INERT: no injection unless a policy says so
+  return { judge: inertJudge, ...parts, kind } as const;
 }
 type ForwardCtx = ReturnType<typeof createForwardCtx>;
 
-/** settle a SERVED outcome (the shared surface): count the request,
- *  bank the usage tokens, raw bytes back out with the chain named */
+/** settle a SERVED outcome (the shared surface): the event rides the
+ *  bus through the shared constructor (collectors bank usage +
+ *  counters asynchronously from the face's point of view), raw bytes
+ *  back out with the chain named */
 function settleServed(
   ctx: ForwardCtx,
-  model: string,
-  outcome: ServedOutcome,
+  input: {
+    model: string;
+    leg: Leg;
+    openedAt: number;
+    peer?: string | undefined;
+    outcome: ServedOutcome;
+  },
 ): Response {
-  ctx.metrics.countRequest(model);
-  ctx.live.close(ctx.principal, model, usageOf(outcome.text));
-  return servedResponse(outcome);
+  const at = Date.now();
+  ctx.bus.emit(
+    servedEventOf({
+      at,
+      principal: ctx.principal,
+      model: input.model,
+      leg: input.leg,
+      peer: input.peer,
+      status: input.outcome.status,
+      tokens: usageOf(input.outcome.text),
+      latencyMs: at - input.openedAt,
+    }),
+  );
+  return servedResponse(input.outcome);
 }
 
-/** settle a FAILED outcome (the shared half): the tracker closes at
- *  zero, the request still counts — leg-specific verdicts answer
- *  after this, locally narrowed */
-function settleFailed(ctx: ForwardCtx, model: string): void {
-  ctx.live.close(ctx.principal, model, 0);
-  ctx.metrics.countRequest(model);
+/** settle a FAILED outcome (the shared half): the failed event rides
+ *  the bus; leg-specific verdicts answer after this, locally narrowed */
+function settleFailed(
+  ctx: ForwardCtx,
+  input: {
+    model: string;
+    leg: Leg;
+    openedAt: number;
+    peer?: string | undefined;
+    fault: FaultKindValue;
+  },
+): void {
+  const at = Date.now();
+  ctx.bus.emit(
+    failedEventOf({
+      at,
+      principal: ctx.principal,
+      model: input.model,
+      leg: input.leg,
+      peer: input.peer,
+      fault: input.fault,
+      latencyMs: at - input.openedAt,
+    }),
+  );
+}
+
+/** the opened half both legs share — the ONE emit site for the kind */
+function emitOpened(ctx: ForwardCtx, model: string, at: number): void {
+  ctx.bus.emit(
+    openedEventOf({ at, principal: ctx.principal, principalKind: ctx.kind, model }),
+  );
 }
 
 export async function forwardChat(
@@ -119,7 +188,7 @@ export async function forwardChat(
   const { settings, principal, tokenOf } = ctx;
   // 1 — the body must name a model (drift fails loud); the raw bytes
   //     are read ONCE and ride untouched from here on
-  const raw = await req.text();
+  let raw = await req.text();
   const model = modelOf(raw);
   if (model === null)
     return problemResponse("validation", "chat body missing model");
@@ -133,6 +202,26 @@ export async function forwardChat(
       "federation loop refused",
       `${settings.hub.label} is already on ${HOP_PATH_HEADER}: ${inboundPath.join(",")}`,
     );
+
+  // 2.5 — CONTEXT INJECTION (the ONE sanctioned body mutation):
+  //      ORIGINATING requests only (a hop arrival already had its
+  //      chance at its own ingress — an empty path header proves
+  //      origin); the judge gets the facts needed to decide (who,
+  //      what they asked — the body's start — which model) and TRUE
+  //      is the default: the body rides byte-identical, verbatim
+  if (inboundPath.length === 0) {
+    const verdict = ctx.judge(
+      ContextFacts.parse({
+        route: "chat",
+        principal,
+        ...pick("principalKind", ctx.kind),
+        model,
+        bodyStart: raw.slice(0, 512),
+        ...pick("repo", req.headers.get("x-fleet-repo")),
+      }),
+    );
+    if (verdict !== true) raw = injectedBodyOf(raw, verdict.system);
+  }
 
   // 3 — the chain budget: an already-exhausted deadline refuses before
   //     ANY peer traffic — a chain can never outlive its origin's budget
@@ -221,16 +310,32 @@ async function serveHop(
       hopPeer.error.issues.map((i) => i.path.join(".")).join(", "),
     );
 
-  ctx.live.open(ctx.principal, ctx.kind, model);
+  const openedAt = Date.now();
+  emitOpened(ctx, model, openedAt);
   const outcome = await hopChat(
     settings.hub.label,
     hopPeer.data,
     ride,
     settings.timeouts.hop_ms,
   );
-  if (outcome.kind === "served") return settleServed(ctx, model, outcome);
-  settleFailed(ctx, model);
+  if (outcome.kind === "served")
+    return settleServed(ctx, {
+      model, leg: "hop", openedAt, peer: peerLabel, outcome,
+    });
+  settleFailed(ctx, {
+    model, leg: "hop", openedAt, peer: peerLabel, fault: faultKindOf(outcome),
+  });
   return verdictOf(peerLabel, outcome);
+}
+
+/** a failed hop outcome narrowed into the taxonomy: the peer's 429
+ *  RELAYS as a denial (retry-after rides the verdict), a refusal is
+ *  a denial (status answered), a transport fault is itself */
+function faultKindOf(
+  outcome: Exclude<HopOutcome, { kind: "served" }>,
+): FaultKindValue {
+  if (outcome.kind === "fault") return outcome.fault.kind;
+  return "denied";
 }
 
 /** the engine leg: provider-origin model → OUR litellm */
@@ -239,10 +344,14 @@ async function serveEngine(
   ride: HopRide,
   model: string,
 ): Promise<Response> {
-  ctx.live.open(ctx.principal, ctx.kind, model);
+  const openedAt = Date.now();
+  emitOpened(ctx, model, openedAt);
   const outcome = await engineChat(ctx.settings, ride.body, ride.traceparent, ctx.tokenOf);
-  if (outcome.kind === "served") return settleServed(ctx, model, outcome);
-  settleFailed(ctx, model);
+  if (outcome.kind === "served")
+    return settleServed(ctx, { model, leg: "engine", openedAt, outcome });
+  settleFailed(ctx, {
+    model, leg: "engine", openedAt, fault: outcome.fault.kind,
+  });
   // outcome.kind === "fault" — named, already logged at the seam
   return problemResponse(
     "unavailable",

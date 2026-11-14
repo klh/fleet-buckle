@@ -13,11 +13,25 @@ import {
   exportSpan,
   newTraceId,
   traceIdOf,
-} from "./live/buckle.live.trace.ts";
+} from "./trace/buckle.trace.export.ts";
 import { loadSettings, readToken, resolveSettingsPaths, type SettingsPaths } from "./settings.ts";
-import { createMetrics } from "./live/buckle.live.metrics.ts";
-import { createLive, type LiveTracker } from "./live/buckle.live.tracker.ts";
-import { createStatsCache, statsBody } from "./live/buckle.live.stats.ts";
+import {
+  createMetrics,
+  subscribeExposition,
+  type MetricsRegistry,
+} from "./metrics/buckle.metrics.exposition.ts";
+import {
+  createLive,
+  subscribeTracker,
+  type LiveTracker,
+} from "./metrics/buckle.metrics.tracker.ts";
+import { createStatsCache, statsBody } from "./metrics/buckle.metrics.stats.ts";
+import {
+  createEngineCollector,
+  type EngineTelemetrySource,
+} from "./metrics/buckle.metrics.engine.ts";
+import { createEventBus } from "./events/buckle.events.bus.ts";
+import { judgeFromSettings, type ContextJudge } from "./context/buckle.context.judge.ts";
 import { authenticate, bearerOf, holdsScope } from "./access/buckle.access.registry.ts";
 import { createLimiter, resolveRpmCap } from "./admission/buckle.admission.limits.ts";
 import { buildFederatedCatalog } from "./catalog/buckle.catalog.view.ts";
@@ -30,11 +44,14 @@ import { pick } from "./pick.ts";
  *  constructor). */
 function createServerState(parts: {
   settings: BuckleSettings;
-  metrics: ReturnType<typeof createMetrics>;
+  bus: ReturnType<typeof createEventBus>;
+  metrics: MetricsRegistry;
   live: LiveTracker;
   limiter: ReturnType<typeof createLimiter>;
   tokenOf: typeof readToken;
   stats: ReturnType<typeof createStatsCache>;
+  engine: EngineTelemetrySource;
+  judge: ContextJudge;
 }) {
   return parts;
 }
@@ -96,8 +113,8 @@ const chatFace: Face = async (srv, rq) => {
   return forwardChat(
     createForwardCtx({
       settings: srv.settings,
-      metrics: srv.metrics,
-      live: srv.live,
+      bus: srv.bus,
+      judge: srv.judge,
       principal: rq.principal as string,
       tokenOf: srv.tokenOf,
     }),
@@ -124,7 +141,7 @@ const statsFace: Face = async (srv, rq) => {
   const denied = requireScope(srv, rq.principal, "stats.read");
   if (denied !== null) return denied;
   return Response.json(
-    await statsBody(srv.settings, srv.live, srv.stats),
+    await statsBody(srv.settings, srv.live, srv.stats, srv.engine),
     { headers: noStore },
   );
 };
@@ -168,15 +185,28 @@ const routes: Record<string, Face> = {
 const notFoundFace: Face = async () => new Response("not found", { status: 404 });
 
 export function bootServer(input: { settings: BuckleSettings; port?: number }) {
+  // the EVENT BUS: the pipeline's one write seam; collectors
+  // subscribe here — the faces never know who is counting
+  const bus = createEventBus();
+  const metrics = createMetrics(input.settings.hub.label);
+  const live = createLive(input.settings.hub.label);
+  subscribeTracker(bus, live);
+  subscribeExposition(bus, metrics);
+  // the CONTEXT JUDGE: built ONCE (stanzas resolved at boot, fail
+  // loud) — the chat face rides the decision, never the build
+  const judge = judgeFromSettings(input.settings);
   const srv = createServerState({
     settings: input.settings,
-    metrics: createMetrics(input.settings.hub.label),
-    live: createLive(input.settings.hub.label),
+    bus,
+    metrics,
+    live,
     limiter: createLimiter(),
     // THE token reader (secrets are paths, never values) — one
     // implementation, in the settings home; faults logged there
     tokenOf: readToken,
     stats: createStatsCache(input.settings, readToken),
+    engine: createEngineCollector(input.settings, readToken),
+    judge,
   });
   const { settings } = srv;
   return Bun.serve({

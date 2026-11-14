@@ -1,4 +1,4 @@
-// live/buckle.live.tracker.ts — the live overview state machine: per-model
+// metrics/buckle.metrics.tracker.ts — the live overview state machine: per-model
 // inflight + requests + tokens (rolling-window tps), per-principal
 // sessions (requests/tokens/connected_since). The proxy pipeline
 // opens/closes around each forwarded chat; snapshot() renders the
@@ -7,6 +7,7 @@
 // (buckle.principal.zod) — never an inline union, never a cast.
 import { z } from "zod";
 import { BucklePrincipalKind } from "../schemas/buckle.principal.zod.ts";
+import type { BuckleEvent, EventBus, EventSubscriber } from "../events/buckle.events.bus.ts";
 import type { BuckleStatsSnapshot } from "../schemas/buckle.stats.zod.ts";
 import { pick } from "../pick.ts";
 
@@ -211,4 +212,16 @@ export function createLive(hub: string) {
       };
     },
   };
+}
+
+/** the tracker as a BUS SUBSCRIBER — the pipeline emits, this
+ *  collects: opened → openOn, served → closeOn(usage), failed →
+ *  closeOn(0). O(1) in-memory bookkeeping (the non-blocking contract). */
+export function subscribeTracker(bus: EventBus, live: LiveTracker): void {
+  const collect: EventSubscriber = (event: BuckleEvent): void => {
+    if (event.kind === "request.opened") live.open(event.principal, event.principalKind, event.model);
+    else if (event.kind === "request.served") live.close(event.principal, event.model, event.tokens);
+    else live.close(event.principal, event.model, 0);
+  };
+  bus.subscribe(collect);
 }

@@ -1,4 +1,4 @@
-// buckle.live.tracker.test.ts — the live overview: /v1/stats is
+// buckle.metrics.tracker.test.ts — the live overview: /v1/stats is
 // grant-gated (stats.read); the forward loop RECORDS per-principal +
 // per-model usage; inflight is true DURING a slow engine call. Worlds
 // ride the kit; responses parse through BuckleStatsResponse.
@@ -12,7 +12,7 @@ import {
 } from "../kit.ts";
 import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
 import { BuckleStatsResponse } from "../schemas/buckle.stats.zod.ts";
-import { TrackedPrincipalState } from "./buckle.live.tracker.ts";
+import { TrackedPrincipalState } from "./buckle.metrics.tracker.ts";
 
 const DIR = mintKeyDir({ "principal.wire@fleet.test.key": "bksk_wire_test" });
 const AUTH = { authorization: "Bearer bksk_wire_test" };
