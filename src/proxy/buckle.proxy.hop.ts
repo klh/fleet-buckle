@@ -88,14 +88,14 @@ function respondOf(self: string, sent: Response, text: string): HopOutcome {
  *  here. `timeoutMs` is settings.timeouts.hop_ms — the chain budget
  *  can only TIGHTEN it. */
 /** one hop ask, bundled — the peer, the ride, the budget, the face */
-export const HopChatCall = z.object({
+const _HopChatCall = z.object({
   self: z.string(),
   peer: HopPeerSchema,
   ride: HopRideSchema,
   timeoutMs: z.number(),
   urlPath: z.string(),
 });
-export type HopChatCall = z.output<typeof HopChatCall>;
+type HopChatCall = z.output<typeof _HopChatCall>;
 
 export async function hopChat(call: HopChatCall): Promise<HopOutcome> {
   const { self, peer, ride, timeoutMs, urlPath } = call;

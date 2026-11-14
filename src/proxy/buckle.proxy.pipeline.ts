@@ -160,12 +160,12 @@ function servedResponse(
 /** what the legs need beyond ctx+ride: the wire face asked + the
  *  attribution that survived ingress (the fired rule's id, the lane
  *  slug) — ONE bundle, no trailing parameter drift */
-export const LegStampSchema = z.object({
+const _LegStampSchema = z.object({
   route: z.enum(["chat", "messages"]),
   laneSlug: z.string(),
   injectedRule: z.string().optional(),
 });
-type LegStamp = z.output<typeof LegStampSchema>;
+type LegStamp = z.output<typeof _LegStampSchema>;
 
 /** the LANE PIN: a /w/<slug> launch URL whose slug HAS a row pins
  *  the model (the pin wins over the body). A slug with NO row is
@@ -205,10 +205,10 @@ function earlyRefusal(settings: BuckleSettings, req: Request): Response | null {
  *  verdict's id stamps the response header */
 /** the ask under inspection: which model the body names + the raw
  *  bytes (in and — possibly injected — back out) */
-export const BodyAskSchema = z.object({ model: z.string(), raw: z.string() });
-export const BodyRideSchema = z.object({ raw: z.string(), injectedRule: z.string().optional() });
-type BodyAsk = z.output<typeof BodyAskSchema>;
-type BodyRide = z.output<typeof BodyRideSchema>;
+const _BodyAskSchema = z.object({ model: z.string(), raw: z.string() });
+const _BodyRideSchema = z.object({ raw: z.string(), injectedRule: z.string().optional() });
+type BodyAsk = z.output<typeof _BodyAskSchema>;
+type BodyRide = z.output<typeof _BodyRideSchema>;
 
 function injectContext(ctx: ForwardCtx, req: Request, stamp: LegStamp, ask: BodyAsk): BodyRide {
   if (hopPathOf(req.headers.get(HOP_PATH_HEADER)).length > 0) return { raw: ask.raw };

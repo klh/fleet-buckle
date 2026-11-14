@@ -42,7 +42,7 @@ const GATE_HOLD_MS = 250;
 const STALE_LOCK_MS = 10 * 60 * 1000;
 
 // ── the shared doc: phase rows + the sweep mutex ──────────────────
-export const RepoDocValue = z.object({
+const _RepoDocValue = z.object({
   rows: z.record(z.string(), PhaseRow),
   busy: z.boolean(),
   busySince: z.number(),
@@ -50,7 +50,7 @@ export const RepoDocValue = z.object({
 const RepoDoc = defineDoc({
   kind: "repoagent.state",
   version: 1,
-  initial: (): z.output<typeof RepoDocValue> => ({ rows: {}, busy: false, busySince: 0 }),
+  initial: (): z.output<typeof _RepoDocValue> => ({ rows: {}, busy: false, busySince: 0 }),
   scope: "conversation",
   history: "latest",
   fork: "initial",
@@ -60,11 +60,11 @@ const RepoDoc = defineDoc({
 });
 
 // ── task shapes (zod-derived; checkpoints are literal phase tags) ──
-export const WorkerInputSchema = z.object({ boot: z.string() });
-export type WorkerInput = z.output<typeof WorkerInputSchema>;
+const _WorkerInputSchema = z.object({ boot: z.string() });
+type WorkerInput = z.output<typeof _WorkerInputSchema>;
 
 export const KickInputSchema = z.object({ requestId: z.string(), event: z.string() });
-export type KickInput = z.output<typeof KickInputSchema>;
+type KickInput = z.output<typeof KickInputSchema>;
 
 type WorkerCheckpoint = { phase: "idle" } | { phase: "gate" } | { phase: "sweep" };
 type KickCheckpoint = { phase: "gate" } | { phase: "sweep" };

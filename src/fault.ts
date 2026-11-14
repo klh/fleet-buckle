@@ -50,11 +50,11 @@ export function attempt<T>(run: () => T, failed: (fault: Fault) => T): T {
   }
 }
 
-export const HttpSendResultSchema = z.union([
+const _HttpSendResultSchema = z.union([
   z.object({ ok: z.literal(true), response: z.instanceof(Response) }),
   z.object({ ok: z.literal(false), fault: Fault }),
 ]);
-type HttpSendResult = z.output<typeof HttpSendResultSchema>;
+type HttpSendResult = z.output<typeof _HttpSendResultSchema>;
 
 /** THE outbound seam: fetch with a bounded wait, every failure a typed
  *  Fault. This is the one try/catch in src/ (the law's only sanction):

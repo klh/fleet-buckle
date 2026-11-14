@@ -57,7 +57,7 @@ export function usageOf(text: string): number {
 const LITELLM_TAGS_HEADER = "x-litellm-tags";
 
 /** one engine call, bundled — the chat seam's whole ask */
-export const EngineCall = z.object({
+const _EngineCall = z.object({
   settings: z.custom<BuckleSettings>(),
   raw: z.string(),
   traceparent: z.string(),
@@ -65,7 +65,7 @@ export const EngineCall = z.object({
   enginePath: z.string(),
   fleetTags: z.string().default(""),
 });
-export type EngineCall = z.output<typeof EngineCall>;
+type EngineCall = z.output<typeof _EngineCall>;
 
 export async function engineChat(call: EngineCall): Promise<EngineOutcome> {
   const { settings, raw, traceparent, tokenOf, enginePath, fleetTags } = call;

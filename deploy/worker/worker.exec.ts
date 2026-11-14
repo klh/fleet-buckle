@@ -40,7 +40,7 @@ const awaitExit = async (id: string, timeoutMs = 120_000): Promise<number> => {
 
 /** run one small container and return its logs — the microworker that
  *  performs a bounded piece of work (a compile check, a syntax pass) */
-export async function microworker(image: string, cmd: string[]): Promise<string> {
+async function microworker(image: string, cmd: string[]): Promise<string> {
   const id = await createContainer(image, cmd);
   const start = await dockerCall(`/containers/${id}/start`, { method: "POST" });
   if (!start.ok) throw new Error(`docker start: ${start.status}`);

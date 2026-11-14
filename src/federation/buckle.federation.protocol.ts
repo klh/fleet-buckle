@@ -61,7 +61,6 @@ export const HopPeerSchema = z
     token: z.string().nullable(),
   })
   .strict();
-export type HopPeer = z.output<typeof HopPeerSchema>;
 
 /** the RIDE — one request's protocol state, carried into the hop:
  *  the verbatim body, the continued trace, the inbound loop path,
