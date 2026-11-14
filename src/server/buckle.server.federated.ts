@@ -25,7 +25,7 @@ export async function buildFederatedCatalog(
   tokenOf: TokenReader,
   traceparent: string,
 ): Promise<BuckleModelsResponse> {
-  const own = await buildCatalog(settings, traceparent);
+  const own = await buildCatalog(settings, traceparent, tokenOf);
   const grant = (settings.access?.grants ?? []).find(
     (g) => g.principal === principal,
   );

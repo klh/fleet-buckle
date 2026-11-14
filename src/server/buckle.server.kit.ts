@@ -11,7 +11,10 @@ import { z } from "zod";
 import { bootServer } from "./buckle.server.main.ts";
 import { loadSettings } from "./buckle.server.settings.ts";
 import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
-import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
+import {
+  mergeSettings,
+  type BuckleSettings,
+} from "../schemas/buckle.settings.zod.ts";
 
 export const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -67,7 +70,7 @@ export function mintKeyDir(entries: Record<string, string>): string {
   return dir;
 }
 
-/** a provider /v1/models stub: serves `rows` verbatim, 404 elsewhere */
+/** a provider catalog stub: serves `rows` at /models, 404 elsewhere */
 export function stubProvider(rows: { id: string }[]): {
   port: number;
   stop: () => void;
@@ -75,7 +78,7 @@ export function stubProvider(rows: { id: string }[]): {
   const server = Bun.serve({
     port: 0,
     fetch: (req) => {
-      if (new URL(req.url).pathname === "/v1/models")
+      if (new URL(req.url).pathname === "/models")
         return Response.json({ data: rows });
       return new Response("not found", { status: 404 });
     },
@@ -132,11 +135,12 @@ export function recorder(target: number): {
   return { port: server.port ?? 0, stop: () => server.stop(true), seen };
 }
 
-/** defaults ⊕ b1 — the base every unit world composes from */
+/** defaults ⊕ b1 — the base every unit world composes from (the
+ *  three-buckle topology lives in test/deploy/settings) */
 export async function loadBaseSettings(): Promise<BuckleSettings> {
   return loadSettings({
     defaults: join(ROOT, "deploy/settings/default.settings.json5"),
-    settings: join(ROOT, "deploy/settings/b1.settings.json5"),
+    settings: join(ROOT, "test/deploy/settings/b1.settings.json5"),
   });
 }
 
@@ -153,10 +157,11 @@ export async function bootBuckle(opts: {
   engineUrl?: string;
 }): Promise<{ base: string; port: number; stop: () => void }> {
   const base = await loadBaseSettings();
-  const settings: BuckleSettings = {
-    ...base,
-    hub: { ...base.hub, label: opts.label },
-    keys: { ...(base.keys ?? {}), principals_dir: opts.dir },
+  // compose as a RAW overlay, re-parsed through the one loader — the
+  // provider registry resolves url/dialect at parse, never by cast
+  const settings = mergeSettings(base, {
+    hub: { label: opts.label },
+    keys: { principals_dir: opts.dir },
     access: opts.access,
     hubs: Object.fromEntries(
       Object.entries(opts.hubs ?? {}).map(([label, url]) => [
@@ -170,7 +175,7 @@ export async function bootBuckle(opts: {
     ...(opts.engineUrl === undefined
       ? {}
       : { engine: { url: opts.engineUrl } }),
-  };
+  });
   const server = bootServer({ settings, port: 0 });
   return {
     base: `http://127.0.0.1:${server.port}`,

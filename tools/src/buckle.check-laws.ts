@@ -54,14 +54,18 @@ for (const f of files.filter(
   }
 }
 
-// 2b. no hand-cast object literals (type law): responses parse through
-//     their zod wire schema — `x as { ... }` anywhere is a defect.
+// 2b. no hand-casts (type law): responses parse through their zod wire
+//     schema — `x as { ... }` anywhere is a defect, and so is a
+//     NAMED-type cast on a response body (`.json() as BuckleX`): the
+//     live bug it hid was the stats fold double-nesting peer bodies.
 for (const f of files.filter(
   (f) => f.endsWith(".ts") && /(\/src\/|\/tools\/|\/test\/)/.test(f),
 )) {
   const src = readFileSync(f, "utf8");
   if (/\)\s*as\s*\{/.test(src))
     errors.push(`${f}: hand-cast object literal (\`as { … }\`) — parse through the zod wire schema`);
+  if (/\.json\(\)\s*\)\s*as\s+[A-Z]/.test(src))
+    errors.push(`${f}: named-type cast on a response body (\`.json() as X\`) — safeParse it through the wire schema`);
 }
 
 // 2c. kit-ownership: key dirs, stubs, recorders, world builders live

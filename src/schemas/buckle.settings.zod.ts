@@ -4,6 +4,10 @@
 // deep-merged, then safeParse'd here — fail loud, never limp along.
 import { z } from "zod";
 import { BuckleAccessRegistry } from "./buckle.access.zod.ts";
+import {
+  KNOWN_PROVIDERS,
+  type KnownProviderLabel,
+} from "./buckle.provider.registry.zod.ts";
 
 /** A path to a 0600 secret file. The value never rides any artifact. */
 export const KeyPath = z.string().min(1);
@@ -15,11 +19,27 @@ export type KeyPath = z.output<typeof KeyPath>;
 import { BuckleLimits } from "./buckle.limits.zod.ts";
 export { BuckleLimits };
 
-/** A provider this buckle fronts (c). Keys are paths (c.2). */
+/** A provider entry as WRITTEN: url/dialect optional — the registry
+ *  of recognized providers supplies real defaults (an unknown label
+ *  without an explicit url fails loud at parse). */
+export const BuckleProviderEntry = z
+  .object({
+    url: z.url().optional(),
+    dialect: z.enum(["openai", "anthropic", "github_copilot"]).optional(),
+    key: KeyPath.optional(),
+    limits: BuckleLimits.optional(),
+    /** c.1 — per-model OVERRIDES only; the list itself is fetched. */
+    models: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+  })
+  .strict();
+export type BuckleProviderEntry = z.output<typeof BuckleProviderEntry>;
+
+/** A provider this buckle fronts (c), RESOLVED against the registry:
+ *  url and dialect always concrete. Keys are paths (c.2). */
 export const BuckleProvider = z
   .object({
     url: z.url(),
-    dialect: z.enum(["openai", "anthropic"]).optional(),
+    dialect: z.enum(["openai", "anthropic", "github_copilot"]),
     key: KeyPath.optional(),
     limits: BuckleLimits.optional(),
     /** c.1 — per-model OVERRIDES only; the list itself is fetched. */
@@ -27,6 +47,27 @@ export const BuckleProvider = z
   })
   .strict();
 export type BuckleProvider = z.output<typeof BuckleProvider>;
+
+/** providers as configured: every entry resolves url/dialect from the
+ *  registry of recognized providers unless the file overrides. */
+export const BuckleProviders = z
+  .record(z.string(), BuckleProviderEntry)
+  .transform((entries) => {
+    const resolved: Record<string, BuckleProvider> = {};
+    for (const [label, entry] of Object.entries(entries)) {
+      const known = KNOWN_PROVIDERS[label as KnownProviderLabel];
+      const url = entry.url ?? (known?.url as string | undefined);
+      if (url === undefined)
+        throw new Error(
+          `provider "${label}" has no url and is not a recognized provider — give it an explicit url or use one of: ${Object.keys(KNOWN_PROVIDERS).join(", ")}`,
+        );
+      const dialect = entry.dialect ?? known?.dialect;
+      if (dialect === undefined)
+        throw new Error(`provider "${label}" has no dialect and is not recognized — set dialect explicitly`);
+      resolved[label] = { ...entry, url, dialect };
+    }
+    return resolved;
+  });
 
 /** A DOWNSTREAM peer buckle (d). We pull its catalog; we never call up.
  *  token_file authenticates our pulls against that peer (d.1). */
@@ -101,8 +142,8 @@ export const BuckleSettings = z
       .optional(),
     /** per-buckle access registry (this buckle's OWN "AD domain"). */
     access: BuckleAccessRegistry.optional(),
-    /** c — providers configured on this hub. */
-    providers: z.record(z.string(), BuckleProvider).optional(),
+    /** c — providers configured on this hub (registry-resolved). */
+    providers: BuckleProviders.optional(),
     /** d — downstream peers. */
     hubs: z.record(z.string(), BucklePeer).optional(),
   })

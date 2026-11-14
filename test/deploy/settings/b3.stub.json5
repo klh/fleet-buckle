@@ -1,0 +1,6 @@
+// b3.stub.json5 — the STUB over-layer (see b1.stub.json5).
+{
+  providers: {
+    zai: { url: "http://zai-stub:8080" },
+  },
+}

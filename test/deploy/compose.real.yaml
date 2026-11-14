@@ -1,0 +1,132 @@
+# compose.real.yaml — the REAL-KEY federation topology: same three
+# units as compose.test.yaml (buckle + litellm engine + fleet-health
+# sidecar) but NO stubs and NO over layer — provider urls/dialects
+# default from the provider registry (the REAL endpoints), catalogs
+# pull live, engine legs were generated from the live catalogs, and
+# every key comes from the machine runtime home (rendered by
+# tools/src/buckle.real.ts — never committed). WIRING ONLY.
+#
+# Same 47xx host-port block as the stub stack: never both up.
+#   b1 4711/4712 (openrouter) → peers b2, b3
+#   b2 4721/4722 (ms copilot) → peer  b3
+#   b3 4731/4732 (zai)        → no peers
+#
+# ${REAL_HOME} (machine runtime home, 0600 real.env via --env-file)
+# carries: keys/ (minted principals + peer tokens + copied provider
+# keys), engine/ (generated real litellm yaml), copilot-tokens/ (the
+# PAT pre-seed litellm's github_copilot provider reads).
+#
+# The fleet-health sidecars build from the PINNED github tag (#v1.0.0).
+
+services:
+  # ── Jaeger: the tracing backend every unit exports to (OTLP) ──
+  jaeger:
+    image: jaegertracing/all-in-one:1.76.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+
+  # ── unit 1: openrouter ──
+  litellm1:
+    image: ghcr.io/berriai/litellm:v1.103.0
+    command: ["--config", "/etc/engine/openrouter.litellm.yaml", "--port", "4000"]
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?}
+    volumes:
+      - ${REAL_HOME}/engine/openrouter.litellm.yaml:/etc/engine/openrouter.litellm.yaml:ro
+  health1:
+    build: https://github.com/klh/fleet-health.git#v1.0.0
+    environment:
+      HEALTH_SETTINGS: /etc/health/settings.json5
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    volumes:
+      - ./health/h1.settings.json5:/etc/health/settings.json5:ro
+    ports:
+      - "4712:4112"
+    depends_on: [buckle1, jaeger]
+  buckle1:
+    build: ../..
+    environment:
+      BUCKLE_SETTINGS: /etc/buckle/settings.json
+      BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+      BUCKLE_ENGINE_URL: http://litellm1:4000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    volumes:
+      - ../../deploy/settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ./settings/b1.settings.json5:/etc/buckle/settings.json:ro
+      # real mode: no over layer — the registry's real urls apply
+      - ${REAL_HOME}/keys:/etc/buckle/keys:ro
+    ports:
+      - "4711:4111"
+    depends_on: [litellm1, jaeger]
+
+  # ── unit 2: ms copilot (github_copilot legs + PAT pre-seed) ──
+  litellm2:
+    image: ghcr.io/berriai/litellm:v1.103.0
+    command: ["--config", "/etc/engine/mscopilot.litellm.yaml", "--port", "4000"]
+    environment:
+      COPILOT_API_KEY: ${COPILOT_API_KEY:?}
+      GITHUB_COPILOT_TOKEN_DIR: /etc/copilot-tokens
+    volumes:
+      - ${REAL_HOME}/engine/mscopilot.litellm.yaml:/etc/engine/mscopilot.litellm.yaml:ro
+      - ${REAL_HOME}/copilot-tokens:/etc/copilot-tokens:ro
+  health2:
+    build: https://github.com/klh/fleet-health.git#v1.0.0
+    environment:
+      HEALTH_SETTINGS: /etc/health/settings.json5
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    volumes:
+      - ./health/h2.settings.json5:/etc/health/settings.json5:ro
+    ports:
+      - "4722:4212"
+    depends_on: [buckle2, jaeger]
+  buckle2:
+    build: ../..
+    environment:
+      BUCKLE_SETTINGS: /etc/buckle/settings.json
+      BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+      BUCKLE_ENGINE_URL: http://litellm2:4000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    volumes:
+      - ../../deploy/settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ./settings/b2.settings.json5:/etc/buckle/settings.json:ro
+      - ${REAL_HOME}/keys:/etc/buckle/keys:ro
+    ports:
+      - "4721:4111"
+    depends_on: [litellm2, jaeger]
+
+  # ── unit 3: zai ──
+  litellm3:
+    image: ghcr.io/berriai/litellm:v1.103.0
+    command: ["--config", "/etc/engine/zai.litellm.yaml", "--port", "4000"]
+    environment:
+      ZAI_API_KEY: ${ZAI_API_KEY:?}
+    volumes:
+      - ${REAL_HOME}/engine/zai.litellm.yaml:/etc/engine/zai.litellm.yaml:ro
+  health3:
+    build: https://github.com/klh/fleet-health.git#v1.0.0
+    environment:
+      HEALTH_SETTINGS: /etc/health/settings.json5
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    volumes:
+      - ./health/h3.settings.json5:/etc/health/settings.json5:ro
+    ports:
+      - "4732:4312"
+    depends_on: [buckle3, jaeger]
+  buckle3:
+    build: ../..
+    environment:
+      BUCKLE_SETTINGS: /etc/buckle/settings.json
+      BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+      BUCKLE_ENGINE_URL: http://litellm3:4000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    volumes:
+      - ../../deploy/settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ./settings/b3.settings.json5:/etc/buckle/settings.json:ro
+      - ${REAL_HOME}/keys:/etc/buckle/keys:ro
+    ports:
+      - "4731:4111"
+    depends_on: [litellm3, jaeger]

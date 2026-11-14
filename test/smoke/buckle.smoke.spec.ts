@@ -77,7 +77,7 @@ test("schema contracts hold (openapi in sync, fixtures parse, settings compose)"
   const { default: defaults } = await import(
     "../../deploy/settings/default.settings.json5"
   );
-  const { default: b1 } = await import("../../deploy/settings/b1.settings.json5");
+  const { default: b1 } = await import("../../test/deploy/settings/b1.settings.json5");
   const { default: demoTree } = await import(
     "../deploy/fixtures/tree.demo.json"
   );

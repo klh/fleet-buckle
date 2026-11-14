@@ -50,7 +50,7 @@ export async function buildTree(
   tokenOf: TokenReader,
   traceparent: string,
 ): Promise<{ self: BuckleTreeNode }> {
-  const catalog = await buildCatalog(settings, traceparent);
+  const catalog = await buildCatalog(settings, traceparent, tokenOf);
   const snap = live.snapshot();
   const peers: BuckleTreePeer[] = [];
   for (const [label, peer] of Object.entries(settings.hubs ?? {})) {

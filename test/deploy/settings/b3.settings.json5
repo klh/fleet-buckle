@@ -24,10 +24,8 @@
     ],
   },
   providers: {
-    zai: {
-      url: "http://zai-stub:8080",
-      dialect: "openai",
-      key: "/etc/buckle/keys/zai.key",
-    },
+    // url/dialect default from the provider registry (the REAL
+    // endpoint); the stub compose injects its stub url as the over layer
+    zai: { key: "/etc/buckle/keys/zai.key" },
   },
 }

@@ -3,7 +3,10 @@
 // last_seen. The forward loop records around the engine hop; /v1/stats
 // renders the snapshot. Peer snapshots (federation) join at the route.
 import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
-import type { BuckleStatsSnapshot } from "../schemas/buckle.stats.zod.ts";
+import {
+  BuckleStatsResponse,
+  type BuckleStatsSnapshot,
+} from "../schemas/buckle.stats.zod.ts";
 import type { TokenReader } from "./buckle.server.federated.ts";
 
 const TPS_WINDOW_MS = 10_000;
@@ -94,8 +97,10 @@ export async function federatedStats(
         headers,
         signal: AbortSignal.timeout(1500),
       });
+      // the peer answers OUR wire face — parse it, never hand-cast;
+      // its SELF snapshot is what folds into our peers record
       peers[label] = r.ok
-        ? ((await r.json()) as BuckleStatsSnapshot)
+        ? BuckleStatsResponse.parse(await r.json()).self
         : null;
     } catch {
       peers[label] = null;

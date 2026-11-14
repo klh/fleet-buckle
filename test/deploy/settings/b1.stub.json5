@@ -1,0 +1,8 @@
+// b1.stub.json5 — the STUB over-layer: compose.test mounts this as
+// BUCKLE_SETTINGS_OVER so the head's openrouter rows come from the
+// stub instead of the registry's real endpoint.
+{
+  providers: {
+    openrouter: { url: "http://openrouter-stub:8080" },
+  },
+}

@@ -5,12 +5,20 @@
 // metadata rides verbatim. The federated VIEW lives in
 // buckle.server.federated.ts — this module only fetches own rows.
 import { z } from "zod";
-import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
+import type {
+  BuckleSettings,
+  BuckleProvider,
+} from "../schemas/buckle.settings.zod.ts";
 import {
   BuckleModelWire,
   type BuckleModelsResponse,
 } from "../schemas/buckle.model.wire.zod.ts";
+import {
+  KNOWN_PROVIDERS,
+  type KnownProviderLabel,
+} from "../schemas/buckle.provider.registry.zod.ts";
 import { continueTraceparent } from "./buckle.server.telemetry.ts";
+import type { TokenReader } from "./buckle.server.federated.ts";
 
 const CACHE_TTL_MS = 2000;
 export const FETCH_TIMEOUT_MS = 1500;
@@ -31,14 +39,24 @@ const ProviderRowSchema = z.object({ id: z.unknown() }).passthrough();
 async function fetchProvider(
   label: string,
   url: string,
+  tokenOf: TokenReader,
+  provider: BuckleProvider,
   traceparent: string,
 ): Promise<BuckleModelWire[]> {
   const key = `${label}|${url}`;
   const hit = cache.get(key);
   if (hit !== undefined && Date.now() - hit.at < CACHE_TTL_MS) return hit.rows;
   try {
-    const r = await fetch(`${url.replace(/\/$/, "")}/v1/models`, {
-      headers: { traceparent: continueTraceparent(traceparent) },
+    // every recognized provider serves its catalog at {url}/models;
+    // the registry carries any headers the seat demands
+    const secret = provider.key !== undefined ? tokenOf(provider.key) : null;
+    const known = KNOWN_PROVIDERS[label as KnownProviderLabel];
+    const r = await fetch(`${url.replace(/\/$/, "")}/models`, {
+      headers: {
+        traceparent: continueTraceparent(traceparent),
+        ...(secret === null ? {} : { authorization: `Bearer ${secret}` }),
+        ...(known?.catalog_headers ?? {}),
+      },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!r.ok) return cacheEmpty(key, hit);
@@ -75,10 +93,13 @@ function cacheEmpty(key: string, previous: CacheEntry | undefined): BuckleModelW
 export async function buildCatalog(
   settings: BuckleSettings,
   traceparent: string,
+  tokenOf: TokenReader = () => null,
 ): Promise<BuckleModelsResponse> {
   const providers = Object.entries(settings.providers ?? {});
   const batches = await Promise.all(
-    providers.map(([label, p]) => fetchProvider(label, p.url, traceparent)),
+    providers.map(([label, p]) =>
+      fetchProvider(label, p.url, tokenOf, p, traceparent),
+    ),
   );
   return { hub: settings.hub.label, models: batches.flat() };
 }

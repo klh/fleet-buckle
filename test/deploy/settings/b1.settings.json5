@@ -1,0 +1,54 @@
+{
+  // b1.settings.json5 — the demo topology's head buckle: openrouter +
+  // downstream peers b2, b3. Composed over default.settings.json5.
+  hub: { label: "b1" },
+  access: {
+    principals: [
+      { id: "alice@fleet", kind: "human", groups: [] },
+      { id: "bob@fleet", kind: "human", groups: [] },
+
+      { id: "carol@fleet", kind: "developer", groups: ["platform"] },
+      { id: "federation@fleet", kind: "service", groups: [] },
+    ],
+    grants: [
+      // own rows ONLY (empty peer list); the load waves ride her small
+      // rpm cap — 429 + Retry-After is DEMOED, not just unit-tested
+      {
+        principal: "alice@fleet",
+        scopes: ["models.list", "models.use"],
+        peers: [],
+        limits: { max_rpm: 4 },
+      },
+      // own + b3's zai rows — the matrix's openrouter+zai cell
+      {
+        principal: "bob@fleet",
+        scopes: ["models.list", "models.use"],
+        peers: ["b3"],
+      },
+      {
+        principal: "carol@fleet",
+        scopes: ["models.list", "models.use", "stats.read", "tree.read"],
+      },
+      {
+        principal: "federation@fleet",
+        scopes: ["models.list", "stats.read", "tree.read"],
+      },
+    ],
+  },
+  providers: {
+    // url/dialect default from the provider registry (the REAL
+    // endpoint); the stub compose injects its stub url as the over layer
+    openrouter: { key: "/etc/buckle/keys/openrouter.key" },
+  },
+  hubs: {
+    // d — DOWNSTREAM ONLY: we pull their catalogs; we never call up.
+    b2: {
+      url: "http://buckle2:4111",
+      token_file: "/etc/buckle/keys/peer-b2.token",
+    },
+    b3: {
+      url: "http://buckle3:4111",
+      token_file: "/etc/buckle/keys/peer-b3.token",
+    },
+  },
+}

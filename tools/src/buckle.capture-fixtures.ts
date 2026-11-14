@@ -12,31 +12,32 @@
 import { writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import {
+  KNOWN_PROVIDERS,
+  type KnownProviderLabel,
+} from "../../src/schemas/buckle.provider.registry.zod.ts";
 
 const HOME = process.env["FLEET_RUNTIME_HOME"] ?? join(homedir(), ".claude/local-llm");
 
-/** filter modes: "all" = every row the account sees; "pickable" = the
- *  provider's own servable flag (copilot model_picker_enabled, previews
+/** capture-specific bits ONLY — url/headers/key file come from the
+ *  provider registry (one home). path = the catalog endpoint variant
+ *  (openrouter's /models/user is the ACCOUNT list); filter modes:
+ *  "all" = every row the account sees, "pickable" = the provider's
+ *  own servable flag (copilot model_picker_enabled, previews
  *  excluded). No id lists — curation by taste is the bug this fixes. */
-const RAW_SELECTION = {
-  // the ACCOUNT list (models/user): every model our openrouter key
-  // actually sees — hundreds of real rows, verbatim
-  "openrouter.models.json": {
-    url: "https://openrouter.ai/api/v1/models/user",
-    key: "openrouter.key",
-    filter: "all",
-  },
-  "mscopilot.models.json": {
-    url: "https://api.githubcopilot.com/models",
-    key: "copilot.key",
-    headers: { "copilot-integration-id": "cockpit" },
-    filter: "pickable",
-  },
-  "zai.models.json": {
-    url: "https://api.z.ai/api/coding/paas/v4/models",
-    key: "zai.key",
-    filter: "all",
-  },
+const RAW_SELECTION: Record<
+  KnownProviderLabel,
+  { path: string; filter: "all" | "pickable" }
+> = {
+  openrouter: { path: "/models/user", filter: "all" },
+  mscopilot: { path: "/models", filter: "pickable" },
+  zai: { path: "/models", filter: "all" },
+};
+
+const OUT_FILE: Record<KnownProviderLabel, string> = {
+  openrouter: "openrouter.models.json",
+  mscopilot: "mscopilot.models.json",
+  zai: "zai.models.json",
 };
 
 
@@ -60,38 +61,28 @@ type Row = z.output<(typeof ListSchema)["shape"]["data"]["element"]>;
 
 /** "pickable" reads the PROVIDER's flags only — copilot marks its own
  *  servable set; everything else rides whole. */
-function keepRow(m: Row, filter: Filter): boolean {
+function keepRow(m: Row, filter: "all" | "pickable"): boolean {
   if (filter === "all") return true;
   return m.model_picker_enabled === true && m.preview !== true;
 }
 
 const OUT = new URL("../../../test/deploy/fixtures/", import.meta.url).pathname;
 
-const CaptureSchema = z.object({
-  url: z.string(),
-  key: z.string(),
-  headers: z.record(z.string(), z.string()).optional(),
-  filter: z.enum(["all", "pickable"]),
-});
-type Capture = z.output<typeof CaptureSchema>;
-type Filter = Capture["filter"];
-
-const SELECTION: Record<string, Capture> = z
-  .record(z.string(), CaptureSchema)
-  .parse(RAW_SELECTION);
-
-for (const [file, cfg] of Object.entries(SELECTION)) {
-  const bearer = process.env[`${cfg.key.replace(".", "_").toUpperCase()}_PATH`] ??
-    await Bun.file(join(HOME, cfg.key)).text();
-  const r = await fetch(cfg.url, {
+for (const [label, cfg] of Object.entries(RAW_SELECTION)) {
+  const known = KNOWN_PROVIDERS[label as KnownProviderLabel];
+  const file = OUT_FILE[label as KnownProviderLabel];
+  const bearer =
+    process.env[`${label.toUpperCase()}_KEY_PATH`] ??
+    (await Bun.file(known.key_file.replace("~", HOME.replace("/.claude/local-llm", ""))).text());
+  const r = await fetch(`${known.url}${cfg.path}`, {
     headers: {
       authorization: `Bearer ${bearer.trim()}`,
-      ...(("headers" in cfg ? cfg.headers : undefined) ?? {}),
+      ...known.catalog_headers,
     },
     signal: AbortSignal.timeout(20_000),
   });
   if (!r.ok) {
-    console.error(`${file}: ${cfg.url} → ${r.status}, SKIPPED (kept existing)`);
+    console.error(`${file}: ${known.url}${cfg.path} → ${r.status}, SKIPPED (kept existing)`);
     continue;
   }
   const raw: unknown = await r.json();

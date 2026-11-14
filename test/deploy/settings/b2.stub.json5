@@ -1,0 +1,6 @@
+// b2.stub.json5 — the STUB over-layer (see b1.stub.json5).
+{
+  providers: {
+    mscopilot: { url: "http://mscopilot-stub:8080" },
+  },
+}
