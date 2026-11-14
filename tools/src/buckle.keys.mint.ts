@@ -6,6 +6,7 @@
 // many mounts). Idempotent: existing files keep their value.
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadSettings } from "../../src/server/buckle.server.settings.ts";
 
 export function mintKey(value = "bksk_"): string {
@@ -24,6 +25,25 @@ export async function mintIfAbsent(file: string, generate: () => string): Promis
 }
 
 export type UnitSettingsPaths = Parameters<typeof loadSettings>[0];
+
+/** the three-buckle topology's settings map — the ONE home (stub mode
+ *  adds the stub-url over layer; real mode rides registry defaults).
+ *  Unit topology lives in test/deploy/settings; deploy/settings
+ *  carries the real single hub only. */
+export function topologyUnits(mode: "stub" | "real"): Record<string, UnitSettingsPaths> {
+  const ROOT = fileURLToPath(new URL("../..", import.meta.url));
+  const units: Record<string, UnitSettingsPaths> = {};
+  for (const label of ["b1", "b2", "b3"]) {
+    units[label] = {
+      defaults: join(ROOT, "deploy/settings/default.settings.json5"),
+      settings: join(ROOT, `test/deploy/settings/${label}.settings.json5`),
+      ...(mode === "stub"
+        ? { over: join(ROOT, `test/deploy/settings/${label}.stub.json5`) }
+        : {}),
+    };
+  }
+  return units;
+}
 
 /** mint the full topology key set for `dir`: every unit's principals
  *  plus a peer token per unit's hubs entry (the shared federation

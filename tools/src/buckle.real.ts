@@ -24,7 +24,12 @@ import {
   type KnownProviderLabel,
 } from "../../src/schemas/buckle.provider.registry.zod.ts";
 import { BuckleModelsResponse } from "../../src/schemas/buckle.model.wire.zod.ts";
-import { mintIfAbsent, mintKey, mintTopologyKeys } from "./buckle.keys.mint.ts";
+import {
+  mintIfAbsent,
+  mintKey,
+  mintTopologyKeys,
+  topologyUnits,
+} from "./buckle.keys.mint.ts";
 import { genRealEngineConfigs } from "./buckle.gen-engine-config.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -57,23 +62,10 @@ function writeSecret(file: string, contents: string): void {
 async function render(): Promise<void> {
   const keys = join(REAL_HOME, "keys");
   const envValues: Record<string, string> = { REAL_HOME };
-  // topology keys: principals + federation peer tokens, from the SAME
-  // test/deploy settings the stub stack uses (identical policy; only
-  // the provider urls differ — registry real vs stub over layer)
-  await mintTopologyKeys(keys, {
-    b1: {
-      defaults: join(ROOT, "deploy/settings/default.settings.json5"),
-      settings: join(ROOT, "test/deploy/settings/b1.settings.json5"),
-    },
-    b2: {
-      defaults: join(ROOT, "deploy/settings/default.settings.json5"),
-      settings: join(ROOT, "test/deploy/settings/b2.settings.json5"),
-    },
-    b3: {
-      defaults: join(ROOT, "deploy/settings/default.settings.json5"),
-      settings: join(ROOT, "test/deploy/settings/b3.settings.json5"),
-    },
-  });
+  // topology keys: principals + federation peer tokens — the SAME
+  // units map the stub mint reads (identical policy; only the
+  // provider urls differ — registry real vs stub over layer)
+  await mintTopologyKeys(keys, topologyUnits("real"));
 
   // the ENGINE GATE: one master key minted into the mounted keys dir
   // (the buckles read keys/engine from settings keys.engine); the SAME
