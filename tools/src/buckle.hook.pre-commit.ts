@@ -29,8 +29,11 @@ if (!run(`qlty fmt --no-upgrade-check -- ${staged.join(" ")}`)) {
 }
 execSync(`git add -- ${staged.join(" ")}`);
 
-// 2. check: any remaining error aborts the commit
-if (!run(`qlty check --no-upgrade-check -- ${staged.join(" ")}`)) {
+// 2. show structural regressions in the staged change.
+run("qlty smells --upstream HEAD --no-upgrade-check");
+
+// 3. lint staged files; Knip needs a whole-project audit and runs separately.
+if (!run(`qlty check --filter eslint --no-upgrade-check -- ${staged.join(" ")}`)) {
   console.error("pre-commit: qlty check reported errors — commit aborted");
   process.exit(1);
 }

@@ -160,6 +160,17 @@ richness (the health sidecar owns verdicts — outside-process law).
   lockfile. Dependency budget: `zod` at runtime — everything else is
   the platform.
 
+## Quality
+
+Before calling a change done, run `qlty smells --all` and `qlty check --all
+--filter eslint`. Run `qlty check --all --filter knip` when exports, files,
+scripts, or dependencies change. Review every finding in the touched code.
+Decompose functions by responsibility; wrapping many parameters in one
+object or extracting a one-use helper solely to lower a metric is not a fix.
+Remove duplicated implementation and unused exports rather than hiding
+findings with suppressions. The existing backlog is visible in these commands;
+new code should not add to it.
+
 ## Tests
 
 - Colocated unit/composition tests: `*.test.ts` next to the file, **bun

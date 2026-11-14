@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/index.ts",
+    "src/server/buckle.server.bin.ts",
+    "deploy/index.ts",
+    "deploy/front/front.main.ts",
+    "tools/src/*.ts",
+    "test/**/*.ts",
+    "playwright.config.ts"
+  ],
+  "project": ["src/**/*.ts", "deploy/**/*.ts", "tools/**/*.ts", "test/**/*.ts"],
+  "ignoreBinaries": ["qlty"],
+  "ignoreDependencies": ["jiti"]
+}

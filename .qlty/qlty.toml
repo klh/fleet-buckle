@@ -56,6 +56,40 @@ test_patterns = [
 [smells]
 mode = "comment"
 
+[smells.function_complexity]
+enabled = true
+threshold = 10
+
+[smells.nested_control_flow]
+enabled = true
+threshold = 4
+
+[smells.function_parameters]
+enabled = true
+threshold = 5
+
+[smells.return_statements]
+enabled = true
+threshold = 6
+
+[smells.duplication]
+nodes_threshold = 48
+
 [[source]]
 name = "default"
 default = true
+
+[[plugin]]
+name = "knip"
+version = "5.88.1"
+mode = "comment"
+
+[[plugin]]
+name = "biome"
+mode = "disabled"
+
+[[plugin]]
+name = "eslint"
+version = "10.8.0"
+mode = "comment"
+package_file = "package.json"
