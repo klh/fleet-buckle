@@ -52,3 +52,17 @@ export const HopPeerSchema = z
   })
   .strict();
 export type HopPeer = z.output<typeof HopPeerSchema>;
+
+/** the RIDE — one request's protocol state, carried into the hop:
+ *  the verbatim body, the continued trace, the inbound loop path,
+ *  the chain budget. Parsed ONCE at ingress (pipeline step 5) and
+ *  threaded whole; zod-derived (the type law). */
+export const HopRideSchema = z
+  .object({
+    body: z.string(),
+    traceparent: z.string(),
+    path: z.array(z.string()),
+    deadline: z.number().int().nullable(),
+  })
+  .strict();
+export type HopRide = z.output<typeof HopRideSchema>;

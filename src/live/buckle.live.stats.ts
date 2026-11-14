@@ -21,14 +21,13 @@ export async function federatedStats(
   const peers: Record<string, BuckleStatsSnapshot | null> = {};
   for (const [label, peer] of Object.entries(settings.hubs ?? {})) {
     // the peer answers OUR wire face; its SELF snapshot is what folds
-    const pulled = await peerJson(
-      "live.stats",
-      peer,
-      "/v1/stats",
-      BuckleStatsResponse,
+    const pulled = await peerJson(peer, {
+      seam: "live.stats",
+      path: "/v1/stats",
+      schema: BuckleStatsResponse,
       tokenOf,
-      settings.timeouts.peer_pull_ms,
-    );
+      timeoutMs: settings.timeouts.peer_pull_ms,
+    });
     peers[label] = pulled.ok ? (pulled.data.self ?? null) : null;
   }
   return { self: live.snapshot(), peers };

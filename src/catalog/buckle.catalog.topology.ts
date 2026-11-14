@@ -29,15 +29,14 @@ async function pullPeerTree(
   traceparent: string,
   timeoutMs: number,
 ): Promise<BuckleTreeNode | null> {
-  const pulled = await peerJson(
-    "catalog.topology",
-    peer,
-    "/v1/tree",
-    BuckleTreeResponse,
+  const pulled = await peerJson(peer, {
+    seam: "catalog.topology",
+    path: "/v1/tree",
+    schema: BuckleTreeResponse,
     tokenOf,
     timeoutMs,
     traceparent,
-  );
+  });
   return pulled.ok ? (pulled.data.self ?? null) : null;
 }
 

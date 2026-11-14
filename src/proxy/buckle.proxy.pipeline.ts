@@ -10,11 +10,12 @@
 // the SERVED mapping is the ONE shared surface between them.
 import { z } from "zod";
 import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
-import type { BucklePrincipalKind } from "../schemas/buckle.principal.zod.ts";
 import { peerToken, type TokenReader } from "../federation/buckle.federation.peer.ts";
 import {
   HOP_DEADLINE_HEADER,
   HOP_PATH_HEADER,
+  type HopRide,
+  HopRideSchema,
   SERVED_BY_HEADER,
   HopPeerSchema,
   hopDeadlineOf,
@@ -22,7 +23,7 @@ import {
   wouldLoop,
 } from "../federation/buckle.federation.protocol.ts";
 import { buildFederatedCatalog } from "../catalog/buckle.catalog.view.ts";
-import { hopChat } from "./buckle.proxy.hop.ts";
+import { hopChat, type HopOutcome } from "./buckle.proxy.hop.ts";
 import { engineChat, usageOf } from "./buckle.proxy.engine.ts";
 import type { MetricsRegistry } from "../live/buckle.live.metrics.ts";
 import type { LiveTracker } from "../live/buckle.live.tracker.ts";
@@ -69,48 +70,53 @@ function servedResponse(outcome: ServedOutcome): Response {
   });
 }
 
-/** the principal's kind from the registry (absent registry row =
- *  undefined — the tracker renders the row without a kind) */
-function kindOf(settings: BuckleSettings, principal: string): BucklePrincipalKind | undefined {
-  return settings.access?.principals.find((p) => p.id === principal)?.kind;
+/** the FORWARDING CONTEXT — the request-independent half of every
+ *  forward: who is asking, under which settings, with which
+ *  observability and secret reader. The factory's real job: resolve
+ *  the principal's KIND from the registry ONCE (absent row = no kind
+ *  — the tracker renders the row without one). Factory-typed (the
+ *  codebase idiom for live values: ReturnType of the one
+ *  constructor — never a fake z.custom parse). */
+export function createForwardCtx(parts: {
+  settings: BuckleSettings;
+  metrics: MetricsRegistry;
+  live: LiveTracker;
+  principal: string;
+  tokenOf: TokenReader;
+}) {
+  const kind = parts.settings.access?.principals.find(
+    (p) => p.id === parts.principal,
+  )?.kind;
+  return { ...parts, kind } as const;
 }
+type ForwardCtx = ReturnType<typeof createForwardCtx>;
 
 /** settle a SERVED outcome (the shared surface): count the request,
  *  bank the usage tokens, raw bytes back out with the chain named */
 function settleServed(
-  metrics: MetricsRegistry,
-  live: LiveTracker,
-  principal: string,
+  ctx: ForwardCtx,
   model: string,
   outcome: ServedOutcome,
 ): Response {
-  metrics.countRequest(model);
-  live.close(principal, model, usageOf(outcome.text));
+  ctx.metrics.countRequest(model);
+  ctx.live.close(ctx.principal, model, usageOf(outcome.text));
   return servedResponse(outcome);
 }
 
 /** settle a FAILED outcome (the shared half): the tracker closes at
  *  zero, the request still counts — leg-specific verdicts answer
  *  after this, locally narrowed */
-function settleFailed(
-  metrics: MetricsRegistry,
-  live: LiveTracker,
-  principal: string,
-  model: string,
-): void {
-  live.close(principal, model, 0);
-  metrics.countRequest(model);
+function settleFailed(ctx: ForwardCtx, model: string): void {
+  ctx.live.close(ctx.principal, model, 0);
+  ctx.metrics.countRequest(model);
 }
 
 export async function forwardChat(
-  settings: BuckleSettings,
-  metrics: MetricsRegistry,
-  live: LiveTracker,
-  principal: string,
+  ctx: ForwardCtx,
   req: Request,
   traceparent: string,
-  tokenOf: TokenReader,
 ): Promise<Response> {
+  const { settings, principal, tokenOf } = ctx;
   // 1 — the body must name a model (drift fails loud); the raw bytes
   //     are read ONCE and ride untouched from here on
   const raw = await req.text();
@@ -149,59 +155,25 @@ export async function forwardChat(
       `model ${model} is not served by this buckle`,
     );
 
-  // 5 — the leg: buckle-origin hops, provider-origin rides our engine
+  // 5 — the leg: buckle-origin hops, provider-origin rides our engine.
+  //     The RIDE is the request's protocol state, validated ONCE —
+  //     body, continued trace, inbound path, chain budget
+  const ride = HopRideSchema.parse({
+    body: raw,
+    traceparent,
+    path: inboundPath,
+    deadline,
+  });
   return known.origin.kind === "buckle"
-    ? await serveHop(settings, metrics, live, principal, known.origin.label, raw, traceparent, inboundPath, deadline, tokenOf, model)
-    : await serveEngine(settings, metrics, live, principal, raw, traceparent, model, tokenOf);
+    ? await serveHop(ctx, ride, known.origin.label, model)
+    : await serveEngine(ctx, ride, model);
 }
 
-/** the peer leg: buckle-origin model → that peer, verbatim */
-async function serveHop(
-  settings: BuckleSettings,
-  metrics: MetricsRegistry,
-  live: LiveTracker,
-  principal: string,
-  peerLabel: string,
-  raw: string,
-  traceparent: string,
-  inboundPath: string[],
-  deadline: number | null,
-  tokenOf: TokenReader,
-  model: string,
-): Promise<Response> {
-  const peer = settings.hubs?.[peerLabel];
-  if (peer === undefined)
-    return problemResponse(
-      "unavailable",
-      `peer ${peerLabel} is no longer configured`,
-    );
-  const token = peerToken(peer, tokenOf);
-  const hopPeer = HopPeerSchema.safeParse({
-    label: peerLabel,
-    url: peer.url,
-    token,
-  });
-  if (!hopPeer.success)
-    return problemResponse(
-      "unavailable",
-      `peer ${peerLabel} is misconfigured`,
-      hopPeer.error.issues.map((i) => i.path.join(".")).join(", "),
-    );
-
-  live.open(principal, kindOf(settings, principal), model);
-  const outcome = await hopChat(
-    settings.hub.label,
-    hopPeer.data,
-    raw,
-    traceparent,
-    inboundPath,
-    deadline,
-    settings.timeouts.hop_ms,
-  );
-  if (outcome.kind === "served") return settleServed(metrics, live, principal, model, outcome);
-  settleFailed(metrics, live, principal, model);
+/** a failed hop's client verdict — the outcome union mapped onto
+ *  problem responses; the peer's 429 RELAYS (Retry-After), refusals
+ *  name the peer, transport faults surface the fault KIND scrubbed */
+function verdictOf(peerLabel: string, outcome: Exclude<HopOutcome, { kind: "served" }>): Response {
   if (outcome.kind === "rate-limited")
-    // the peer's verdict RELAYS: the client must see Retry-After
     return problemResponse(
       "rate-limited",
       `peer ${peerLabel} rate-limited the hop`,
@@ -223,21 +195,54 @@ async function serveHop(
   );
 }
 
+/** the peer leg: buckle-origin model → that peer, verbatim */
+async function serveHop(
+  ctx: ForwardCtx,
+  ride: HopRide,
+  peerLabel: string,
+  model: string,
+): Promise<Response> {
+  const { settings, tokenOf } = ctx;
+  const peer = settings.hubs?.[peerLabel];
+  if (peer === undefined)
+    return problemResponse(
+      "unavailable",
+      `peer ${peerLabel} is no longer configured`,
+    );
+  const hopPeer = HopPeerSchema.safeParse({
+    label: peerLabel,
+    url: peer.url,
+    token: peerToken(peer, tokenOf),
+  });
+  if (!hopPeer.success)
+    return problemResponse(
+      "unavailable",
+      `peer ${peerLabel} is misconfigured`,
+      hopPeer.error.issues.map((i) => i.path.join(".")).join(", "),
+    );
+
+  ctx.live.open(ctx.principal, ctx.kind, model);
+  const outcome = await hopChat(
+    settings.hub.label,
+    hopPeer.data,
+    ride,
+    settings.timeouts.hop_ms,
+  );
+  if (outcome.kind === "served") return settleServed(ctx, model, outcome);
+  settleFailed(ctx, model);
+  return verdictOf(peerLabel, outcome);
+}
+
 /** the engine leg: provider-origin model → OUR litellm */
 async function serveEngine(
-  settings: BuckleSettings,
-  metrics: MetricsRegistry,
-  live: LiveTracker,
-  principal: string,
-  raw: string,
-  traceparent: string,
+  ctx: ForwardCtx,
+  ride: HopRide,
   model: string,
-  tokenOf: TokenReader,
 ): Promise<Response> {
-  live.open(principal, kindOf(settings, principal), model);
-  const outcome = await engineChat(settings, raw, traceparent, tokenOf);
-  if (outcome.kind === "served") return settleServed(metrics, live, principal, model, outcome);
-  settleFailed(metrics, live, principal, model);
+  ctx.live.open(ctx.principal, ctx.kind, model);
+  const outcome = await engineChat(ctx.settings, ride.body, ride.traceparent, ctx.tokenOf);
+  if (outcome.kind === "served") return settleServed(ctx, model, outcome);
+  settleFailed(ctx, model);
   // outcome.kind === "fault" — named, already logged at the seam
   return problemResponse(
     "unavailable",

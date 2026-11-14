@@ -30,63 +30,114 @@ export const TrackedPrincipalState = z
   .strict();
 type TrackedPrincipal = z.output<typeof TrackedPrincipalState>;
 
-export function createLive(hub: string) {
-  const models = new Map<string, { inflight: number }>();
-  const principals = new Map<string, TrackedPrincipal>();
-  const tokenEvents: { at: number; tokens: number }[] = [];
-
-  const principalRow = (id: string, kind?: BucklePrincipalKind): TrackedPrincipal => {
-    let row = principals.get(id);
-    if (row === undefined) {
-      row = { inflight: 0, requests: 0, connected_since: Date.now(), last_seen: 0 };
-      if (kind !== undefined) row.kind = kind;
-      principals.set(id, row);
-    }
-    return row;
+/** the tracker's whole state — one object, mutated only by the
+ *  functions below (factory-typed, the live-values idiom) */
+function createLiveState() {
+  return {
+    models: new Map<string, { inflight: number }>(),
+    principals: new Map<string, TrackedPrincipal>(),
+    tokenEvents: [] as { at: number; tokens: number }[],
   };
+}
+type LiveState = ReturnType<typeof createLiveState>;
 
+/** the principal's row, lazily created (kind stamps only on creation) */
+function principalRowOf(
+  state: LiveState,
+  id: string,
+  kind: BucklePrincipalKind | undefined,
+): TrackedPrincipal {
+  let row = state.principals.get(id);
+  if (row === undefined) {
+    row = { inflight: 0, requests: 0, connected_since: Date.now(), last_seen: 0 };
+    if (kind !== undefined) row.kind = kind;
+    state.principals.set(id, row);
+  }
+  return row;
+}
+
+/** tokens banked inside the rolling window (pure fold) */
+function windowTokensOf(
+  events: { at: number; tokens: number }[],
+  now: number,
+): number {
+  let tokens = 0;
+  for (const e of events) if (now - e.at <= TPS_WINDOW_MS) tokens += e.tokens;
+  return tokens;
+}
+
+/** the snapshot's model rows (pure map over the models state) */
+function modelRowsOf(
+  models: Map<string, { inflight: number }>,
+  tps: number,
+): BuckleStatsSnapshot["models"] {
+  return [...models.entries()].map(([model, m]) => ({ model, inflight: m.inflight, tps }));
+}
+
+/** the snapshot's principal rows (pure map over the principals state) */
+function principalRowsOf(
+  principals: Map<string, TrackedPrincipal>,
+): BuckleStatsSnapshot["principals"] {
+  return [...principals.entries()].map(([principal, p]) => ({
+    principal,
+    ...pick("kind", p.kind),
+    inflight: p.inflight,
+    requests: p.requests,
+    connected_since: p.connected_since,
+    last_seen: p.last_seen,
+  }));
+}
+
+/** open: inflight on model + principal */
+function openOn(
+  state: LiveState,
+  principal: string,
+  kind: BucklePrincipalKind | undefined,
+  model: string,
+): void {
+  const m = state.models.get(model) ?? { inflight: 0 };
+  m.inflight += 1;
+  state.models.set(model, m);
+  principalRowOf(state, principal, kind).inflight += 1;
+}
+
+/** close: usage tokens counted, requests bumped */
+function closeOn(
+  state: LiveState,
+  principal: string,
+  model: string,
+  tokens: number,
+): void {
+  const m = state.models.get(model);
+  if (m !== undefined && m.inflight > 0) m.inflight -= 1;
+  const p = state.principals.get(principal);
+  if (p !== undefined) {
+    if (p.inflight > 0) p.inflight -= 1;
+    p.requests += 1;
+    p.last_seen = Date.now();
+  }
+  if (tokens > 0) state.tokenEvents.push({ at: Date.now(), tokens });
+}
+
+export function createLive(hub: string) {
+  const state = createLiveState();
   return {
     /** the forward loop opens a hop: inflight on model + principal. */
     open(principal: string, kind: BucklePrincipalKind | undefined, model: string): void {
-      const m = models.get(model) ?? { inflight: 0 };
-      m.inflight += 1;
-      models.set(model, m);
-      principalRow(principal, kind).inflight += 1;
+      openOn(state, principal, kind, model);
     },
     /** the hop closes: usage tokens counted, requests bumped. */
     close(principal: string, model: string, tokens: number): void {
-      const m = models.get(model);
-      if (m !== undefined && m.inflight > 0) m.inflight -= 1;
-      const p = principals.get(principal);
-      if (p !== undefined) {
-        if (p.inflight > 0) p.inflight -= 1;
-        p.requests += 1;
-        p.last_seen = Date.now();
-      }
-      if (tokens > 0) tokenEvents.push({ at: Date.now(), tokens });
+      closeOn(state, principal, model, tokens);
     },
     snapshot(): BuckleStatsSnapshot {
-      const now = Date.now();
-      let windowTokens = 0;
-      for (const e of tokenEvents)
-        if (now - e.at <= TPS_WINDOW_MS) windowTokens += e.tokens;
+      const tps = windowTokensOf(state.tokenEvents, Date.now()) / (TPS_WINDOW_MS / 1000);
       return {
         hub,
-        models: [...models.entries()].map(([model, m]) => ({
-          model,
-          inflight: m.inflight,
-          tps: windowTokens / (TPS_WINDOW_MS / 1000),
-        })),
-        current_connections: principals.size,
-        tps: windowTokens / (TPS_WINDOW_MS / 1000),
-        principals: [...principals.entries()].map(([principal, p]) => ({
-          principal,
-          ...pick("kind", p.kind),
-          inflight: p.inflight,
-          requests: p.requests,
-          connected_since: p.connected_since,
-          last_seen: p.last_seen,
-        })),
+        models: modelRowsOf(state.models, tps),
+        current_connections: state.principals.size,
+        tps,
+        principals: principalRowsOf(state.principals),
       };
     },
   };

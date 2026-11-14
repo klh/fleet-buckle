@@ -308,7 +308,7 @@
           },
           "default": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
                   "$schema": "https://json-schema.org/draft/2020-12/schema",
                   "type": "object",
@@ -966,7 +966,7 @@
           },
           "default": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
                   "$schema": "https://json-schema.org/draft/2020-12/schema",
                   "type": "object",
@@ -1025,7 +1025,7 @@
         }
       }
     },
-    "/stats": {
+    "/v1/stats": {
       "get": {
         "summary": "Live stats: inflight + tok/s per model, per buckle",
         "responses": {
@@ -1268,248 +1268,59 @@
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "/connections": {
-      "get": {
-        "summary": "WHO is connected to which buckle (users + machines)",
-        "responses": {
-          "200": {
+          },
+          "default": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
                   "$schema": "https://json-schema.org/draft/2020-12/schema",
                   "type": "object",
                   "properties": {
-                    "self": {
-                      "type": "object",
-                      "properties": {
-                        "hub": {
-                          "type": "string",
-                          "minLength": 1
-                        },
-                        "models": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "model": {
-                                "type": "string",
-                                "minLength": 1
-                              },
-                              "inflight": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "maximum": 9007199254740991
-                              },
-                              "tps": {
-                                "type": "number",
-                                "minimum": 0
-                              }
-                            },
-                            "required": [
-                              "model",
-                              "inflight",
-                              "tps"
-                            ],
-                            "additionalProperties": false
-                          }
-                        },
-                        "current_connections": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        },
-                        "tps": {
-                          "type": "number",
-                          "minimum": 0
-                        },
-                        "principals": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "principal": {
-                                "type": "string",
-                                "minLength": 1
-                              },
-                              "kind": {
-                                "type": "string",
-                                "enum": [
-                                  "human",
-                                  "developer",
-                                  "agent",
-                                  "service"
-                                ]
-                              },
-                              "machine": {
-                                "type": "string"
-                              },
-                              "inflight": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "maximum": 9007199254740991
-                              },
-                              "requests": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "maximum": 9007199254740991
-                              },
-                              "connected_since": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "maximum": 9007199254740991
-                              },
-                              "last_seen": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "maximum": 9007199254740991
-                              }
-                            },
-                            "required": [
-                              "principal",
-                              "inflight",
-                              "requests",
-                              "connected_since",
-                              "last_seen"
-                            ],
-                            "additionalProperties": false
-                          }
-                        }
-                      },
-                      "required": [
-                        "hub",
-                        "models",
-                        "current_connections",
-                        "tps",
-                        "principals"
-                      ],
-                      "additionalProperties": false
+                    "type": {
+                      "type": "string",
+                      "const": "https://buckle.fleet/problems/1"
                     },
-                    "peers": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      },
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "object",
-                            "properties": {
-                              "hub": {
-                                "type": "string",
-                                "minLength": 1
-                              },
-                              "models": {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "model": {
-                                      "type": "string",
-                                      "minLength": 1
-                                    },
-                                    "inflight": {
-                                      "type": "integer",
-                                      "minimum": 0,
-                                      "maximum": 9007199254740991
-                                    },
-                                    "tps": {
-                                      "type": "number",
-                                      "minimum": 0
-                                    }
-                                  },
-                                  "required": [
-                                    "model",
-                                    "inflight",
-                                    "tps"
-                                  ],
-                                  "additionalProperties": false
-                                }
-                              },
-                              "current_connections": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "maximum": 9007199254740991
-                              },
-                              "tps": {
-                                "type": "number",
-                                "minimum": 0
-                              },
-                              "principals": {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "principal": {
-                                      "type": "string",
-                                      "minLength": 1
-                                    },
-                                    "kind": {
-                                      "type": "string",
-                                      "enum": [
-                                        "human",
-                                        "developer",
-                                        "agent",
-                                        "service"
-                                      ]
-                                    },
-                                    "machine": {
-                                      "type": "string"
-                                    },
-                                    "inflight": {
-                                      "type": "integer",
-                                      "minimum": 0,
-                                      "maximum": 9007199254740991
-                                    },
-                                    "requests": {
-                                      "type": "integer",
-                                      "minimum": 0,
-                                      "maximum": 9007199254740991
-                                    },
-                                    "connected_since": {
-                                      "type": "integer",
-                                      "minimum": 0,
-                                      "maximum": 9007199254740991
-                                    },
-                                    "last_seen": {
-                                      "type": "integer",
-                                      "minimum": 0,
-                                      "maximum": 9007199254740991
-                                    }
-                                  },
-                                  "required": [
-                                    "principal",
-                                    "inflight",
-                                    "requests",
-                                    "connected_since",
-                                    "last_seen"
-                                  ],
-                                  "additionalProperties": false
-                                }
-                              }
-                            },
-                            "required": [
-                              "hub",
-                              "models",
-                              "current_connections",
-                              "tps",
-                              "principals"
-                            ],
-                            "additionalProperties": false
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      }
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "validation",
+                        "unauthenticated",
+                        "forbidden",
+                        "not-found",
+                        "conflict",
+                        "rate-limited",
+                        "unavailable",
+                        "internal"
+                      ]
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "errors": {},
+                    "requestId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "retryAfter": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
-                    "self",
-                    "peers"
+                    "type",
+                    "kind",
+                    "title",
+                    "status"
                   ],
                   "additionalProperties": false
                 }

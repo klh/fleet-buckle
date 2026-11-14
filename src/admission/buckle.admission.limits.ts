@@ -17,7 +17,7 @@ const WINDOW_MS = 60_000;
 
 /** the admission verdict — a zod discriminated union (the type law:
  * every data type is zod-derived, never hand-written) */
-export const RateVerdict = z.discriminatedUnion("allowed", [
+const RateVerdict = z.discriminatedUnion("allowed", [
   z.object({ allowed: z.literal(true) }).strict(),
   z
     .object({
@@ -26,7 +26,7 @@ export const RateVerdict = z.discriminatedUnion("allowed", [
     })
     .strict(),
 ]);
-export type RateVerdict = z.output<typeof RateVerdict>;
+type RateVerdict = z.output<typeof RateVerdict>;
 
 export function createLimiter(
   now: () => number = Date.now,
@@ -36,7 +36,7 @@ export function createLimiter(
   const hits = new Map<string, number[]>();
   return {
     admit(principal, maxRpm) {
-      if (maxRpm <= 0) return { allowed: true };
+      if (maxRpm <= 0) return RateVerdict.parse({ allowed: true });
       const t = now();
       const window = (hits.get(principal) ?? []).filter((at) => t - at < WINDOW_MS);
       if (window.length >= maxRpm) {
@@ -44,11 +44,11 @@ export function createLimiter(
           1,
           Math.ceil((window[0]! + WINDOW_MS - t) / 1000),
         );
-        return { allowed: false, retryAfterS };
+        return RateVerdict.parse({ allowed: false, retryAfterS });
       }
       window.push(t);
       hits.set(principal, window);
-      return { allowed: true };
+      return RateVerdict.parse({ allowed: true });
     },
   };
 }

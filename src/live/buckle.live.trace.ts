@@ -9,19 +9,19 @@ import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
 import { classifyFault, logFault } from "../fault.ts";
 
 /** a traceparent: trace id + span id + flags — parseable, never trusted */
-export const TraceparentSchema = z
+const TraceparentSchema = z
   .object({
     traceId: z.string().regex(/^[0-9a-f]{32}$/),
     spanId: z.string().regex(/^[0-9a-f]{16}$/),
     flags: z.string().regex(/^[0-9a-f]{2}$/),
   })
   .strict();
-export type Traceparent = z.output<typeof TraceparentSchema>;
+type Traceparent = z.output<typeof TraceparentSchema>;
 
 /** canonical parse: lowercase, all-zero ids rejected, version ff
  *  rejected, malformed input never propagates (null = root a fresh
  *  trace — garbage must not ride the wire) */
-export function parseTraceparent(
+function parseTraceparent(
   inbound: string | null,
 ): Traceparent | null {
   if (inbound === null) return null;
@@ -59,7 +59,7 @@ function freshId(hex: number): string {
 }
 
 /** one exported span, in OTLP/HTTP JSON shape */
-export const SpanEndSchema = z
+const SpanEndSchema = z
   .object({
     traceparent: z.string().min(1),
     name: z.string().min(1),
@@ -70,16 +70,17 @@ export const SpanEndSchema = z
       .optional(),
   })
   .strict();
-export type SpanEnd = z.output<typeof SpanEndSchema>;
+type SpanEnd = z.output<typeof SpanEndSchema>;
 
 /** fire-and-forget OTLP/HTTP JSON export (jaeger :4318/v1/traces).
  *  The sink url comes from settings (telemetry.otlp_url) — ONE home.
  *  Export failures are LOGGED faults, never silent, never fatal: the
  *  serving path does not depend on the sink. */
 export function exportSpan(end: SpanEnd, settings: BuckleSettings): void {
+  const span = SpanEndSchema.parse(end);
   const base = settings.telemetry.otlp_url;
   if (base === undefined) return; // no sink configured — traces still flow on the wire headers
-  const [t, s] = end.traceparent.split("-");
+  const [t, s] = span.traceparent.split("-");
   void fetch(`${base.replace(/\/$/, "")}/v1/traces`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -96,11 +97,11 @@ export function exportSpan(end: SpanEnd, settings: BuckleSettings): void {
                 {
                   traceId: t,
                   spanId: s,
-                  name: end.name,
+                  name: span.name,
                   kind: 1,
-                  startTimeUnixNano: end.startedAt * 1_000_000,
-                  endTimeUnixNano: end.endedAt * 1_000_000,
-                  attributes: Object.entries(end.attributes ?? {}).map(
+                  startTimeUnixNano: span.startedAt * 1_000_000,
+                  endTimeUnixNano: span.endedAt * 1_000_000,
+                  attributes: Object.entries(span.attributes ?? {}).map(
                     ([key, value]) => ({ key, value: { stringValue: String(value) } }),
                   ),
                 },

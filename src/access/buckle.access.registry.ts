@@ -12,30 +12,39 @@ import { listDir, readToken } from "../settings.ts";
 const KEY_PREFIX = "principal.";
 const KEY_SUFFIX = ".key";
 
+/** the ids the access registry knows — an empty roster authenticates
+ *  nobody (fail CLOSED); dir scan faults already logged at the reader */
+function candidateKeys(settings: BuckleSettings): { dir: string; ids: string[] } | null {
+  const dir = settings.keys?.principals_dir;
+  const registry = settings.access;
+  if (dir === undefined || registry === undefined) return null;
+  const ids = registry.principals.map((p) => p.id);
+  return listDir(dir) === null ? null : { dir, ids };
+}
+
+/** the principal whose key file under dir holds exactly this bearer
+ *  value (unreadable key = that principal cannot authenticate) */
+function principalHoldingKey(
+  dir: string,
+  ids: string[],
+  bearer: string,
+): string | null {
+  for (const id of ids) {
+    const value = readToken(join(dir, `${KEY_PREFIX}${id}${KEY_SUFFIX}`));
+    if (value === bearer) return id;
+  }
+  return null;
+}
+
 /** authenticate a Bearer token → principal id (null = nobody). */
 export function authenticate(
   settings: BuckleSettings,
   bearer: string | null,
 ): string | null {
   if (bearer === null || !bearer.startsWith("bksk_")) return null;
-  const dir = settings.keys?.principals_dir;
-  if (dir === undefined) return null; // no keys minted = nobody
-  const registry = settings.access;
-  if (registry === undefined) return null; // fail closed
-  const known = new Set(registry.principals.map((p) => p.id));
-  // unreadable dir = fault logged at the reader; auth fails CLOSED
-  const files = listDir(dir);
-  if (files === null) return null;
-  for (const f of files) {
-    if (!f.startsWith(KEY_PREFIX) || !f.endsWith(KEY_SUFFIX)) continue;
-    const id = f.slice(KEY_PREFIX.length, -KEY_SUFFIX.length);
-    if (!known.has(id)) continue;
-    // unreadable key file (fault logged at the reader): that
-    // principal cannot authenticate
-    const value = readToken(join(dir, f));
-    if (value !== null && value === bearer) return id;
-  }
-  return null;
+  const keys = candidateKeys(settings);
+  if (keys === null) return null;
+  return principalHoldingKey(keys.dir, keys.ids, bearer);
 }
 
 /** does the principal hold the scope on THIS buckle? */

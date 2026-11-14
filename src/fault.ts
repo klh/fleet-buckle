@@ -29,7 +29,7 @@ export function logFault(seam: string, subject: string, fault: Fault): void {
   );
 }
 
-export type HttpSendResult =
+type HttpSendResult =
   | { ok: true; response: Response }
   | { ok: false; fault: Fault };
 

@@ -6,7 +6,7 @@
 // EVERY hop, against the peer's OWN registry). The catalog is a SET:
 // one row per model id — a machine sitting under several hubs never
 // sees duplicates. Downstream only.
-import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
+import type { BucklePeer, BuckleSettings } from "../schemas/buckle.settings.zod.ts";
 import {
   BuckleModelWire,
   BuckleModelsResponse,
@@ -39,6 +39,60 @@ function hopRowOf(
   return hop.success ? hop.data : null;
 }
 
+/** a pulled peer catalog's DIRECT rows re-originated for our view —
+ *  only origin kind=provider rides (transit copies would duplicate;
+ *  the topology view shows the depth), malformed rows drop (pure) */
+function directHopRowsOf(
+  pulled: BuckleModelsResponse,
+  label: string,
+  url: string,
+): BuckleModelWire[] {
+  return pulled.models
+    .filter((row) => row.origin.kind === "provider")
+    .flatMap((row) => {
+      const hop = hopRowOf(row, label, url);
+      return hop === null ? [] : [hop];
+    });
+}
+
+/** the catalog's SET accumulator — one row per model id, first
+ *  admission wins. Factory-typed (the live-values idiom). */
+function createModelSet() {
+  const seen = new Set<string>();
+  const models: BuckleModelWire[] = [];
+  return {
+    admit(rows: Iterable<BuckleModelWire>): void {
+      for (const row of rows)
+        if (!seen.has(row.id)) {
+          seen.add(row.id);
+          models.push(row);
+        }
+    },
+    rows(): BuckleModelWire[] {
+      return models;
+    },
+  };
+}
+
+/** one peer's contribution: pull its catalog through the seam, keep
+ *  its direct rows re-originated. A dead or denied peer contributes
+ *  nothing — its fault is logged at the seam, named, never swallowed. */
+async function pullPeerRows(
+  peer: BucklePeer,
+  label: string,
+  call: { tokenOf: TokenReader; traceparent: string; timeoutMs: number },
+): Promise<BuckleModelWire[]> {
+  const pulled = await peerJson(peer, {
+    seam: "catalog.view",
+    path: "/v1/models",
+    schema: BuckleModelsResponse,
+    tokenOf: call.tokenOf,
+    timeoutMs: call.timeoutMs,
+    traceparent: call.traceparent,
+  });
+  return pulled.ok ? directHopRowsOf(pulled.data, label, peer.url) : [];
+}
+
 export async function buildFederatedCatalog(
   settings: BuckleSettings,
   principal: string,
@@ -47,45 +101,20 @@ export async function buildFederatedCatalog(
 ): Promise<BuckleModelsResponse> {
   const own = await buildCatalog(settings, traceparent, tokenOf);
   const admitted = admittedPeers(settings, principal);
+  const set = createModelSet();
 
-  // the SET law: one row per model id, no matter how many hubs serve
-  // it. Precedence is deterministic: own rows win over peers (never
-  // hop for what we serve), then peers in hubs-declaration order. A
-  // dead or denied peer contributes nothing — its fault is logged at
-  // the seam, named, never swallowed. Only a peer's DIRECT rows
-  // (origin kind=provider) ride our catalog: transit copies would
-  // duplicate (the topology view shows the depth).
-  const seen = new Set<string>();
-  const models: BuckleModelWire[] = [];
-  const admit = (rows: Iterable<BuckleModelWire>): void => {
-    for (const row of rows)
-      if (!seen.has(row.id)) {
-        seen.add(row.id);
-        models.push(row);
-      }
-  };
-
-  admit(own.models);
+  // SET law precedence is deterministic: own rows win over peers
+  // (never hop for what we serve), then peers in hubs-declaration order
+  set.admit(own.models);
   for (const [label, peer] of Object.entries(settings.hubs ?? {})) {
     if (!admitted.includes(label)) continue;
-    const pulled = await peerJson(
-      "catalog.view",
-      peer,
-      "/v1/models",
-      BuckleModelsResponse,
-      tokenOf,
-      settings.timeouts.peer_pull_ms,
-      traceparent,
+    set.admit(
+      await pullPeerRows(peer, label, {
+        tokenOf,
+        traceparent,
+        timeoutMs: settings.timeouts.peer_pull_ms,
+      }),
     );
-    if (pulled.ok)
-      admit(
-        pulled.data.models
-          .filter((row) => row.origin.kind === "provider")
-          .flatMap((row) => {
-            const hop = hopRowOf(row, label, peer.url);
-            return hop === null ? [] : [hop];
-          }),
-      );
   }
-  return { hub: settings.hub.label, models };
+  return { hub: settings.hub.label, models: set.rows() };
 }

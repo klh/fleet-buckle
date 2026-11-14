@@ -22,53 +22,67 @@ export function peerToken(peer: BucklePeer, tokenOf: TokenReader): string | null
   return peer.token_file !== undefined ? tokenOf(peer.token_file) : null;
 }
 
-export type PeerJsonResult<T> =
+type PeerJsonResult<T> =
   | { ok: true; data: T }
   | { ok: false; fault: Fault };
+
+/** the request headers for one peer pull: continued trace when the
+ *  caller rides one, the peer's federation token when it has one */
+function peerHeaders(
+  peer: BucklePeer,
+  call: { tokenOf: TokenReader; traceparent?: string },
+): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (call.traceparent !== undefined)
+    headers["traceparent"] = continueTraceparent(call.traceparent);
+  const token = peerToken(peer, call.tokenOf);
+  if (token !== null) headers["authorization"] = `Bearer ${token}`;
+  return headers;
+}
+
+/** the malformed-body fault (drift fails loud in the log) */
+function malformedFault(detail: string): Fault {
+  return { kind: "malformed", detail };
+}
 
 /** pull one wire face from a peer, parsed through the caller's schema.
  *  Dead, slow, or denied peers fail SOFT (a fault, logged, no throw) —
  *  the view of record stays ours; malformed peer bodies are faults
  *  too (drift fails loud in the log, never a silent empty view). */
 export async function peerJson<T>(
-  seam: string,
   peer: BucklePeer,
-  path: string,
-  schema: z.ZodType<T>,
-  tokenOf: TokenReader,
-  timeoutMs: number,
-  traceparent?: string,
+  call: {
+    seam: string;
+    path: string;
+    schema: z.ZodType<T>;
+    tokenOf: TokenReader;
+    timeoutMs: number;
+    traceparent?: string;
+  },
 ): Promise<PeerJsonResult<T>> {
-  const headers: Record<string, string> = {};
-  if (traceparent !== undefined)
-    headers["traceparent"] = continueTraceparent(traceparent);
-  const token = peerToken(peer, tokenOf);
-  if (token !== null) headers["authorization"] = `Bearer ${token}`;
-
   const sent = await httpSend(
-    `${peer.url.replace(/\/$/, "")}${path}`,
-    { headers },
-    timeoutMs,
+    `${peer.url.replace(/\/$/, "")}${call.path}`,
+    { headers: peerHeaders(peer, call) },
+    call.timeoutMs,
   );
   if (!sent.ok) {
-    logFault(seam, peer.url, sent.fault);
+    logFault(call.seam, peer.url, sent.fault);
     return { ok: false, fault: sent.fault };
   }
   const body = await bodyJson(sent);
   if (!body.ok) {
-    logFault(seam, peer.url, body.fault);
+    logFault(call.seam, peer.url, body.fault);
     return { ok: false, fault: body.fault };
   }
-  const parsed = schema.safeParse(body.data);
+  const parsed = call.schema.safeParse(body.data);
   if (!parsed.success) {
-    const fault: Fault = {
-      kind: "malformed",
-      detail: parsed.error.issues
+    const fault = malformedFault(
+      parsed.error.issues
         .slice(0, 3)
         .map((i) => `${i.path.join(".")}: ${i.message}`)
         .join("; "),
-    };
-    logFault(seam, peer.url, fault);
+    );
+    logFault(call.seam, peer.url, fault);
     return { ok: false, fault };
   }
   return { ok: true, data: parsed.data };

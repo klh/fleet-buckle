@@ -21,7 +21,7 @@ export const ROOT = fileURLToPath(new URL("..", import.meta.url));
 export type AccessRegistry = ReturnType<typeof BuckleAccessRegistry.parse>;
 
 /** what every stub/recorder records when a request rides in */
-export const SawRequest = z
+const SawRequest = z
   .object({
     auth: z.string().nullable(),
     traceparent: z.string().nullable(),
@@ -30,16 +30,16 @@ export const SawRequest = z
     raw: z.string(),
   })
   .strict();
-export type SawRequest = z.output<typeof SawRequest>;
+type SawRequest = z.output<typeof SawRequest>;
 
 function sawOf(req: Request, raw: string): SawRequest {
-  return {
+  return SawRequest.parse({
     auth: req.headers.get("authorization"),
     traceparent: req.headers.get("traceparent"),
     hopPath: req.headers.get("x-fleet-buckle-hop-path"),
     deadline: req.headers.get("x-fleet-buckle-deadline-ms"),
     raw,
-  };
+  });
 }
 
 /** the hop headers a proxy forwards verbatim */
@@ -133,19 +133,6 @@ export function recorder(target: number): {
     },
   });
   return { port: server.port ?? 0, stop: () => server.stop(true), seen };
-}
-
-/** defaults ⊕ b1 — the full demo topology base (used by tests that
- *  boot the b1 FACE itself). Unit WORLDS never compose from this:
- *  b1's providers point at REAL registry endpoints and its hubs at
- *  docker-network urls — a world inheriting them would leak into
- *  whatever is live on this machine. Worlds are HERMETIC: they
- *  compose from defaults ⊕ their own stubs only. */
-export async function loadBaseSettings(): Promise<BuckleSettings> {
-  return loadSettings({
-    defaults: join(ROOT, "deploy/settings/default.settings.json5"),
-    settings: join(ROOT, "test/deploy/settings/b1.settings.json5"),
-  });
 }
 
 /** defaults only — the hermetic base every world composes from */

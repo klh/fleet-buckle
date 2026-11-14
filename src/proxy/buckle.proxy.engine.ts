@@ -11,14 +11,14 @@ import type { TokenReader } from "../federation/buckle.federation.peer.ts";
 import { continueTraceparent } from "../live/buckle.live.trace.ts";
 
 /** the engine base url — ONE home: settings.engine.url */
-export function engineUrl(settings: BuckleSettings): string {
+function engineUrl(settings: BuckleSettings): string {
   return settings.engine.url;
 }
 
 /** the engine outcome, mapped by the caller into client responses.
  *  served carries servedBy — provenance is named AT THE SOURCE so the
  *  pipeline's served mapping is ONE surface for both legs. */
-export const EngineOutcome = z.discriminatedUnion("kind", [
+const EngineOutcome = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("served"),
@@ -30,7 +30,7 @@ export const EngineOutcome = z.discriminatedUnion("kind", [
     .strict(),
   z.object({ kind: z.literal("fault"), fault: Fault }).strict(),
 ]);
-export type EngineOutcome = z.output<typeof EngineOutcome>;
+type EngineOutcome = z.output<typeof EngineOutcome>;
 
 /** total_tokens out of an upstream chat body (0 when absent/unparseable) */
 const UsageBody = z
@@ -75,11 +75,11 @@ export async function engineChat(
   if (!sent.ok) return { kind: "fault", fault: sent.fault };
   const body = await bodyText(sent);
   if (!body.ok) return { kind: "fault", fault: body.fault };
-  return {
+  return EngineOutcome.parse({
     kind: "served",
     status: sent.response.status,
     text: body.text,
     contentType: sent.response.headers.get("content-type") ?? "application/json",
     servedBy: settings.hub.label,
-  };
+  });
 }

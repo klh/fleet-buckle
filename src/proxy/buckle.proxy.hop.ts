@@ -15,6 +15,7 @@ import {
   HOP_DEADLINE_HEADER,
   HOP_PATH_HEADER,
   type HopPeer,
+  type HopRide,
   SERVED_BY_HEADER,
 } from "../federation/buckle.federation.protocol.ts";
 import { continueTraceparent } from "../live/buckle.live.trace.ts";
@@ -53,56 +54,53 @@ function respondOf(self: string, sent: Response, text: string): HopOutcome {
   if (sent.status === 429) {
     // relay the peer's verdict: the client must see Retry-After
     const retryAfterS = Number(sent.headers.get("retry-after") ?? "1");
-    return {
+    return HopOutcome.parse({
       kind: "rate-limited",
       retryAfterS:
         Number.isFinite(retryAfterS) && retryAfterS > 0 ? retryAfterS : 1,
       detail: text.slice(0, 200),
-    };
+    });
   }
   if (!(sent.status >= 200 && sent.status < 300))
-    return {
+    return HopOutcome.parse({
       kind: "refused",
       detail: `status ${String(sent.status)} — ${text.slice(0, 200)}`,
-    };
+    });
   // serving order is head-first: OUR label, then whoever served below us
   const chain = sent.headers
     .get(SERVED_BY_HEADER)
     ?.split(",")
     .map((s) => s.trim())
     .filter((s) => s.length > 0) ?? [];
-  return {
+  return HopOutcome.parse({
     kind: "served",
     status: sent.status,
     text,
     contentType: sent.headers.get("content-type") ?? "application/json",
     servedBy: [self, ...chain].join(","),
-  };
+  });
 }
 
-/** forward one chat body to the peer. NEVER throws — every failure is
- *  a named outcome. `inboundPath` is the path WE rode in on (fresh at
- *  a head buckle); the peer receives it plus OUR label. `deadlineMs`
- *  is the chain budget (null at an origin: we stamp our own and the
- *  chain is bounded by it from here down). `timeoutMs` is
- *  settings.timeouts.hop_ms — the chain budget can only TIGHTEN it. */
+/** forward one chat to the peer. NEVER throws — every failure is a
+ *  named outcome. The RIDE is the request's protocol state (body,
+ *  continued trace, inbound path, chain budget); the peer receives
+ *  the path plus OUR label, and a null origin deadline gets stamped
+ *  here. `timeoutMs` is settings.timeouts.hop_ms — the chain budget
+ *  can only TIGHTEN it. */
 export async function hopChat(
   self: string,
   peer: HopPeer,
-  bodyText: string,
-  traceparent: string,
-  inboundPath: string[],
-  deadlineMs: number | null,
+  ride: HopRide,
   timeoutMs: number,
 ): Promise<HopOutcome> {
-  const budget = deadlineMs === null ? timeoutMs : deadlineMs - Date.now();
+  const budget = ride.deadline === null ? timeoutMs : ride.deadline - Date.now();
   if (budget <= 0)
     return { kind: "refused", detail: "hop deadline exhausted" };
-  const deadline = deadlineMs ?? Date.now() + timeoutMs;
+  const deadline = ride.deadline ?? Date.now() + timeoutMs;
   const headers: Record<string, string> = {
     "content-type": "application/json",
-    traceparent: continueTraceparent(traceparent),
-    [HOP_PATH_HEADER]: [...inboundPath, self].join(","),
+    traceparent: continueTraceparent(ride.traceparent),
+    [HOP_PATH_HEADER]: [...ride.path, self].join(","),
     [HOP_DEADLINE_HEADER]: String(deadline),
   };
   if (peer.token !== null) headers["authorization"] = `Bearer ${peer.token}`;
@@ -112,7 +110,7 @@ export async function hopChat(
     {
       method: "POST",
       headers,
-      body: bodyText,
+      body: ride.body,
     },
     // never longer than the chain budget, never longer than the hop knob
     Math.min(timeoutMs, budget),
