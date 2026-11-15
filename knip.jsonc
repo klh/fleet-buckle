@@ -9,8 +9,9 @@
   // KNOWN ARTIFACT, deliberately NOT silenced: qlty additionally invokes
   // knip once per workspace with cwd=deploy/worker while still passing
   // this root config; from that cwd knip resolves zero project files and
-  // reports deploy/worker's four deps as unused. Do not add config tricks
-  // (dual-face globs, ignoreDependencies) to hide those four — they are
+  // reports deploy/worker's five deps (the four runtime deps + pi-schema
+  // for the vendored examples) as unused. Do not add config tricks
+  // (dual-face globs, ignoreDependencies) to hide those five — they are
   // an invocation artifact, and the fix belongs upstream in qlty's
   // per-workspace config handling. Verify with: npx knip@5.88.1
   "workspaces": {
@@ -21,7 +22,10 @@
       "project": ["src/**/*.ts", "deploy/front/*.ts", "tools/**/*.ts", "test/**/*.ts"],
     },
     "deploy/worker": {
-      "entry": ["worker.main.ts"],
+      // examples/ is the vendored @earendil-works/pi-durable v1.5.0
+      // teaching corpus (provenance in examples/README.md): each file is
+      // a self-contained runnable, i.e. an entry — not dead code
+      "entry": ["worker.main.ts", "examples/*.ts"],
       "project": ["*.ts"],
     },
   },

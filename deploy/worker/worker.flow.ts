@@ -92,12 +92,14 @@ const contentsSha = async (path: string, branch: string): Promise<string> => {
   const existing = await gh<unknown>(`/repos/${env.repo}/contents/${path}?ref=${branch}`).catch(
     () => null,
   );
-  const hasSha =
+  if (
     typeof existing === "object" &&
     existing !== null &&
     "sha" in existing &&
-    typeof existing.sha === "string";
-  return hasSha ? existing.sha : "";
+    typeof existing["sha"] === "string"
+  )
+    return existing["sha"];
+  return "";
 };
 
 const landFile = async (
