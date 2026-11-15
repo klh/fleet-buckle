@@ -4,7 +4,7 @@
 // every hop against the peer's own registry.
 import { z } from "zod";
 import { BuckleLimits } from "./buckle.limits.zod.ts";
-import { BucklePrincipal } from "./buckle.principal.zod.ts";
+import { BucklePrincipal, BucklePrincipalKind } from "./buckle.principal.zod.ts";
 
 export const BuckleScope = z.enum([
   "models.list",
@@ -20,7 +20,7 @@ export type BuckleScope = z.output<typeof BuckleScope>;
 export const BuckleTier = z
   .object({
     label: z.string().min(1),
-    kind: z.enum(["human", "developer", "agent", "service"]),
+    kind: BucklePrincipalKind,
   })
   .extend(BuckleLimits.shape)
   .strict();

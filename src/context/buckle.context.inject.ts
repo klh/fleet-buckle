@@ -6,10 +6,11 @@
 // understand.
 import { z } from "zod";
 import { parseJson } from "../fault.ts";
+import type { ChatRoute } from "../schemas/buckle.route.zod.ts";
 
 /** the wire dialects buckle speaks at its OWN faces (everything
  *  else passes through verbatim — litellm owns every other wire) */
-export type ChatRoute = "chat" | "messages";
+export type { ChatRoute };
 export const ENGINE_PATH: Record<ChatRoute, string> = {
   chat: "/v1/chat/completions",
   messages: "/v1/messages",

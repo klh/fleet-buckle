@@ -4,11 +4,20 @@
 // deep-merged, then safeParse'd here — fail loud, never limp along.
 import { z } from "zod";
 import { BuckleAccessRegistry } from "./buckle.access.zod.ts";
-import { KNOWN_PROVIDERS, type KnownProviderLabel } from "./buckle.provider.registry.zod.ts";
+import {
+  KNOWN_PROVIDERS,
+  ProviderDialect,
+  type KnownProviderLabel,
+} from "./buckle.provider.registry.zod.ts";
+import { ChatRouteSchema } from "./buckle.route.zod.ts";
 
 /** A path to a 0600 secret file. The value never rides any artifact. */
 export const KeyPath = z.string().min(1);
 export type KeyPath = z.output<typeof KeyPath>;
+
+/** per-model OVERRIDES only (law c.1: the model list itself is FETCHED,
+ *  settings carry overrides) — model id → override field → value */
+const ModelOverrides = z.record(z.string(), z.record(z.string(), z.unknown()));
 
 /** Connection caps. Resolution: model > provider > hub, per field. */
 // composed from the ONE caps schema — imported here, re-exported for
@@ -22,11 +31,11 @@ export { BuckleLimits };
 export const BuckleProviderEntry = z
   .object({
     url: z.url().optional(),
-    dialect: z.enum(["openai", "anthropic", "github_copilot"]).optional(),
+    dialect: ProviderDialect.optional(),
     key: KeyPath.optional(),
     limits: BuckleLimits.optional(),
     /** c.1 — per-model OVERRIDES only; the list itself is fetched. */
-    models: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+    models: ModelOverrides.optional(),
     /** BYOC (bring-your-own-credential): the CALLER's /w/ token is
      *  the upstream credential — no key file ever exists for this
      *  provider on this unit. True by registry default for seats
@@ -41,11 +50,11 @@ export type BuckleProviderEntry = z.output<typeof BuckleProviderEntry>;
 export const BuckleProvider = z
   .object({
     url: z.url(),
-    dialect: z.enum(["openai", "anthropic", "github_copilot"]),
+    dialect: ProviderDialect,
     key: KeyPath.optional(),
     limits: BuckleLimits.optional(),
     /** c.1 — per-model OVERRIDES only; the list itself is fetched. */
-    models: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+    models: ModelOverrides.optional(),
     /** resolved BYOC flag: entry row ⊕ registry default, always concrete */
     user_token: z.boolean(),
   })
@@ -99,7 +108,7 @@ export const BucklePeer = z
     url: z.url(),
     token_file: KeyPath.optional(),
     limits: BuckleLimits.optional(),
-    models: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+    models: ModelOverrides.optional(),
   })
   .strict();
 export type BucklePeer = z.output<typeof BucklePeer>;
@@ -119,7 +128,7 @@ const ContextMatch = z
     /** a principal GROUP the caller must carry */
     group: z.string().min(1).optional(),
     /** the ingress dialect this rule fires on (chat | messages) */
-    route: z.enum(["chat", "messages"]).optional(),
+    route: ChatRouteSchema.optional(),
     /** model group filters: exact or prefix */
     models: z.array(z.string().min(1)).optional(),
     /** a substring the BODY START must carry */

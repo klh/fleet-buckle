@@ -40,6 +40,7 @@ import { pick } from "../pick.ts";
 import { problemResponse } from "../problem.ts";
 import { ServedOutcomeSchema } from "./buckle.proxy.outcome.ts";
 import { ContextFacts } from "../context/buckle.context.judge.ts";
+import { ChatRouteSchema } from "../schemas/buckle.route.zod.ts";
 import { ENGINE_PATH, injectedBodyOf, pinnedBodyOf } from "../context/buckle.context.inject.ts";
 import type { ForwardCtx } from "./buckle.proxy.ctx.ts";
 
@@ -65,7 +66,7 @@ export type { ChatRoute } from "../context/buckle.context.inject.ts";
  *  attribution that survived ingress (the fired rule's id, the lane
  *  slug) — ONE bundle, no trailing parameter drift */
 const _LegStampSchema = z.object({
-  route: z.enum(["chat", "messages"]),
+  route: ChatRouteSchema,
   laneSlug: z.string(),
   injectedRule: z.string().optional(),
 });
@@ -183,9 +184,10 @@ export async function forwardChat(
   return gate.origin === "buckle"
     ? await serveHop(ctx, ride, sealed, { peerLabel: gate.originLabel, model })
     : gate.providerRow !== undefined && gate.providerRow.user_token
-      ? await serveUser(ctx, ride, model, sealed, {
+      ? await serveUser(ctx, ride, sealed, {
           label: gate.originLabel,
           url: gate.providerRow.url,
+          model,
         })
       : await serveEngine(ctx, ride, model, sealed);
 }
@@ -250,18 +252,18 @@ async function serveHop(
 async function serveUser(
   ctx: ForwardCtx,
   ride: HopRide,
-  model: string,
   stamp: LegStamp,
-  target: { label: string; url: string },
+  target: { label: string; url: string; model: string },
 ): Promise<Response> {
+  const { label, url, model } = target;
   if (ctx.userToken === null)
     return problemResponse("unauthenticated", "the BYOC leg requires the user token");
   const openedAt = Date.now();
   emitOpened(ctx, model, openedAt);
   const outcome = await userChat({
     settings: ctx.settings,
-    label: target.label,
-    url: target.url,
+    label,
+    url,
     raw: ride.body,
     traceparent: ride.traceparent,
     route: stamp.route,
@@ -272,7 +274,7 @@ async function serveUser(
       model,
       leg: "user",
       openedAt,
-      peer: target.label,
+      peer: label,
       injectedRule: stamp.injectedRule,
       laneSlug: stamp.laneSlug,
       outcome,
@@ -281,12 +283,12 @@ async function serveUser(
     model,
     leg: "user",
     openedAt,
-    peer: target.label,
+    peer: label,
     fault: outcome.fault.kind,
   });
   return problemResponse(
     "unavailable",
-    `provider ${target.label} ${outcome.fault.kind}`,
+    `provider ${label} ${outcome.fault.kind}`,
     `user leg fault: ${outcome.fault.kind}`,
   );
 }

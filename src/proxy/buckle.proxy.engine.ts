@@ -9,7 +9,6 @@ import { bodyText, httpSend, parseJson } from "../fault.ts";
 import type { TokenReader } from "../federation/buckle.federation.peer.ts";
 import { continueTraceparent } from "../trace/buckle.trace.export.ts";
 import { LegOutcomeSchema, type LegOutcome } from "./buckle.proxy.outcome.ts";
-
 /** the engine outcome, mapped by the caller into client responses.
  *  The union is the shared leg outcome (buckle.proxy.outcome.ts) —
  *  served carries servedBy: provenance is named AT THE SOURCE so the
@@ -45,18 +44,17 @@ export function usageOf(text: string): number {
  *  stamped where the GUI can see it — lane + principal facts */
 const LITELLM_TAGS_HEADER = "x-litellm-tags";
 
-/** one engine call, bundled — the chat seam's whole ask */
-const _EngineCall = z.object({
-  settings: z.custom<BuckleSettings>(),
-  raw: z.string(),
-  traceparent: z.string(),
-  tokenOf: z.custom<TokenReader>(),
-  enginePath: z.string(),
-  fleetTags: z.string().default(""),
-});
-type EngineCall = z.output<typeof _EngineCall>;
-
-export async function engineChat(call: EngineCall): Promise<EngineOutcome> {
+/** one engine call, bundled — the chat seam's whole ask (live values
+ *  like settings and the token reader ride the param object, never a
+ *  fake z.custom parse of a live value). */
+export async function engineChat(call: {
+  settings: BuckleSettings;
+  raw: string;
+  traceparent: string;
+  tokenOf: TokenReader;
+  enginePath: string;
+  fleetTags: string;
+}): Promise<EngineOutcome> {
   const { settings, raw, traceparent, tokenOf, enginePath, fleetTags } = call;
   if (settings.engine === undefined) return noEngineOutcome();
   const engine = `${settings.engine.url.replace(/\/$/, "")}${enginePath}`;

@@ -8,11 +8,8 @@
 // needs to await; never block a face).
 import { z } from "zod";
 import { BucklePrincipalKind } from "../schemas/buckle.principal.zod.ts";
+import { FaultKind } from "../schemas/buckle.fault.zod.ts";
 import { pick } from "../pick.ts";
-
-/** the fault KINDS (the taxonomy's discriminants, mirrored here as
- *  the event payload — the named set the pipeline can report) */
-const FaultKind = z.enum(["timeout", "unreachable", "denied", "malformed", "io"]);
 
 /** which leg carried the request */
 const LegKind = z.enum(["engine", "hop", "user"]);

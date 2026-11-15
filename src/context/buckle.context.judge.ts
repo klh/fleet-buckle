@@ -14,6 +14,7 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { BucklePrincipalKind } from "../schemas/buckle.principal.zod.ts";
+import { ChatRouteSchema } from "../schemas/buckle.route.zod.ts";
 import type {
   BuckleContextPolicy,
   BuckleContextRule,
@@ -27,7 +28,7 @@ import type {
  *  provenance, not the key) */
 export const ContextFacts = z
   .object({
-    route: z.enum(["chat", "messages"]),
+    route: ChatRouteSchema,
     principal: z.string().min(1),
     principalKind: BucklePrincipalKind.optional(),
     groups: z.array(z.string().min(1)).optional(),

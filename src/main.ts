@@ -158,7 +158,7 @@ const chatFace: Face = async (srv, rq) => {
     }),
     rq.req,
     rq.tp,
-    { route: rq.route as ChatRoute, laneSlug: rq.laneSlug },
+    { route: rq.route, laneSlug: rq.laneSlug },
   );
 };
 
@@ -173,13 +173,13 @@ const modelsFace: Face = async (srv, rq) => {
     if (denied !== null) return denied;
   }
   return Response.json(
-    await buildFederatedCatalog(
-      srv.settings,
+    await buildFederatedCatalog({
+      settings: srv.settings,
       principal,
-      srv.tokenOf,
-      rq.tp,
-      rq.userToken,
-    ),
+      tokenOf: srv.tokenOf,
+      traceparent: rq.tp,
+      userToken: rq.userToken,
+    }),
     { headers: noStore },
   );
 };
@@ -284,7 +284,7 @@ const routes: Record<string, Face> = {
 const passThroughFace: Face = async (srv, rq) => {
   const refused = admitPrincipal(srv, rq.principal);
   if (refused !== null) return refused;
-  return passThrough(srv.settings, rq.req, `${rq.path}${rq.search ?? ""}`, srv.tokenOf);
+  return passThrough(srv.settings, rq.req, `${rq.path}${rq.search}`, srv.tokenOf);
 };
 
 export function bootServer(input: {

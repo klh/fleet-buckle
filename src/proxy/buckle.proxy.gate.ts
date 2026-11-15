@@ -25,23 +25,23 @@ function rideGate(
 ) {
   return { kind: "ride" as const, providerRow, origin, originLabel };
 }
-export type ModelGate = ReturnType<typeof refusedGate> | ReturnType<typeof rideGate>;
+type ModelGate = ReturnType<typeof refusedGate> | ReturnType<typeof rideGate>;
 
 /** where a resolved model originates (the wire schema's enum, derived) */
-type OriginKind = BuckleModelWire extends { origin: { kind: infer K } } ? K : never;
+type OriginKind = BuckleModelWire["origin"]["kind"];
 
 export async function resolveModelGate(
   ctx: ForwardCtx,
   ask: { model: string; traceparent: string },
 ): Promise<ModelGate> {
   const { settings, principal, tokenOf } = ctx;
-  const catalog = await buildFederatedCatalog(
+  const catalog = await buildFederatedCatalog({
     settings,
     principal,
     tokenOf,
-    ask.traceparent,
-    ctx.userToken,
-  );
+    traceparent: ask.traceparent,
+    userToken: ctx.userToken,
+  });
   const known = catalog.models.find((m) => m.id === ask.model);
   if (known === undefined)
     return refusedGate(

@@ -8,6 +8,11 @@
 //   io           — anything else, NAMED (never swallowed silently)
 import { z } from "zod";
 
+/** the fault KINDS — ONE named enum (the taxonomy's discriminants);
+ *  the event payloads compose it, never a re-declared mirror */
+export const FaultKind = z.enum(["timeout", "unreachable", "denied", "malformed", "io"]);
+export type FaultKind = z.output<typeof FaultKind>;
+
 export const Fault = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("timeout") }).strict(),
   z.object({ kind: z.literal("unreachable") }).strict(),

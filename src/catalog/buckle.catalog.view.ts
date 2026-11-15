@@ -84,13 +84,15 @@ async function pullPeerRows(
   return pulled.ok ? directHopRowsOf(pulled.data, label, peer.url) : [];
 }
 
-export async function buildFederatedCatalog(
-  settings: BuckleSettings,
-  principal: string,
-  tokenOf: TokenReader,
-  traceparent: string,
-  userToken: string | null = null,
-): Promise<BuckleModelsResponse> {
+export async function buildFederatedCatalog(ask: {
+  settings: BuckleSettings;
+  principal: string;
+  tokenOf: TokenReader;
+  traceparent: string;
+  userToken?: string | null;
+}): Promise<BuckleModelsResponse> {
+  const { settings, principal, tokenOf, traceparent } = ask;
+  const userToken = ask.userToken ?? null;
   const own = await buildCatalog(settings, traceparent, tokenOf, userToken);
   const admitted = admittedPeers(settings, principal);
   const set = createModelSet();

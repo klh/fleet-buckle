@@ -12,6 +12,7 @@ import { bootServer } from "./main.ts";
 import { loadSettings } from "./settings.ts";
 import { BuckleAccessRegistry } from "./schemas/buckle.access.zod.ts";
 import { mergeSettings, type BuckleSettings } from "./schemas/buckle.settings.zod.ts";
+import type { KnownProvider } from "./schemas/buckle.provider.registry.zod.ts";
 import {
   HOP_DEADLINE_HEADER,
   HOP_PATH_HEADER,
@@ -227,8 +228,7 @@ async function loadDefaultsRaw(engineless: boolean): Promise<Record<string, unkn
 /** a world provider: bare url (recognized labels resolve url+dialect
  *  from the registry) or the full entry — an UNKNOWN label needs its
  *  dialect explicit (the registry law: fail loud, never guess) */
-export type WorldProvider =
-  string | { url: string; dialect: "openai" | "anthropic" | "github_copilot" };
+export type WorldProvider = string | { url: string; dialect: KnownProvider["dialect"] };
 
 export async function bootBuckle(opts: {
   label: string;

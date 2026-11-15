@@ -7,10 +7,16 @@
 // Key FILES are muramasa runtime paths (never values in this repo).
 import { z } from "zod";
 
+/** the wire dialects the recognized providers speak — ONE home; the
+ *  settings provider rows and the engine-leg generator compose this
+ *  enum (never a re-declared mirror) */
+export const ProviderDialect = z.enum(["openai", "anthropic", "github_copilot"]);
+export type ProviderDialect = z.output<typeof ProviderDialect>;
+
 export const KnownProviderSchema = z.object({
   /** the API root: catalogs at {url}/models, openai legs at {url}/chat/completions */
   url: z.string().url(),
-  dialect: z.enum(["openai", "anthropic", "github_copilot"]),
+  dialect: ProviderDialect,
   /** headers every catalog pull carries (the copilot seat demands its integration id) */
   catalog_headers: z.record(z.string(), z.string()),
   /** engine-gen cap on rows per provider (registry-declared, operator-editable) */
@@ -56,10 +62,3 @@ export const KNOWN_PROVIDERS = {
 } as const satisfies Record<string, KnownProvider>;
 
 export type KnownProviderLabel = keyof typeof KNOWN_PROVIDERS;
-
-/** the catalog FACE every provider serves: {data: [{id, …}]} — the
- *  single shape for the server pull, the engine gen, and captures */
-export const ProviderCatalogSchema = z.object({
-  data: z.array(z.object({ id: z.string() }).passthrough()),
-});
-export type ProviderCatalog = z.output<typeof ProviderCatalogSchema>;

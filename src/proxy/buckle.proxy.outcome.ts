@@ -24,7 +24,6 @@ export type ServedOutcome = z.output<typeof ServedOutcomeSchema>;
 /** the FAULT outcome (engine + BYOC legs): a transport failure
  *  already classified at the seam, named for the client verdict */
 export const FaultOutcomeSchema = z.object({ kind: z.literal("fault"), fault: Fault }).strict();
-export type FaultOutcome = z.output<typeof FaultOutcomeSchema>;
 
 /** the engine + BYOC legs' whole outcome — ONE union, ONE surface
  *  (the pipeline's settleServed consumes both identically) */
