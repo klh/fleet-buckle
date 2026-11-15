@@ -235,6 +235,11 @@ export const openRuntime = async () => {
   const harness = await Harness.open(
     storage,
     {
+      // pi-ai satisfies Harness's required models: shape ONLY — the
+      // live worker's every model ask rides the buckle wire
+      // (worker.model.ts ask()); this image carries no provider keys,
+      // so nothing can egress around buckle, and a harness-side model
+      // call would fail auth loudly, not bypass.
       models: createModels(),
       registry,
       onReport: (report) => console.error(`[worker] durable report: ${report.kind}`),
