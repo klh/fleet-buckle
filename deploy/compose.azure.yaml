@@ -31,12 +31,18 @@ services:
     depends_on: [buckle]
 
   # the minimal GUI — static shell + /api seam (rides the GUI
-  # principal key from /state/keys, read per request)
+  # principal key from /state/keys, read per request). Set
+  # OIDC_ISSUER + OIDC_CLIENT_ID (deploy-time .env) to put the seam
+  # behind the device-code front door — unset = open ops face.
   gui:
     build: ./gui
     environment:
       BUCKLE_URL: http://buckle:4111
       GUI_KEY_FILE: /state/keys/principal.gui@azure.key
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      SESSION_KEY_FILE: /state/keys/session.key
+      PUBLIC_URL: ${PUBLIC_URL:-}
     volumes:
       - state:/state:ro
     ports:

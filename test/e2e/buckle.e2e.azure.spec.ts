@@ -34,6 +34,15 @@ const GuiState = z.object({
   ),
 });
 
+const DeviceLogin = z.object({
+  handle: z.string(),
+  user_code: z.string(),
+  verification_uri: z.string(),
+  interval: z.number(),
+});
+
+const PollState = z.object({ state: z.enum(["pending", "slow_down", "done", "expired", "failed"]) });
+
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const FILE = "test/deploy/compose.azure.test.yaml";
 const PROJECT = "fleet-buckle-azure";
@@ -89,6 +98,13 @@ async function seen() {
 
 let guiKey = "";
 let ownerKey = "";
+let sessionCookie = ""; // the GUI session sealed by the OIDC front door
+
+const OIDC = "http://127.0.0.1:4766"; // the stub IdP's approve face
+const withSession = (extra: Record<string, string> = {}): Record<string, string> => ({
+  cookie: sessionCookie,
+  ...extra,
+});
 
 test.describe.serial("the azure tabula-rasa hub", () => {
   test.beforeAll(() => {
@@ -209,15 +225,54 @@ test.describe.serial("the azure tabula-rasa hub", () => {
     expect(refused.detail ?? "").toContain("/w/<lane>/<token>");
   });
 
+  test("the OIDC front door: device-code login gates the /api seam", async () => {
+    // closed before login — and a FORGED seal is refused (HMAC)
+    expect((await fetch(`${GUI}/api/state`)).status).toBe(401);
+    const forged = await fetch(`${GUI}/api/state`, {
+      headers: { cookie: "buckle_session=Zm9yZ2Vk.aGVyZQ" },
+    });
+    expect(forged.status).toBe(401);
+    // start the device flow at the GUI (against the stub IdP in-net)
+    const start = await fetch(`${GUI}/api/oidc/login`, { method: "POST" });
+    expect(start.status).toBe(200);
+    const startBody = z.record(z.string(), z.unknown()).parse(await start.json());
+    const login = DeviceLogin.parse(startBody);
+    expect(login.user_code).toBe("STUB-2468");
+    expect(Object.keys(startBody)).not.toContain("device_code"); // grant secret stays server-side
+    // still pending until the human approves at the IdP
+    const before = PollState.parse(await (await fetch(`${GUI}/api/oidc/poll?handle=${login.handle}`)).json());
+    expect(before.state).toBe("pending");
+    // the "human" approves — the rig's test face, keyed by the PUBLIC user_code
+    const approve = await fetch(`${OIDC}/_approve?user_code=${login.user_code}`, { method: "POST" });
+    expect(approve.status).toBe(200);
+    // the next poll seals the session (Set-Cookie rides the response)
+    const poll = await fetch(`${GUI}/api/oidc/poll?handle=${login.handle}`);
+    const done = PollState.parse(await poll.json());
+    expect(done.state).toBe("done");
+    sessionCookie = poll.headers.get("set-cookie") ?? "";
+    expect(sessionCookie.startsWith("buckle_session=")).toBe(true);
+    // the session opens the seam + carries the VERIFIED claims
+    const state = await fetch(`${GUI}/api/state`, { headers: withSession() });
+    expect(state.status).toBe(200);
+    expect(GuiState.parse(await state.json()).hub).toBe("azure");
+    const who = await fetch(`${GUI}/api/oidc/session`, { headers: withSession() });
+    expect(who.status).toBe(200);
+    expect(z.object({ sub: z.string() }).parse(await who.json()).sub).toBe("stub-dev-1");
+  });
+
   test("the GUI proxies state/health/stats with ITS principal key", async () => {
-    const state = GuiState.parse(await (await fetch(`${GUI}/api/state`)).json());
+    const state = GuiState.parse(
+      await (await fetch(`${GUI}/api/state`, { headers: withSession() })).json(),
+    );
     expect(state.hub).toBe("azure");
     expect(state.providers).toEqual([
       { label: "mscopilot", user_token: true, dialect: "github_copilot", url: "http://mscopilot-stub:8080" },
     ]);
-    const health = await fetch(`${GUI}/api/health`);
+    const health = await fetch(`${GUI}/api/health`, { headers: withSession() });
     expect(health.status).toBe(200);
-    const stats = StatsView.parse(await (await fetch(`${GUI}/api/stats`)).json());
+    const stats = StatsView.parse(
+      await (await fetch(`${GUI}/api/stats`, { headers: withSession() })).json(),
+    );
     const users = stats.self.principals.map((p) => p.principal).filter((p) => p.startsWith("user:"));
     expect(users.length).toBe(2); // PAT_A and PAT_B — the pseudonymous rows
   });
@@ -225,13 +280,13 @@ test.describe.serial("the azure tabula-rasa hub", () => {
   test("the GUI cannot mint over an existing key (conflict, never re-mint)", async () => {
     const r = await fetch(`${GUI}/api/keys`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: withSession({ "content-type": "application/json" }),
       body: JSON.stringify({ principal: "owner@azure" }),
     });
     expect(r.status).toBe(409); // already keyed by the bootstrap mint
     const ghost = await fetch(`${GUI}/api/keys`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: withSession({ "content-type": "application/json" }),
       body: JSON.stringify({ principal: "ghost@nowhere" }),
     });
     expect(ghost.status).toBe(404); // the roster is code
@@ -240,13 +295,15 @@ test.describe.serial("the azure tabula-rasa hub", () => {
   test("a provider edit lands LIVE through the GUI (over layer, no restart)", async () => {
     const r = await fetch(`${GUI}/api/hubs`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: withSession({ "content-type": "application/json" }),
       body: JSON.stringify({
         providers: { openrouter: { url: "http://openrouter-stub:8080" } },
       }),
     });
     expect(r.status).toBe(200);
-    const state = GuiState.parse(await (await fetch(`${GUI}/api/state`)).json());
+    const state = GuiState.parse(
+      await (await fetch(`${GUI}/api/state`, { headers: withSession() })).json(),
+    );
     expect(state.providers.map((p) => p.label).sort()).toEqual(["mscopilot", "openrouter"]);
     // the swap is LIVE: the owner's keyed /v1/models now carries the
     // openrouter catalog rows (fetched with the unit's non-BYOC leg;
@@ -268,5 +325,17 @@ test.describe.serial("the azure tabula-rasa hub", () => {
     const anon = await fetch(`${HUB}/admin/state`);
     expect(anon.status).toBe(401);
     expect(guiKey.startsWith("bksk_")).toBe(true); // minted, never typed
+  });
+
+  test("logout closes the door again (and BYOC lanes never needed it)", async () => {
+    const out = await fetch(`${GUI}/api/oidc/logout`, { method: "POST" });
+    expect(out.status).toBe(200);
+    const cleared = out.headers.get("set-cookie") ?? "";
+    expect(cleared).toContain("Max-Age=0");
+    // the OLD cookie stays sealed-but-dead only client-side; the seam
+    // itself still honors it until expiry — logout clears the BROWSER.
+    // The wire (/w/…) was never behind this door:
+    const chat = await byocChat(HUB, PAT_A);
+    expect(chat.status).toBe(200);
   });
 });

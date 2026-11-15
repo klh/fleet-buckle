@@ -5,7 +5,7 @@
 # baked into the image).
 FROM oven/bun:1.4.4-debian
 WORKDIR /app
-COPY gui.main.ts ./
+COPY gui.main.ts gui.oidc.ts gui.session.ts ./
 COPY www/ ./www/
 EXPOSE 8080
 CMD ["bun", "gui.main.ts"]

@@ -24,6 +24,7 @@
   ],
   "scripts": {
     "test": "bun test",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p deploy/gui",
     "test:smoke": "bun --bun playwright test --project=smoke",
     "test:e2e": "bun --bun playwright test --project=e2e",
     "test:federation": "bun --bun playwright test --project=federation",

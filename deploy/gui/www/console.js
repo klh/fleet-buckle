@@ -109,6 +109,24 @@ class BuckleConsole extends LitElement {
       align-items: center;
       flex-wrap: wrap;
     }
+    .row.top {
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .code {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 28px;
+      letter-spacing: 0.12em;
+      margin: 12px 0;
+    }
+    button.ghost {
+      background: transparent;
+      color: var(--dim, #8b949e);
+      border: 1px solid var(--line, #2a313c);
+    }
+    a {
+      color: var(--accent, #58a6ff);
+    }
     .err {
       color: var(--bad, #f85149);
       font-size: 13px;
@@ -125,6 +143,80 @@ class BuckleConsole extends LitElement {
   mintPrincipal = "";
   addLabel = "";
   addUrl = "";
+  // the front door: null = still probing, {name} = signed in
+  oidcEnabled = null;
+  who = null;
+  login = null;
+  polling = false;
+
+  async boot() {
+    try {
+      const cfg = await (await fetch("/api/oidc/config")).json();
+      this.oidcEnabled = cfg.enabled === true;
+    } catch {
+      this.oidcEnabled = false;
+    }
+    if (this.oidcEnabled) {
+      const session = await fetch("/api/oidc/session");
+      if (session.ok) this.who = await session.json();
+    }
+    if (!this.oidcEnabled || this.who !== null) await this.refresh();
+    this.requestUpdate();
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    void this.boot();
+  }
+
+  async startLogin() {
+    this.err = "";
+    const r = await fetch("/api/oidc/login", { method: "POST" });
+    if (!r.ok) {
+      this.err = await r.text();
+      this.requestUpdate();
+      return;
+    }
+    this.login = await r.json();
+    this.requestUpdate();
+    void this.pollLogin();
+  }
+
+  async pollLogin() {
+    if (this.login === null || this.polling) return;
+    this.polling = true;
+    const handle = this.login.handle;
+    const wait = (this.login.interval ?? 5) * 1000 + 250;
+    try {
+      const r = await fetch(`/api/oidc/poll?handle=${encodeURIComponent(handle)}`);
+      const out = await r.json();
+      if (out.state === "pending" || out.state === "slow_down") {
+        if (out.state === "slow_down" && this.login !== null) this.login = { ...this.login, interval: (this.login.interval ?? 5) + 5 };
+        setTimeout(() => void this.pollLogin(), out.state === "slow_down" ? wait + 5000 : wait);
+      } else if (out.state === "done") {
+        this.who = out;
+        this.login = null;
+        await this.refresh();
+      } else {
+        this.login = null;
+        this.err = out.state === "expired" ? "login expired — start again" : `login failed: ${out.error ?? out.state}`;
+        this.requestUpdate();
+      }
+    } catch (e) {
+      this.login = null;
+      this.err = String(e);
+      this.requestUpdate();
+    }
+    this.polling = false;
+  }
+
+  async logout() {
+    await fetch("/api/oidc/logout", { method: "POST" });
+    this.who = null;
+    this.state = null;
+    this.sessions = [];
+    this.requestUpdate();
+  }
 
   async refresh() {
     try {
@@ -140,11 +232,6 @@ class BuckleConsole extends LitElement {
       this.err = String(e);
     }
     this.requestUpdate();
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    void this.refresh();
   }
 
   async mint() {
@@ -178,11 +265,58 @@ class BuckleConsole extends LitElement {
   }
 
   render() {
+    if (this.oidcEnabled === null) return html`<h1>buckle · …</h1>`;
+    if (this.oidcEnabled && this.who === null) return this.loginView();
+    return this.consoleView();
+  }
+
+  loginView() {
+    if (this.login === null)
+      return html`
+        <h1>buckle · sign in</h1>
+        <section>
+          <h2>the console is behind single sign-on</h2>
+          <div class="row">
+            <button @click=${() => void this.startLogin()}>sign in with your IdP</button>
+          </div>
+          <p class="note">device-code flow — your credentials never touch this hub.</p>
+        </section>
+        ${this.err === "" ? "" : html`<p class="err">${this.err}</p>`}
+      `;
+    return html`
+      <h1>buckle · sign in</h1>
+      <section>
+        <h2>authorize this browser</h2>
+        <p class="code">${this.login.user_code}</p>
+        <p>
+          open
+          <a href=${this.login.verification_uri} target="_blank" rel="noreferrer">${this.login.verification_uri}</a>
+          and enter the code — this page waits for approval.
+        </p>
+        ${this.login.verification_uri_complete === undefined
+          ? ""
+          : html`<p>
+              <a href=${this.login.verification_uri_complete} target="_blank" rel="noreferrer">or approve directly</a>
+            </p>`}
+      </section>
+      ${this.err === "" ? "" : html`<p class="err">${this.err}</p>`}
+    `;
+  }
+
+  consoleView() {
     const providers = this.state?.providers ?? [];
     const principals = this.state?.principals ?? [];
     const byocUsers = this.sessions.filter((s) => s.principal.startsWith("user:"));
     return html`
-      <h1>buckle · ${this.hubLabel || "…"}</h1>
+      <div class="row top">
+        <h1 style="margin:0">buckle · ${this.hubLabel || "…"}</h1>
+        ${
+          this.who === null
+            ? ""
+            : html`<span class="note">signed in as ${this.who.name ?? this.who.sub}</span>
+                <button class="ghost" @click=${() => void this.logout()}>sign out</button>`
+        }
+      </div>
       <section>
         <h2>health</h2>
         <p>

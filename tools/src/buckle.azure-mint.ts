@@ -4,6 +4,7 @@
 // existing keys are never overwritten). BYOC needs nothing here:
 // copilot credentials ride user requests and are minted NOWHERE.
 import { mkdirSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { join, resolve } from "node:path";
 import { loadSettings } from "../../src/settings.ts";
 import { mintIfAbsent, mintKey } from "./buckle.keys.mint.ts";
@@ -31,3 +32,9 @@ for (const p of settings.access?.principals ?? []) {
   // the key value never prints — secrets are paths
   void key;
 }
+
+// the GUI session seal (HMAC secret for the OIDC front door's
+// cookie) — minted like every key: random, 0600, never printed,
+// never overwritten
+await mintIfAbsent(join(dir, "session.key"), () => randomBytes(32).toString("hex"));
+console.log(`minted session seal → ${join(dir, "session.key")}`);

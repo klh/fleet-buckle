@@ -6,8 +6,9 @@
 # the caller's token forwarded) → mscopilot-stub. The over layer
 # lives on the shared `state` volume and starts EMPTY — the spec
 # lands a provider edit through /admin/hubs (the exact runtime path
-# production rides). Host ports: GUI 4761 · buckle 4762 · stub
-# /_seen evidence face 4764 · engine 4765.
+# production rides). The GUI's /api seam is GATED behind the oidc
+# stub's device-code login. Host ports: GUI 4761 · buckle 4762 ·
+# stub /_seen evidence face 4764 · engine 4765 · oidc approve 4766.
 services:
   mscopilot-stub:
     build: ../kit/stub
@@ -51,16 +52,26 @@ services:
       - "4762:4111"
     depends_on: [mscopilot-stub, engine]
 
+  # the hermetic OIDC IdP — the GUI front door's device-code login
+  # rides it end to end (approval via the /_approve test face: 4766)
+  oidc:
+    build: ../kit/oidcstub
+    ports:
+      - "4766:8080"
+
   gui:
     build: ../../deploy/gui
     environment:
       BUCKLE_URL: http://buckle:4111
       GUI_KEY_FILE: /state/keys/principal.gui@azure.key
+      OIDC_ISSUER: http://oidc:8080
+      OIDC_CLIENT_ID: stub-console
+      SESSION_KEY_FILE: /state/keys/session.key
     volumes:
       - ./keys/.azure:/state/keys:ro
     ports:
       - "4761:8080"
-    depends_on: [buckle]
+    depends_on: [buckle, oidc]
 
 volumes:
   state:
