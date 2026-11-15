@@ -1,13 +1,15 @@
 // proxy/buckle.proxy.pipeline.ts — the MITM loop. The model resolves in
 // the PRINCIPAL'S federated view (own rows + peers their grant admits):
-// a provider-origin model forwards to OUR engine; a buckle-origin
+// a provider-origin model forwards to OUR engine (or the BYOC leg when
+// the provider rides the caller's own credential); a buckle-origin
 // model HOPS to that peer verbatim (the peer re-checks models.use
 // against its own registry — per-hop grants). Drift fails loud
 // (problem+json 404). Bodies ride UNTOUCHED (raw bytes in, raw bytes
 // out); the trace CONTINUES; the serving chain rides x-fleet-buckle-served-by;
-// every request counts in /metrics. This module is the PIPELINE —
-// the two legs live in buckle.proxy.hop.ts and buckle.proxy.engine.ts;
-// the SERVED mapping is the ONE shared surface between them.
+// every request counts in /metrics. This module is the LOOP — the
+// legs live in buckle.proxy.{hop,engine,userleg}.ts, the settle
+// surface in buckle.proxy.settle.ts, the model gate in
+// buckle.proxy.gate.ts, the shared outcome in buckle.proxy.outcome.ts.
 import { z } from "zod";
 import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
 import { peerToken } from "../federation/buckle.federation.peer.ts";
@@ -16,37 +18,35 @@ import {
   HOP_PATH_HEADER,
   type HopRide,
   HopRideSchema,
-  SERVED_BY_HEADER,
   HopPeerSchema,
   hopDeadlineOf,
   hopPathOf,
   wouldLoop,
 } from "../federation/buckle.federation.protocol.ts";
-import { buildFederatedCatalog } from "../catalog/buckle.catalog.view.ts";
-import { hopChat, type HopOutcome } from "./buckle.proxy.hop.ts";
-import { engineChat, usageOf } from "./buckle.proxy.engine.ts";
+import { hopChat } from "./buckle.proxy.hop.ts";
+import { engineChat } from "./buckle.proxy.engine.ts";
 import { userChat } from "./buckle.proxy.userleg.ts";
 import {
-  failedEventOf,
-  injectedEventOf,
-  openedEventOf,
-  servedEventOf,
-  type FaultKindValue,
-  type Leg,
-} from "../events/buckle.events.bus.ts";
+  emitOpened,
+  faultKindOf,
+  settleFailed,
+  settleServed,
+  verdictOf,
+} from "./buckle.proxy.settle.ts";
+import { resolveModelGate } from "./buckle.proxy.gate.ts";
+import { injectedEventOf } from "../events/buckle.events.bus.ts";
 import { parseJson } from "../fault.ts";
 import { pick } from "../pick.ts";
 import { problemResponse } from "../problem.ts";
+import { ServedOutcomeSchema } from "./buckle.proxy.outcome.ts";
 import { ContextFacts } from "../context/buckle.context.judge.ts";
 import { ENGINE_PATH, injectedBodyOf, pinnedBodyOf } from "../context/buckle.context.inject.ts";
 import type { ForwardCtx } from "./buckle.proxy.ctx.ts";
-import { LANE_ROUTE_HEADER } from "../lane.ts";
-
-/** the never-silent stamp: every injected response names the rule
- *  that fired (id only — stanza content never surfaces) */
-const CONTEXT_RULE_HEADER = "x-fleet-buckle-context-rule";
 
 export { problemResponse };
+// the ONE served outcome (buckle.proxy.outcome.ts) — re-exported for
+// the colocated pipeline tests; the legs import it from the leaf
+export { ServedOutcomeSchema };
 
 /** we read ONLY the model id out of the chat body — everything else
  *  rides verbatim (the engine owns its own face, never re-schematized) */
@@ -59,104 +59,7 @@ function modelOf(raw: string): string | null {
   return parsed.success ? parsed.data.model : null;
 }
 
-/** the SERVED outcome both legs share: raw bytes back out, content
- *  type preserved, the serving chain named. ONE surface — the legs
- *  differ only in how the outcome is fetched, never in how it maps.
- *  zod-derived (the type law) and structurally what both legs'
- *  outcome schemas emit for kind="served". */
-export const ServedOutcomeSchema = z
-  .object({
-    kind: z.literal("served"),
-    status: z.number().int(),
-    text: z.string(),
-    contentType: z.string(),
-    servedBy: z.string(),
-  })
-  .strict();
-type ServedOutcome = z.output<typeof ServedOutcomeSchema>;
-
 export type { ChatRoute } from "../context/buckle.context.inject.ts";
-
-/** settle a SERVED outcome (the shared surface): the event rides the
- *  bus through the shared constructor (collectors bank usage +
- *  counters asynchronously from the face's point of view), raw bytes
- *  back out with the chain named */
-function settleServed(
-  ctx: ForwardCtx,
-  input: {
-    model: string;
-    leg: Leg;
-    openedAt: number;
-    peer?: string | undefined;
-    injectedRule?: string | undefined;
-    laneSlug?: string | undefined;
-    outcome: ServedOutcome;
-  },
-): Response {
-  const at = Date.now();
-  ctx.bus.emit(
-    servedEventOf({
-      at,
-      principal: ctx.principal,
-      model: input.model,
-      leg: input.leg,
-      peer: input.peer,
-      status: input.outcome.status,
-      tokens: usageOf(input.outcome.text),
-      latencyMs: at - input.openedAt,
-    }),
-  );
-  return servedResponse(input.outcome, input.injectedRule, input.laneSlug);
-}
-
-/** settle a FAILED outcome (the shared half): the failed event rides
- *  the bus; leg-specific verdicts answer after this, locally narrowed */
-function settleFailed(
-  ctx: ForwardCtx,
-  input: {
-    model: string;
-    leg: Leg;
-    openedAt: number;
-    peer?: string | undefined;
-    fault: FaultKindValue;
-  },
-): void {
-  const at = Date.now();
-  ctx.bus.emit(
-    failedEventOf({
-      at,
-      principal: ctx.principal,
-      model: input.model,
-      leg: input.leg,
-      peer: input.peer,
-      fault: input.fault,
-      latencyMs: at - input.openedAt,
-    }),
-  );
-}
-
-/** the opened half both legs share — the ONE emit site for the kind */
-
-function emitOpened(ctx: ForwardCtx, model: string, at: number): void {
-  ctx.bus.emit(openedEventOf({ at, principal: ctx.principal, principalKind: ctx.kind, model }));
-}
-
-function servedResponse(
-  outcome: ServedOutcome,
-  injectedRule?: string | undefined,
-  laneSlug = "",
-): Response {
-  return new Response(outcome.text, {
-    status: outcome.status,
-    headers: {
-      "content-type": outcome.contentType,
-      "cache-control": "no-store",
-      [SERVED_BY_HEADER]: outcome.servedBy,
-      ...pick(CONTEXT_RULE_HEADER, injectedRule),
-      ...pick(LANE_ROUTE_HEADER, laneSlug === "" ? undefined : laneSlug),
-    },
-  });
-}
 
 /** what the legs need beyond ctx+ride: the wire face asked + the
  *  attribution that survived ingress (the fired rule's id, the lane
@@ -239,69 +142,6 @@ function injectContext(ctx: ForwardCtx, req: Request, stamp: LegStamp, ask: Body
   return { raw: injectedBodyOf(ask.raw, verdict.system, stamp.route), injectedRule: verdict.rule };
 }
 
-/** steps 3 + 3.5 extracted: federated-model resolution and the BYOC
- *  gate — a peer model a grant does not admit is indistinguishable
- *  from an unknown model (no leak); a user_token provider demands the
- *  CALLER's /w/ credential, and that credential admits nothing else. */
-async function resolveModelGate(
-  ctx: ForwardCtx,
-  ask: { model: string; raw: string; traceparent: string },
-): Promise<
-  | { kind: "refused"; response: Response }
-  | { kind: "ride"; providerRow: { user_token?: boolean; url: string } | undefined; origin: "buckle" | "provider"; originLabel: string }
-> {
-  const { settings, principal, tokenOf } = ctx;
-  const catalog = await buildFederatedCatalog(
-    settings,
-    principal,
-    tokenOf,
-    ask.traceparent,
-    ctx.userToken,
-  );
-  const known = catalog.models.find((m) => m.id === ask.model);
-  if (known === undefined)
-    return {
-      kind: "refused",
-      response: problemResponse(
-        "not-found",
-        `model ${ask.model} is not served by this buckle`,
-        // a BYOC seat's catalog rides the caller's token — without one
-        // its rows are invisible; the refusal NAMES the contract
-        ctx.userToken === null &&
-          Object.values(settings.providers ?? {}).some((p) => p.user_token)
-          ? "BYOC seats list their models only through your token: point the client at /w/<lane>/<token>/…"
-          : undefined,
-      ),
-    };
-  const providerRow =
-    known.origin.kind === "provider" ? settings.providers?.[known.origin.label] : undefined;
-  const byoc = providerRow !== undefined && providerRow.user_token;
-  if (byoc && ctx.userToken === null)
-    return {
-      kind: "refused",
-      response: problemResponse(
-        "unauthenticated",
-        "this model's provider requires the user token",
-        "point the client at /w/<lane>/<token>/… (BYOC seat)",
-      ),
-    };
-  if (!byoc && ctx.principal.startsWith("user:"))
-    return {
-      kind: "refused",
-      response: problemResponse(
-        "unauthenticated",
-        "a principal key is required for this model",
-        "the /w/ user token only admits BYOC providers",
-      ),
-    };
-  return {
-    kind: "ride",
-    providerRow,
-    origin: known.origin.kind,
-    originLabel: known.origin.label,
-  };
-}
-
 export async function forwardChat(
   ctx: ForwardCtx,
   req: Request,
@@ -327,12 +167,13 @@ export async function forwardChat(
 
   // 3 + 3.5 — resolve in the principal's FEDERATED view, then the
   //     BYOC gate (both refusals decompose to problems)
-  const gate = await resolveModelGate(ctx, { model, raw, traceparent });
+  const gate = await resolveModelGate(ctx, { model, traceparent });
   if (gate.kind === "refused") return gate.response;
 
-  // 4 — the leg: buckle-origin hops, provider-origin rides our engine.
-  //     The RIDE is the request's protocol state, validated ONCE —
-  //     body, continued trace, inbound path, chain budget
+  // 4 — the leg: buckle-origin hops, provider-origin rides our engine
+  //     (or the BYOC leg for user_token providers). The RIDE is the
+  //     request's protocol state, validated ONCE — body, continued
+  //     trace, inbound path, chain budget
   const ride = HopRideSchema.parse({
     body: raw,
     traceparent,
@@ -347,28 +188,6 @@ export async function forwardChat(
           url: gate.providerRow.url,
         })
       : await serveEngine(ctx, ride, model, sealed);
-}
-
-/** a failed hop's client verdict — the outcome union mapped onto
- *  problem responses; the peer's 429 RELAYS (Retry-After), refusals
- *  name the peer, transport faults surface the fault KIND scrubbed */
-function verdictOf(peerLabel: string, outcome: Exclude<HopOutcome, { kind: "served" }>): Response {
-  if (outcome.kind === "rate-limited")
-    return problemResponse(
-      "rate-limited",
-      `peer ${peerLabel} rate-limited the hop`,
-      outcome.detail,
-      { "retry-after": String(outcome.retryAfterS) },
-    );
-  if (outcome.kind === "refused")
-    return problemResponse("unavailable", `peer ${peerLabel} refused the hop`, outcome.detail);
-  // outcome.kind === "fault" — the transport failed; the fault is
-  // already logged at the seam, the client sees it NAMED, scrubbed
-  return problemResponse(
-    "unavailable",
-    `peer ${peerLabel} ${outcome.fault.kind}`,
-    `hop leg fault: ${outcome.fault.kind}`,
-  );
 }
 
 /** the peer leg: buckle-origin model → that peer, verbatim */
@@ -422,14 +241,6 @@ async function serveHop(
     fault: faultKindOf(outcome),
   });
   return verdictOf(peerLabel, outcome);
-}
-
-/** a failed hop outcome narrowed into the taxonomy: the peer's 429
- *  RELAYS as a denial (retry-after rides the verdict), a refusal is
- *  a denial (status answered), a transport fault is itself */
-function faultKindOf(outcome: Exclude<HopOutcome, { kind: "served" }>): FaultKindValue {
-  if (outcome.kind === "fault") return outcome.fault.kind;
-  return "denied";
 }
 
 /** the BYOC leg: a user_token provider → the provider DIRECT, with

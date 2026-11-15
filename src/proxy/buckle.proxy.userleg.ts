@@ -23,24 +23,23 @@
 // Body bytes verbatim, the W3C trace CONTINUED. The outcome shape is
 // the engine leg's (served|fault) so settleServed maps both through
 // ONE surface.
-import { Fault } from "../schemas/buckle.fault.zod.ts";
 import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
 import { bodyText, httpSend } from "../fault.ts";
 import { continueTraceparent } from "../trace/buckle.trace.export.ts";
 import { KNOWN_PROVIDERS, type KnownProviderLabel } from "../schemas/buckle.provider.registry.zod.ts";
 import { ENGINE_PATH, type ChatRoute } from "../context/buckle.context.inject.ts";
+import { LegOutcomeSchema, type LegOutcome } from "./buckle.proxy.outcome.ts";
 
-/** the BYOC leg outcome — structurally the engine leg's union (the
- *  pipeline's settle surface consumes both identically) */
-type UserLegOutcome =
-  | { kind: "served"; status: number; text: string; contentType: string; servedBy: string }
-  | { kind: "fault"; fault: Fault };
+/** the BYOC leg outcome — the shared leg union (the pipeline's
+ *  settle surface consumes every leg identically) */
+type UserLegOutcome = LegOutcome;
 
 /** one BYOC call, bundled — the leg's whole ask. token is the
  *  CALLER's credential (the /w/ segment); provider the resolved
  *  settings row (url, dialect, user_token=true guaranteed by the
  *  caller); label its settings key (catalog headers resolve from
- *  the registry by label). */
+ *  the registry by label). Derived from the one signature (the
+ *  Parameters idiom — never a hand-written mirror). */
 export async function userChat(call: {
   settings: BuckleSettings;
   label: string;
@@ -50,37 +49,40 @@ export async function userChat(call: {
   route: ChatRoute;
   token: string;
 }): Promise<UserLegOutcome> {
+  const engine = call.settings.engine?.url.replace(/\/$/, "");
   const sent =
-    call.settings.engine !== undefined
-      ? await engineRelay(call)
-      : await directRelay(call);
+    engine !== undefined
+      ? await relayTo(
+          call,
+          `${engine}/v1/byoc/${call.label}${ENGINE_PATH[call.route]}`,
+          {},
+        )
+      : await relayTo(
+          call,
+          `${call.url.replace(/\/$/, "")}${ENGINE_PATH[call.route]}`,
+          KNOWN_PROVIDERS[call.label as KnownProviderLabel]?.catalog_headers ?? {},
+        );
   if (!sent.ok) return { kind: "fault", fault: sent.fault };
   const body = await bodyText(sent);
   if (!body.ok) return { kind: "fault", fault: body.fault };
-  return {
+  return LegOutcomeSchema.parse({
     kind: "served",
     status: sent.response.status,
     text: body.text,
     contentType: sent.response.headers.get("content-type") ?? "application/json",
     servedBy: call.settings.hub.label,
-  };
+  });
 }
 
-/** the engine carrier: the caller's token rides AS the incoming
- *  Authorization — the engine's pass-through endpoint forwards it
- *  verbatim to the seat (the engine is ungated; a master key here
- *  would replace the user credential at the upstream seat). */
-async function engineRelay(call: {
-  settings: BuckleSettings;
-  label: string;
-  raw: string;
-  traceparent: string;
-  route: ChatRoute;
-  token: string;
-}) {
-  const engine = call.settings.engine?.url.replace(/\/$/, "") ?? "";
-  // the BYOC path convention (the generator's pass-through rows)
-  const target = `${engine}/v1/byoc/${call.label}${ENGINE_PATH[call.route]}`;
+/** the ONE relay carrier both BYOC modes ride: verbatim body,
+ *  continued trace, the caller's token as the upstream Bearer —
+ *  only the TARGET (engine pass-through vs provider direct) and
+ *  any registry headers differ. */
+function relayTo(
+  call: Parameters<typeof userChat>[0],
+  target: string,
+  extraHeaders: Record<string, string>,
+) {
   return httpSend(
     target,
     {
@@ -88,36 +90,7 @@ async function engineRelay(call: {
       headers: {
         "content-type": "application/json",
         traceparent: continueTraceparent(call.traceparent),
-        authorization: `Bearer ${call.token}`,
-      },
-      body: call.raw,
-    },
-    call.settings.timeouts.engine_ms,
-  );
-}
-
-/** the direct carrier: verbatim relay to the provider, registry
- *  catalog headers attached (the Copilot seat demands its
- *  integration id). */
-async function directRelay(call: {
-  settings: BuckleSettings;
-  label: string;
-  url: string;
-  raw: string;
-  traceparent: string;
-  route: ChatRoute;
-  token: string;
-}) {
-  const target = `${call.url.replace(/\/$/, "")}${ENGINE_PATH[call.route]}`;
-  const known = KNOWN_PROVIDERS[call.label as KnownProviderLabel];
-  return httpSend(
-    target,
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        traceparent: continueTraceparent(call.traceparent),
-        ...(known?.catalog_headers ?? {}),
+        ...extraHeaders,
         authorization: `Bearer ${call.token}`,
       },
       body: call.raw,

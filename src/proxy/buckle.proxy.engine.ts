@@ -4,11 +4,17 @@
 // Outcome is a zod-typed union the caller maps into client responses;
 // every type here is zod-derived (the type law).
 import { z } from "zod";
-import { Fault } from "../schemas/buckle.fault.zod.ts";
 import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
 import { bodyText, httpSend, parseJson } from "../fault.ts";
 import type { TokenReader } from "../federation/buckle.federation.peer.ts";
 import { continueTraceparent } from "../trace/buckle.trace.export.ts";
+import { LegOutcomeSchema, type LegOutcome } from "./buckle.proxy.outcome.ts";
+
+/** the engine outcome, mapped by the caller into client responses.
+ *  The union is the shared leg outcome (buckle.proxy.outcome.ts) —
+ *  served carries servedBy: provenance is named AT THE SOURCE so the
+ *  pipeline's served mapping is ONE surface for every leg. */
+type EngineOutcome = LegOutcome;
 
 /** the engine outcome for a unit with no engine configured — the
  *  leg answers a typed fault, never a crash (relay-only units) */
@@ -16,23 +22,6 @@ const noEngineOutcome = (): EngineOutcome => ({
   kind: "fault",
   fault: { kind: "malformed", detail: "no engine configured on this unit" },
 });
-
-/** the engine outcome, mapped by the caller into client responses.
- *  served carries servedBy — provenance is named AT THE SOURCE so the
- *  pipeline's served mapping is ONE surface for both legs. */
-const EngineOutcome = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("served"),
-      status: z.number().int(),
-      text: z.string(),
-      contentType: z.string(),
-      servedBy: z.string(),
-    })
-    .strict(),
-  z.object({ kind: z.literal("fault"), fault: Fault }).strict(),
-]);
-type EngineOutcome = z.output<typeof EngineOutcome>;
 
 /** total_tokens out of an upstream chat body (0 when absent/unparseable) */
 const UsageBody = z
@@ -89,7 +78,7 @@ export async function engineChat(call: EngineCall): Promise<EngineOutcome> {
   if (!sent.ok) return { kind: "fault", fault: sent.fault };
   const body = await bodyText(sent);
   if (!body.ok) return { kind: "fault", fault: body.fault };
-  return EngineOutcome.parse({
+  return LegOutcomeSchema.parse({
     kind: "served",
     status: sent.response.status,
     text: body.text,

@@ -1,4 +1,4 @@
-// buckle.server.problem.test.ts — the scrub guard (port doctrine #4):
+// problem.test.ts — the scrub guard (port doctrine #4):
 // hop outcomes RELAY peer-provided text into client-facing problem
 // details, so secret shapes and home paths must never ride an error.
 import { describe, expect, test } from "bun:test";

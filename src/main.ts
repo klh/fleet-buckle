@@ -122,14 +122,23 @@ function admitPrincipal(srv: ServerState, principal: string | null): Response | 
 
 const noStore = { "cache-control": "no-store" };
 
+/** the BYOC identity derivation: a caller whose ONLY credential is
+ *  the /w/ token (no principal key) rides the pseudonymous principal
+ *  the lane contract derives — the ONE derivation, shared by every
+ *  face that admits token riders (chat + models). */
+function byocPrincipalOf(rq: {
+  principal: string | null;
+  userToken: string | null;
+}): string | null {
+  return rq.principal ?? (rq.userToken !== null ? userIdOf(rq.userToken) : null);
+}
+
 const chatFace: Face = async (srv, rq) => {
-  // the BYOC identity: a caller whose ONLY credential is the /w/
-  // token (no principal key) rides a pseudonymous principal — the
-  // pipeline's BYOC gate (3.5) admits them to user_token providers
-  // and REFUSES them everywhere else, so no scope check fires here
-  // for them (a token is not a principal key)
-  const principal =
-    rq.principal ?? (rq.userToken !== null ? userIdOf(rq.userToken) : null);
+  // the BYOC identity: a token-only caller rides the pseudonymous
+  // principal — the pipeline's BYOC gate (3.5) admits them to
+  // user_token providers and REFUSES them everywhere else, so no
+  // scope check fires here for them (a token is not a principal key)
+  const principal = byocPrincipalOf(rq);
   if (principal === null)
     return problemResponse("unauthenticated", "a principal key is required");
   if (rq.principal !== null) {
@@ -156,8 +165,7 @@ const chatFace: Face = async (srv, rq) => {
 const modelsFace: Face = async (srv, rq) => {
   // BYOC callers (token, no key) may list too — their catalog pull
   // rides their own credential for user_token seats
-  const principal =
-    rq.principal ?? (rq.userToken !== null ? userIdOf(rq.userToken) : null);
+  const principal = byocPrincipalOf(rq);
   if (principal === null)
     return problemResponse("unauthenticated", "a principal key is required");
   if (rq.principal !== null) {

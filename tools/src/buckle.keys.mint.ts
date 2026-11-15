@@ -1,28 +1,19 @@
-// buckle.keys.mint.ts — secrets are MINTED, never typed. ONE minter
-// for every mode: per-principal key files (0600) generated from each
-// unit's access registry into the keys dir, the shared federation
-// principal key, and the peer tokens hubs use to pull each other
-// (`peer-<label>.token` carries the federation value — one secret,
-// many mounts). Idempotent: existing files keep their value.
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+// buckle.keys.mint.ts — the topology POLICY home for key minting
+// (which units, which principals, which peer tokens): the VALUE
+// minter + atomic writer live in ONE place — src/admin's
+// buckle.admin.control.ts (mintKey/mintIfAbsent) — and this module
+// composes them into the three-buckle topology: per-principal key
+// files (0600) generated from each unit's access registry into the
+// keys dir, the shared federation principal key, and the peer
+// tokens hubs use to pull each other (`peer-<label>.token` carries
+// the federation value — one secret, many mounts). Idempotent:
+// existing files keep their value.
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadSettings } from "../../src/settings.ts";
+import { mintIfAbsent, mintKey } from "../../src/admin/buckle.admin.control.ts";
 
-export function mintKey(value = "bksk_"): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
-  return `${value}${Buffer.from(bytes).toString("base64url")}`;
-}
-
-/** mint the file if absent (0600); always returns its CURRENT value */
-export async function mintIfAbsent(file: string, generate: () => string): Promise<string> {
-  mkdirSync(dirname(file), { recursive: true });
-  if (!existsSync(file)) {
-    writeFileSync(file, `${generate()}\n`);
-    chmodSync(file, 0o600);
-  }
-  return (await Bun.file(file).text()).trim();
-}
+export { mintIfAbsent, mintKey };
 
 export type UnitSettingsPaths = Parameters<typeof loadSettings>[0];
 

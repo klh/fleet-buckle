@@ -6,7 +6,7 @@
 // swap: the running server NEVER restarts). zod law: every body and
 // view parses through a NAMED schema; secrets are files, values
 // never logged.
-import { chmodSync, existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
@@ -74,11 +74,37 @@ export const AdminKeyMintRequest = z
   .strict();
 export type AdminKeyMintRequest = z.output<typeof AdminKeyMintRequest>;
 
-type MintOutcome =
-  | { kind: "minted"; principal: string; key: string; file: string }
-  | { kind: "unknown-principal"; principal: string }
-  | { kind: "already-keyed"; principal: string; file: string }
-  | { kind: "no-dir" };
+/** THE one key-value minter — 24 random bytes, prefixed, base64url
+ *  (the fleet `bksk_` grammar; the prefix is a parameter so tools
+ *  mint engine master keys too). One home: every minter (the admin
+ *  face, the CLI minters) rides THIS function — never a second
+ *  randomBytes concat. */
+export function mintKey(prefix = "bksk_"): string {
+  return `${prefix}${randomBytes(24).toString("base64url")}`;
+}
+
+/** mint the file if absent (atomic 0600 write — the one secret-write
+ *  idiom below); always returns its CURRENT value. Idempotent: an
+ *  existing file keeps its value, forever. */
+export function mintIfAbsent(file: string, generate: () => string): string {
+  mkdirSync(dirname(file), { recursive: true });
+  if (!existsSync(file)) atomicSecret(file, `${generate()}\n`);
+  return readFileSync(file, "utf8").trim();
+}
+
+/** the mint verdict — zod-derived (the type law: never a
+ *  hand-written mirror of what the schema already says) */
+const _MintOutcomeSchema = z.discriminatedUnion("kind", [
+  z
+    .object({ kind: z.literal("minted"), principal: z.string(), key: z.string(), file: z.string() })
+    .strict(),
+  z.object({ kind: z.literal("unknown-principal"), principal: z.string() }).strict(),
+  z
+    .object({ kind: z.literal("already-keyed"), principal: z.string(), file: z.string() })
+    .strict(),
+  z.object({ kind: z.literal("no-dir") }).strict(),
+]);
+type MintOutcome = z.output<typeof _MintOutcomeSchema>;
 
 export function mintPrincipalKey(
   settings: BuckleSettings,
@@ -92,7 +118,7 @@ export function mintPrincipalKey(
   if (!declared) return { kind: "unknown-principal", principal: ask.principal };
   const file = join(dir, `principal.${ask.principal}.key`);
   if (existsSync(file)) return { kind: "already-keyed", principal: ask.principal, file };
-  const key = `bksk_${randomBytes(24).toString("base64url")}`;
+  const key = mintKey();
   atomicSecret(file, `${key}\n`);
   return { kind: "minted", principal: ask.principal, key, file };
 }
@@ -111,10 +137,16 @@ export const AdminHubEditRequest = z
   .strict();
 export type AdminHubEditRequest = z.output<typeof AdminHubEditRequest>;
 
-type HubEditOutcome =
-  | { kind: "applied"; settings: BuckleSettings; over: string }
-  | { kind: "no-over"; detail: string }
-  | { kind: "rejected"; detail: string };
+/** the applied verdict — factory-typed (carries the LIVE merged
+ *  settings: the live-values idiom, never a fake z.custom parse) */
+function appliedEdit(settings: BuckleSettings, over: string) {
+  return { kind: "applied" as const, settings, over };
+}
+const _HubEditRefusalSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("no-over"), detail: z.string() }).strict(),
+  z.object({ kind: z.literal("rejected"), detail: z.string() }).strict(),
+]);
+type HubEditOutcome = ReturnType<typeof appliedEdit> | z.output<typeof _HubEditRefusalSchema>;
 
 export async function applyHubEdit(
   paths: SettingsPaths | null,
@@ -134,10 +166,12 @@ export async function applyHubEdit(
   if (!merged.ok) return { kind: "rejected", detail: `the edit does not parse: ${merged.detail}` };
   // the over layer holds EXACTLY the edit (unit file stays pristine)
   atomicSecret(paths.over, `${JSON.stringify(edit, null, 2)}\n`);
-  return { kind: "applied", settings: await loadSettings(paths), over: paths.over };
+  return appliedEdit(await loadSettings(paths), paths.over);
 }
 
-/** the one secret-write idiom: tmp file + rename, 0600 */
+/** the one secret-write idiom: tmp file + rename, 0600 — the SAME
+ *  discipline every minted secret rides (CLI tools included: a
+ *  partially-written key file must never be observable) */
 function atomicSecret(file: string, content: string): void {
   mkdirSync(dirname(file), { recursive: true });
   const tmp = `${file}.tmp-${process.pid}`;

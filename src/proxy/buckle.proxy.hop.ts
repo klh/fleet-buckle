@@ -9,7 +9,7 @@
 // an unavailable problem NAMING the peer — hop authz is
 // operator-facing, never the client's fault.
 import { z } from "zod";
-import { Fault } from "../schemas/buckle.fault.zod.ts";
+
 import { bodyText as readBody, httpSend, logFault } from "../fault.ts";
 import {
   HOP_DEADLINE_HEADER,
@@ -19,21 +19,15 @@ import {
   SERVED_BY_HEADER,
 } from "../federation/buckle.federation.protocol.ts";
 import { continueTraceparent } from "../trace/buckle.trace.export.ts";
+import { FaultOutcomeSchema, ServedOutcomeSchema } from "./buckle.proxy.outcome.ts";
 
 /** the hop outcome (zod union), mapped by the caller into
  *  client-facing responses — every type zod-derived (the type law);
- *  every failure decomposed onto the one Fault taxonomy */
+ *  every failure decomposed onto the one Fault taxonomy. The served
+ *  and fault members are the SHARED leg outcome (buckle.proxy.outcome)
+ *  — every leg settles through the one pipeline surface. */
 export const HopOutcome = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("served"),
-      status: z.number().int(),
-      text: z.string(),
-      contentType: z.string(),
-      /** the full serving chain, this hub PREPENDED */
-      servedBy: z.string(),
-    })
-    .strict(),
+  ServedOutcomeSchema,
   z
     .object({
       kind: z.literal("rate-limited"),
@@ -42,7 +36,7 @@ export const HopOutcome = z.discriminatedUnion("kind", [
     })
     .strict(),
   z.object({ kind: z.literal("refused"), detail: z.string() }).strict(),
-  z.object({ kind: z.literal("fault"), fault: Fault }).strict(),
+  FaultOutcomeSchema,
 ]);
 export type HopOutcome = z.output<typeof HopOutcome>;
 

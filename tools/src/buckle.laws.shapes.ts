@@ -3,7 +3,7 @@
 // The runner + boundary laws (catch/env/knobs/yaml/lines) live in
 // buckle.check-laws.ts; the file listing rides buckle.laws.scan.ts.
 import { readFileSync } from "node:fs";
-import { srcOrToolsTs, srcTests, tsFiles } from "./buckle.laws.scan.ts";
+import { srcOrToolsTs, srcTests, tsFiles, SRC } from "./buckle.laws.scan.ts";
 
 /** what a check reports into (factory-typed, the live-values idiom) */
 export function createLawsCtx() {
@@ -35,10 +35,10 @@ export function checkTypeLaw(ctx: LawsCtx, files: string[]): void {
       ctx.errors.push(
         `${f}: hand-written interface "${iface[2]}" — derive it: type X = z.output<typeof XSchema>`,
       );
-    const alias = src.match(/^\s*(export\s+)?type\s+\w+\s*=\s*\{/m);
+    const alias = src.match(/^\s*(export\s+)?type\s+\w+\s*=\s*\|?\s*\{/m);
     if (alias)
       ctx.errors.push(
-        `${f}: hand-written object type alias — derive it: type X = z.output<typeof XSchema>`,
+        `${f}: hand-written object type alias (single or union member) — derive it: type X = z.output<typeof XSchema>`,
       );
   }
 }
@@ -99,8 +99,15 @@ function shapeKeysOf(src: string): string[] {
 //     (the BuckleLimits precedent: the limits triple once lived 5×).
 export function checkSchemaDuplication(ctx: LawsCtx, files: string[]): void {
   const shapeCounts = new Map<string, string[]>();
+  // every NON-TEST src module (not just /schemas/) — the served-outcome
+  // precedent lived 4× across proxy files, invisible to a /schemas/-only
+  // scan; a shape triplicated anywhere in src is a re-declaration
   for (const f of files.filter(
-    (f) => /\/schemas\/.*\.zod\.ts$/.test(f) && !f.endsWith(".test.ts"),
+    (f) =>
+      f.startsWith(SRC) &&
+      !f.endsWith(".test.ts") &&
+      !f.endsWith(".json5") &&
+      f.endsWith(".ts"),
   )) {
     for (const fields of shapeKeysOf(readFileSync(f, "utf8"))) {
       const list = shapeCounts.get(fields) ?? [];
