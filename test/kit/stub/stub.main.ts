@@ -102,14 +102,26 @@ const server = Bun.serve({
   port: 8080,
   fetch: async (req) => {
     const { pathname } = new URL(req.url);
-    if (req.method === "GET" && pathname === "/models")
+    // SEAT-SHAPED ROUTES: the live Copilot seat is not path-uniform
+    // (chat rides BARE /chat/completions, responses BARE /responses,
+    // anthropic keeps /v1/messages) — the registry's byoc_routes rows
+    // forward those exact shapes, so this stub accepts BOTH the
+    // openai-standard and the seat-shaped spellings (same handler:
+    // one behavior, two route tables)
+    const seatPath =
+      pathname === "/chat/completions"
+        ? "/v1/chat/completions"
+        : pathname === "/responses"
+          ? "/v1/responses"
+          : pathname;
+    if (req.method === "GET" && seatPath === "/models")
       return Response.json(rows, { headers: { "cache-control": "no-store" } });
     // the EVIDENCE ring: what this stub actually SAW (the worker e2e
     // asserts the lane pin + context injection from here — never from
     // hand-typed expectations)
-    if (req.method === "GET" && pathname === "/_seen")
+    if (req.method === "GET" && seatPath === "/_seen")
       return Response.json({ seen }, { headers: { "cache-control": "no-store" } });
-    if (req.method === "POST" && pathname === "/v1/chat/completions") {
+    if (req.method === "POST" && seatPath === "/v1/chat/completions") {
       chats += 1;
       // the oracle: injection is visible in the ANSWER — a
       // system-first body carrying the mark answers "injected",
@@ -172,7 +184,7 @@ const server = Bun.serve({
     }
     // the ANTHROPIC dialect oracle: top-level `system` carrying the
     // mark answers "injected" (the /v1/messages injection seam)
-    if (req.method === "POST" && pathname === "/v1/messages") {
+    if (req.method === "POST" && seatPath === "/v1/messages") {
       let answer = "plain";
       let model = "stub-messages";
       let contract: string | null = null;
@@ -226,7 +238,7 @@ const server = Bun.serve({
     // /v1/messages dialect onto the OpenAI /v1/responses wire for
     // openai legs (instructions carries the injected system stanza) —
     // without this face the dialect round trip cannot complete
-    if (req.method === "POST" && pathname === "/v1/responses") {
+    if (req.method === "POST" && seatPath === "/v1/responses") {
       let answer = "plain";
       let model = "stub-responses";
       let contract: string | null = null;
@@ -303,22 +315,22 @@ const server = Bun.serve({
         usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
       });
     }
-    if (req.method === "GET" && pathname === "/metrics")
+    if (req.method === "GET" && seatPath === "/metrics")
       return new Response(
         `# TYPE stub_engine_requests_total counter\nstub_engine_requests_total ${chats}\n# TYPE stub_engine_latency_ms gauge\nstub_engine_latency_ms 12\n`,
         { headers: { "content-type": "text/plain" } },
       );
-    if (req.method === "GET" && pathname === "/global/spend")
+    if (req.method === "GET" && seatPath === "/global/spend")
       return Response.json(
         { spend: 0.42, max_budget: 100 },
         { headers: { "cache-control": "no-store" } },
       );
-    if (req.method === "GET" && pathname === "/global/spend/models")
+    if (req.method === "GET" && seatPath === "/global/spend/models")
       return Response.json(
         { data: [{ model: "stub-model", total_spend: 0.42 }] },
         { headers: { "cache-control": "no-store" } },
       );
-    if (req.method === "GET" && pathname === "/healthz")
+    if (req.method === "GET" && seatPath === "/healthz")
       return Response.json({ ok: true, status: "up" });
     // the PASS-THROUGH oracle: any unhandled face echoes verbatim —
     // method + path + body riding back (the e2e proves buckle

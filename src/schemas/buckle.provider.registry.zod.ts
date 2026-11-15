@@ -29,6 +29,14 @@ export const KnownProviderSchema = z.object({
    *  upstream — no unit-level key file ever exists for it (the
    *  Copilot seat: every dev forwards their own token) */
   user_token: z.boolean().optional(),
+  /** BYOC seat route table (LIVE-verified 2026-11-15 on the Copilot
+   *  seat): buckle's wire path → the seat's real path. The seat is
+   *  NOT uniform (chat is BARE /chat/completions, anthropic keeps
+   *  /v1/messages, the responses family is BARE /responses) — the
+   *  uniform include_subpath join lands chat on a Go-404. The
+   *  generator emits one explicit passthrough row per entry; only
+   *  user_token seats may carry the field */
+  byoc_routes: z.record(z.string(), z.string()).optional(),
 });
 export type KnownProvider = z.output<typeof KnownProviderSchema>;
 
@@ -49,6 +57,11 @@ export const KNOWN_PROVIDERS = {
     key_env: "COPILOT_API_KEY",
     key_file: "~/.claude/local-llm/copilot.key",
     user_token: true, // per-dev tokens ride /w/<lane>/<token>/… — never stored
+    byoc_routes: {
+      "/v1/chat/completions": "/chat/completions",
+      "/v1/messages": "/v1/messages",
+      "/v1/responses": "/responses",
+    },
   },
   zai: {
     url: "https://api.z.ai/api/coding/paas/v4",

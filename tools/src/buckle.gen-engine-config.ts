@@ -44,25 +44,36 @@ const UNITS = {
  *  The path convention is the contract buckle's userleg rides:
  *  /v1/byoc/<label>/<subpath>. */
 function byocPassThroughOf(label: KnownProviderLabel, target: string): string {
-  const known = KNOWN_PROVIDERS[label];
+  const known: KnownProvider = KNOWN_PROVIDERS[label];
   const headers = Object.entries(known.catalog_headers)
     .map(([k, v]) => `        ${JSON.stringify(k)}: ${JSON.stringify(v)}`)
     .join("\n");
+  const row = (path: string, rowTarget: string, subpath: boolean) =>
+    `    - path: ${JSON.stringify(path)}\n` +
+    `      target: ${JSON.stringify(rowTarget)}\n` +
+    (subpath ? "      include_subpath: true\n" : "") +
+    "      forward_headers: true\n" +
+    (headers.length > 0 ? `      headers:\n${headers}\n` : "");
+  // ORDER IS LOAD-BEARING: litellm matches the first row whose path
+  // prefixes the request — explicit seat-route rows MUST precede the
+  // catch-all, or the uniform join lands chat on the seat's Go-404
+  const routeRows = Object.entries(known.byoc_routes ?? {})
+    .map(([wire, seat]) => row(`/v1/byoc/${label}${wire}`, `${target}${seat}`, false))
+    .join("");
   return (
     header([
       `GENERATED for the BYOC seat ${label} — never hand-edited.`,
       "Pass-through seam: the caller's token IS the credential — litellm",
       "forwards the incoming Authorization verbatim (forward_headers),",
       "registry catalog_headers ride static config. Buckle's userleg",
-      "calls /v1/byoc/" + label + "/<subpath>.",
+      "calls /v1/byoc/" + label + "/<subpath>. Seat route rows come",
+      "first (byoc_routes in the registry — the live seat is not",
+      "path-uniform); the catch-all forwards everything else verbatim.",
     ]) +
     "general_settings:\n" +
     "  pass_through_endpoints:\n" +
-    `    - path: /v1/byoc/${label}\n` +
-    `      target: ${JSON.stringify(target)}\n` +
-    "      include_subpath: true\n" +
-    "      forward_headers: true\n" +
-    (headers.length > 0 ? `      headers:\n${headers}\n` : "")
+    routeRows +
+    row(`/v1/byoc/${label}`, target, true)
   );
 }
 
