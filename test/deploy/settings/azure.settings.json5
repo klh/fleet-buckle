@@ -1,0 +1,36 @@
+// azure.settings.json5 — the E2E azure world: the tabula-rasa hub
+// (BYOC mscopilot seat + GUI + owner) with the seat pointed at the
+// compose STUB (hermetic — nothing real, no egress). The over layer
+// starts EMPTY: the spec lands a provider edit through /admin/hubs
+// (the exact runtime path production rides).
+{
+  hub: {
+    label: "azure",
+    ports: { buckle: 4111 },
+  },
+  keys: {
+    principals_dir: "/state/keys",
+  },
+  access: {
+    principals: [
+      { id: "gui@azure", kind: "service", groups: [] },
+      { id: "owner@azure", kind: "human", groups: [] },
+    ],
+    grants: [
+      {
+        principal: "gui@azure",
+        scopes: ["admin", "models.list", "stats.read", "tree.read"],
+      },
+      { principal: "owner@azure", scopes: ["models.list", "models.use", "stats.read"] },
+    ],
+    tiers: [],
+  },
+  providers: {
+    // BYOC by registry default; url overridden to the compose stub
+    mscopilot: { url: "http://mscopilot-stub:8080" },
+  },
+  // the unit's ENGINE: the chat chain is the production one —
+  // /w/<lane>/<token> rides the engine's KEYLESS BYOC deployments
+  // (the caller's token forwards through to the seat)
+  engine: { url: "http://engine:4000" },
+}

@@ -1,0 +1,8 @@
+{
+  "name": "@fleet/buckle-gui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun gui.main.ts"
+  }
+}

@@ -11,6 +11,7 @@ node_modules/
 .qlty/plugin_cachedir/
 .qlty/sources/
 test/deploy/keys/.gen/*
+test/deploy/keys/.azure/*
 test/deploy/engine/
 
 .worktrees/

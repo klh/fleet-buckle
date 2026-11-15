@@ -54,6 +54,28 @@ describe("BuckleSettings", () => {
       providers: { mscopilot: {} },
     });
     expect(copilot.providers?.["mscopilot"]?.dialect).toBe("github_copilot");
+    expect(copilot.providers?.["mscopilot"]?.user_token).toBe(true); // keyless = BYOC default
+  });
+
+  // the user_token resolution ratchet: the registry default is a
+  // TABULA-RASA default — a KEYED entry is classic (the demo's b2
+  // rides a unit key), an explicit entry flag always wins
+  test("user_token: keyed mscopilot stays CLASSIC, keyless inherits BYOC, explicit wins", () => {
+    const keyed = BuckleSettings.parse({
+      hub: { label: "x" },
+      providers: { mscopilot: { key: "/etc/k" } },
+    });
+    expect(keyed.providers?.["mscopilot"]?.user_token).toBe(false);
+    const explicit = BuckleSettings.parse({
+      hub: { label: "x" },
+      providers: { mscopilot: { key: "/etc/k", user_token: true } },
+    });
+    expect(explicit.providers?.["mscopilot"]?.user_token).toBe(true);
+    const openrouterKeyless = BuckleSettings.parse({
+      hub: { label: "x" },
+      providers: { openrouter: {} },
+    });
+    expect(openrouterKeyless.providers?.["openrouter"]?.user_token).toBe(false); // registry says classic
   });
 
   test("an explicit url overrides the registry default (the stub over-layer does this)", () => {

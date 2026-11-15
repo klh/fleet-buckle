@@ -25,6 +25,7 @@ import {
 import { buildFederatedCatalog } from "../catalog/buckle.catalog.view.ts";
 import { hopChat, type HopOutcome } from "./buckle.proxy.hop.ts";
 import { engineChat, usageOf } from "./buckle.proxy.engine.ts";
+import { userChat } from "./buckle.proxy.userleg.ts";
 import {
   failedEventOf,
   injectedEventOf,
@@ -238,13 +239,76 @@ function injectContext(ctx: ForwardCtx, req: Request, stamp: LegStamp, ask: Body
   return { raw: injectedBodyOf(ask.raw, verdict.system, stamp.route), injectedRule: verdict.rule };
 }
 
+/** steps 3 + 3.5 extracted: federated-model resolution and the BYOC
+ *  gate — a peer model a grant does not admit is indistinguishable
+ *  from an unknown model (no leak); a user_token provider demands the
+ *  CALLER's /w/ credential, and that credential admits nothing else. */
+async function resolveModelGate(
+  ctx: ForwardCtx,
+  ask: { model: string; raw: string; traceparent: string },
+): Promise<
+  | { kind: "refused"; response: Response }
+  | { kind: "ride"; providerRow: { user_token?: boolean; url: string } | undefined; origin: "buckle" | "provider"; originLabel: string }
+> {
+  const { settings, principal, tokenOf } = ctx;
+  const catalog = await buildFederatedCatalog(
+    settings,
+    principal,
+    tokenOf,
+    ask.traceparent,
+    ctx.userToken,
+  );
+  const known = catalog.models.find((m) => m.id === ask.model);
+  if (known === undefined)
+    return {
+      kind: "refused",
+      response: problemResponse(
+        "not-found",
+        `model ${ask.model} is not served by this buckle`,
+        // a BYOC seat's catalog rides the caller's token — without one
+        // its rows are invisible; the refusal NAMES the contract
+        ctx.userToken === null &&
+          Object.values(settings.providers ?? {}).some((p) => p.user_token)
+          ? "BYOC seats list their models only through your token: point the client at /w/<lane>/<token>/…"
+          : undefined,
+      ),
+    };
+  const providerRow =
+    known.origin.kind === "provider" ? settings.providers?.[known.origin.label] : undefined;
+  const byoc = providerRow !== undefined && providerRow.user_token;
+  if (byoc && ctx.userToken === null)
+    return {
+      kind: "refused",
+      response: problemResponse(
+        "unauthenticated",
+        "this model's provider requires the user token",
+        "point the client at /w/<lane>/<token>/… (BYOC seat)",
+      ),
+    };
+  if (!byoc && ctx.principal.startsWith("user:"))
+    return {
+      kind: "refused",
+      response: problemResponse(
+        "unauthenticated",
+        "a principal key is required for this model",
+        "the /w/ user token only admits BYOC providers",
+      ),
+    };
+  return {
+    kind: "ride",
+    providerRow,
+    origin: known.origin.kind,
+    originLabel: known.origin.label,
+  };
+}
+
 export async function forwardChat(
   ctx: ForwardCtx,
   req: Request,
   traceparent: string,
   stamp: LegStamp,
 ): Promise<Response> {
-  const { settings, principal, tokenOf } = ctx;
+  const { settings } = ctx;
   // 1 — the body must name a model (drift fails loud); the raw bytes
   //     are read ONCE and ride untouched from here on
   let raw = lanePinnedBody(settings, stamp.laneSlug, await req.text());
@@ -261,13 +325,10 @@ export async function forwardChat(
   // legs and stamps the served response (never-silent injection)
   const sealed: LegStamp = { ...stamp, injectedRule: injected.injectedRule };
 
-  // 3 — resolve in the principal's FEDERATED view: a peer model a
-  //     grant does not admit is indistinguishable from an unknown
-  //     model (no leak)
-  const catalog = await buildFederatedCatalog(settings, principal, tokenOf, traceparent);
-  const known = catalog.models.find((m) => m.id === model);
-  if (known === undefined)
-    return problemResponse("not-found", `model ${model} is not served by this buckle`);
+  // 3 + 3.5 — resolve in the principal's FEDERATED view, then the
+  //     BYOC gate (both refusals decompose to problems)
+  const gate = await resolveModelGate(ctx, { model, raw, traceparent });
+  if (gate.kind === "refused") return gate.response;
 
   // 4 — the leg: buckle-origin hops, provider-origin rides our engine.
   //     The RIDE is the request's protocol state, validated ONCE —
@@ -278,9 +339,14 @@ export async function forwardChat(
     path: hopPathOf(req.headers.get(HOP_PATH_HEADER)),
     deadline: hopDeadlineOf(req.headers.get(HOP_DEADLINE_HEADER)),
   });
-  return known.origin.kind === "buckle"
-    ? await serveHop(ctx, ride, sealed, { peerLabel: known.origin.label, model })
-    : await serveEngine(ctx, ride, model, sealed);
+  return gate.origin === "buckle"
+    ? await serveHop(ctx, ride, sealed, { peerLabel: gate.originLabel, model })
+    : gate.providerRow !== undefined && gate.providerRow.user_token
+      ? await serveUser(ctx, ride, model, sealed, {
+          label: gate.originLabel,
+          url: gate.providerRow.url,
+        })
+      : await serveEngine(ctx, ride, model, sealed);
 }
 
 /** a failed hop's client verdict — the outcome union mapped onto
@@ -364,6 +430,54 @@ async function serveHop(
 function faultKindOf(outcome: Exclude<HopOutcome, { kind: "served" }>): FaultKindValue {
   if (outcome.kind === "fault") return outcome.fault.kind;
   return "denied";
+}
+
+/** the BYOC leg: a user_token provider → the provider DIRECT, with
+ *  the caller's own credential (relayed verbatim, then dropped). No
+ *  fleet tags (no engine sits on this leg to read them); the settled
+ *  event carries the provider label as the chain name. */
+async function serveUser(
+  ctx: ForwardCtx,
+  ride: HopRide,
+  model: string,
+  stamp: LegStamp,
+  target: { label: string; url: string },
+): Promise<Response> {
+  if (ctx.userToken === null)
+    return problemResponse("unauthenticated", "the BYOC leg requires the user token");
+  const openedAt = Date.now();
+  emitOpened(ctx, model, openedAt);
+  const outcome = await userChat({
+    settings: ctx.settings,
+    label: target.label,
+    url: target.url,
+    raw: ride.body,
+    traceparent: ride.traceparent,
+    route: stamp.route,
+    token: ctx.userToken,
+  });
+  if (outcome.kind === "served")
+    return settleServed(ctx, {
+      model,
+      leg: "user",
+      openedAt,
+      peer: target.label,
+      injectedRule: stamp.injectedRule,
+      laneSlug: stamp.laneSlug,
+      outcome,
+    });
+  settleFailed(ctx, {
+    model,
+    leg: "user",
+    openedAt,
+    peer: target.label,
+    fault: outcome.fault.kind,
+  });
+  return problemResponse(
+    "unavailable",
+    `provider ${target.label} ${outcome.fault.kind}`,
+    `user leg fault: ${outcome.fault.kind}`,
+  );
 }
 
 /** the engine leg: provider-origin model → OUR litellm */

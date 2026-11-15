@@ -32,6 +32,9 @@ export default defineConfig({
   projects: [
     { name: "smoke", testMatch: "**/smoke/*.spec.ts" },
     { name: "e2e", testMatch: "**/e2e/*.spec.ts", dependencies: ["smoke"] },
+    // the azure tabula-rasa rig SELF-COMPOSES (its own compose file,
+    // minted keys, stub seat) — no global-stack dependency
+    { name: "azure", testMatch: "**/e2e/buckle.e2e.azure.spec.ts" },
     {
       name: "federation",
       testMatch: "**/federation/*.spec.ts",

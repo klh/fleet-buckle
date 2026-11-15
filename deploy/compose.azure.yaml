@@ -1,0 +1,60 @@
+# compose.azure.yaml — the TABULA RASA hub for the ~50-dev Azure
+# deployment: buckle + its health sidecar + the GUI. NOTHING else —
+# no engine (no litellm yet), no provider keys anywhere. The ONE
+# shared /state volume carries the principal keys (0600, minted on
+# the hub by the one-shot `mint` profile) and the over layer
+# (/state/over.json5 — the file /admin/hubs lands edits through).
+# WIRING ONLY — all config lives in settings/azure.settings.json5.
+services:
+  buckle:
+    build: ..
+    environment:
+      BUCKLE_SETTINGS: /etc/buckle/settings.json5
+      BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+      BUCKLE_SETTINGS_OVER: /state/over.json5
+    volumes:
+      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ./settings/azure.settings.json5:/etc/buckle/settings.json5:ro
+      - state:/state
+    ports:
+      - "4111:4111"
+
+  # the outside-process health verdict (never the served process)
+  health:
+    build: https://github.com/klh/fleet-health.git#v1.0.0
+    environment:
+      HEALTH_SETTINGS: /etc/health/settings.json5
+    volumes:
+      - ./settings/azure.health.settings.json5:/etc/health/settings.json5:ro
+    ports:
+      - "4112:4112"
+    depends_on: [buckle]
+
+  # the minimal GUI — static shell + /api seam (rides the GUI
+  # principal key from /state/keys, read per request)
+  gui:
+    build: ./gui
+    environment:
+      BUCKLE_URL: http://buckle:4111
+      GUI_KEY_FILE: /state/keys/principal.gui@azure.key
+    volumes:
+      - state:/state:ro
+    ports:
+      - "8080:8080"
+    depends_on: [buckle]
+
+  # ONE-SHOT bootstrap (profile `mint`): mints the declared
+  # principals' 0600 key files into /state/keys. Idempotent — run it
+  # once per hub:  docker compose --profile mint run --rm mint
+  mint:
+    profiles: ["mint"]
+    build: ..
+    entrypoint:
+      ["bun", "/app/tools/src/buckle.azure-mint.ts", "/state/keys"]
+    volumes:
+      - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ./settings/azure.settings.json5:/etc/buckle/settings.json5:ro
+      - state:/state
+
+volumes:
+  state:

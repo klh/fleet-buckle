@@ -3,7 +3,7 @@
 // file never hand-rolls them). Mirrors test/kit/, which serves the
 // Docker projects; this kit serves the colocated bun unit tests.
 // TYPE LAW: every exported type is zod-derived — no hand-written shapes.
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -30,6 +30,10 @@ const SawRequest = z
     hopPath: z.string().nullable(),
     deadline: z.string().nullable(),
     raw: z.string(),
+    /** the copilot seat's demanded integration id (BYOC proofs) */
+    copilotId: z.string().nullable(),
+    /** the request path (chat vs catalog rides, engine-leg proofs) */
+    path: z.string(),
   })
   .strict();
 type SawRequest = z.output<typeof SawRequest>;
@@ -40,6 +44,8 @@ function sawOf(req: Request, raw: string): SawRequest {
     traceparent: req.headers.get("traceparent"),
     hopPath: req.headers.get(HOP_PATH_HEADER),
     deadline: req.headers.get(HOP_DEADLINE_HEADER),
+    copilotId: req.headers.get("copilot-integration-id"),
+    path: new URL(req.url).pathname,
     raw,
   });
 }
@@ -77,6 +83,40 @@ export function stubProvider(rows: { id: string }[]): {
     },
   });
   return { port: server.port ?? 0, stop: () => server.stop(true) };
+}
+
+/** a BYOC seat stub — the copilot-shaped provider: the /models
+ *  catalog PLUS direct /v1/chat/completions + /v1/messages legs
+ *  (the user leg posts the provider DIRECT, no engine between),
+ *  every ride recorded with the headers that arrived (the BYOC
+ *  proof reads exactly which credential reached the seat) */
+export function stubByocSeat(rows: { id: string }[]): {
+  port: number;
+  stop: () => void;
+  seen: SawRequest[];
+} {
+  const seen: SawRequest[] = [];
+  const server = Bun.serve({
+    port: 0,
+    fetch: async (req) => {
+      const pathname = new URL(req.url).pathname;
+      if (req.method === "GET" && pathname === "/models")
+        return Response.json({ data: rows });
+      if (req.method === "POST" && (pathname === "/v1/chat/completions" || pathname === "/v1/messages")) {
+        seen.push(sawOf(req, await req.text()));
+        return Response.json({
+          id: "copilot-seat-echo",
+          object: "chat.completion",
+          created: 1,
+          model: "seat",
+          choices: [{ index: 0, message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+  return { port: server.port ?? 0, stop: () => server.stop(true), seen };
 }
 
 /** the engine stub: answers /v1/chat/completions with a well-formed
@@ -155,12 +195,29 @@ export function recorder(target: number): {
   return { port: server.port ?? 0, stop: () => server.stop(true), seen };
 }
 
-/** defaults only — the hermetic base every world composes from */
-async function loadDefaultsOnly(): Promise<BuckleSettings> {
-  return loadSettings({
-    defaults: join(ROOT, "deploy/settings/default.settings.json5"),
-    settings: join(ROOT, "deploy/settings/default.settings.json5"),
-  });
+/** the loaded defaults face parses through a NAMED schema (zod law —
+ *  the dynamic json5 import is wire-shaped input, never a hand cast) */
+const LoadedDefaultsSchema = z.object({ default: z.record(z.string(), z.unknown()) });
+
+/** defaults only — the hermetic base every world composes from.
+ *  Engineless worlds (engineUrl undefined) STRIP the engine url and
+ *  key path from the RAW defaults layer first: deep-merge cannot
+ *  delete, so the strip happens before the one parse. */
+async function loadDefaultsRaw(engineless: boolean): Promise<Record<string, unknown>> {
+  const mod = LoadedDefaultsSchema.parse(
+    await import(join(ROOT, "deploy/settings/default.settings.json5"), {
+      with: { type: "json5" },
+    }),
+  );
+  const raw = structuredClone(mod.default);
+  if (engineless) {
+    delete raw["engine"];
+    const keys = raw["keys"];
+    if (typeof keys === "object" && keys !== null && !Array.isArray(keys)) {
+      delete (keys as Record<string, unknown>)["engine"];
+    }
+  }
+  return raw;
 }
 
 /** boot ONE buckle world: defaults ⊕ b1 ⊕ the overrides below, then
@@ -183,13 +240,15 @@ export async function bootBuckle(opts: {
   /** path to the engine master key file — when set, worlds exercise
    *  the engine gate (litellm master_key auth on the engine leg) */
   engineKeyFile?: string;
+  /** over-layer path — when set, the world boots WITH an over layer
+   *  (and /admin/hubs can land edits through it) */
+  over?: string;
 }): Promise<{ base: string; port: number; stop: () => void }> {
-  const base = await loadDefaultsOnly();
   // compose as a RAW overlay, re-parsed through the one loader — the
   // provider registry resolves url/dialect at parse, never by cast.
   // HERMETIC: providers/hubs are exactly the world's opts — nothing
   // real, nothing docker, nothing inherited
-  const settings = mergeSettings(base, {
+  const overlay = {
     hub: { label: opts.label },
     keys: {
       principals_dir: opts.dir,
@@ -209,8 +268,30 @@ export async function bootBuckle(opts: {
       ]),
     ),
     ...(opts.engineUrl === undefined ? {} : { engine: { url: opts.engineUrl } }),
+  };
+  // with an over path the world RIDES the over layer (the exact
+  // mechanism /admin/hubs lands edits through — reload reproduces
+  // the same settings); without one it composes in memory. The unit
+  // layer is a WRITTEN copy of the (possibly engine-stripped) raw
+  // defaults so reloads reproduce exactly what the world booted with
+  const rawBase = await loadDefaultsRaw(opts.engineUrl === undefined);
+  let settings: BuckleSettings;
+  const overPath = opts.over;
+  if (overPath === undefined) {
+    settings = mergeSettings(rawBase, overlay);
+  } else {
+    const unitPath = join(dirname(overPath), "unit.json5");
+    writeFileSync(unitPath, `${JSON.stringify(rawBase, null, 2)}\n`, { mode: 0o600 });
+    writeFileSync(overPath, `${JSON.stringify(overlay, null, 2)}\n`, { mode: 0o600 });
+    settings = await loadSettings({ defaults: unitPath, settings: unitPath, over: overPath });
+  }
+  const server = bootServer({
+    settings,
+    port: 0,
+    ...(overPath === undefined
+      ? {}
+      : { paths: { defaults: join(dirname(overPath), "unit.json5"), settings: join(dirname(overPath), "unit.json5"), over: overPath } }),
   });
-  const server = bootServer({ settings, port: 0 });
   return {
     base: `http://127.0.0.1:${server.port}`,
     port: server.port ?? 0,

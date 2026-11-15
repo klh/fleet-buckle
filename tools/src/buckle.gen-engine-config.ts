@@ -36,6 +36,36 @@ const UNITS = {
   zai: "http://zai-stub:8080/v1",
 } as const;
 
+/** BYOC seats ride the engine's PASS-THROUGH seam (verified live on
+ *  litellm 1.103.0): `include_subpath: true` + `forward_headers:
+ *  true` relays the CALLER's Authorization verbatim to the seat —
+ *  model deployments CANNOT carry it (a deployment api_key replaces
+ *  the user credential; keyless ones 500 on client construction).
+ *  The path convention is the contract buckle's userleg rides:
+ *  /v1/byoc/<label>/<subpath>. */
+function byocPassThroughOf(label: KnownProviderLabel, target: string): string {
+  const known = KNOWN_PROVIDERS[label];
+  const headers = Object.entries(known.catalog_headers)
+    .map(([k, v]) => `        ${JSON.stringify(k)}: ${JSON.stringify(v)}`)
+    .join("\n");
+  return (
+    header([
+      `GENERATED for the BYOC seat ${label} — never hand-edited.`,
+      "Pass-through seam: the caller's token IS the credential — litellm",
+      "forwards the incoming Authorization verbatim (forward_headers),",
+      "registry catalog_headers ride static config. Buckle's userleg",
+      "calls /v1/byoc/" + label + "/<subpath>.",
+    ]) +
+    "general_settings:\n" +
+    "  pass_through_endpoints:\n" +
+    `    - path: /v1/byoc/${label}\n` +
+    `      target: ${JSON.stringify(target)}\n` +
+    "      include_subpath: true\n" +
+    "      forward_headers: true\n" +
+    (headers.length > 0 ? `      headers:\n${headers}\n` : "")
+  );
+}
+
 const ROOT = new URL("../..", import.meta.url).pathname;
 const OUT = join(ROOT, "test", "deploy", "engine");
 
@@ -44,6 +74,14 @@ function header(comment: string[]): string {
 }
 
 function stubDeploymentsOf(provider: keyof typeof UNITS): string {
+  // BYOC seat: the PASS-THROUGH seam always rides (auth cannot ride
+  // model deployments). The stub file ALSO carries the classic keyed
+  // deployments — the settings layer can declare the seat ENGINE-HELD
+  // (b2 does; its key file is a stub fixture, not a user token), and
+  // that world rides /v1/chat/completions against model_list rows.
+  const passThrough = KNOWN_PROVIDERS[provider].user_token
+    ? byocPassThroughOf(provider, UNITS[provider].replace(/\/v1$/, ""))
+    : "";
   const fixture: Fixture = FixtureSchema.parse(
     JSON.parse(
       readFileSync(join(ROOT, "test", "deploy", "fixtures", `${provider}.models.json`), "utf8"),
@@ -61,35 +99,41 @@ function stubDeploymentsOf(provider: keyof typeof UNITS): string {
       '      api_key: "sk-stub-fixture"',
     );
   }
-  return [
+  const deployments = [
     header([
-      "GENERATED from test/deploy/fixtures/" + provider + ".models.json",
+      `GENERATED from test/deploy/fixtures/${provider}.models.json`,
       "(the real captured catalog) — never hand-edited; regenerate instead.",
     ]),
     ...lines,
     "",
   ].join("\n");
+  return `${passThrough}${deployments}`;
 }
 
-/** a REAL leg per row: dialect decides the shape (one registry, one
- *  truth). Keys ride os.environ — never the generated file. */
+/** a REAL leg per row: dialect decides the shape (one registry,
+ *  one truth). Keys ride os.environ — never the generated file.
+ *  BYOC seats never reach here — their files are the pass-through
+ *  seam (the caller's token cannot ride a deployment). */
 function realLegOf(known: KnownProvider, id: string): string[] {
   const litellm_params: string[] = [];
   if (known.dialect === "openai") {
     litellm_params.push(
       `      model: ${JSON.stringify(`openai/${id.replace(/^openai\//, "")}`)}`,
       `      api_base: ${JSON.stringify(known.url)}`,
+      `      api_key: ${JSON.stringify(`os.environ/${known.key_env}`)}`,
     );
   } else if (known.dialect === "github_copilot") {
-    litellm_params.push(`      model: ${JSON.stringify(`github_copilot/${id}`)}`);
+    litellm_params.push(
+      `      model: ${JSON.stringify(`github_copilot/${id}`)}`,
+      `      api_key: ${JSON.stringify(`os.environ/${known.key_env}`)}`,
+    );
   } else {
-    litellm_params.push(`      model: ${JSON.stringify(`anthropic/${id}`)}`);
+    litellm_params.push(
+      `      model: ${JSON.stringify(`anthropic/${id}`)}`,
+      `      api_key: ${JSON.stringify(`os.environ/${known.key_env}`)}`,
+    );
   }
-  litellm_params.push(
-    `      api_key: ${JSON.stringify(`os.environ/${known.key_env}`)}`,
-    "    model_info:",
-    "      disable_background_health_check: true",
-  );
+  litellm_params.push("    model_info:", "      disable_background_health_check: true");
   return litellm_params;
 }
 
@@ -106,15 +150,27 @@ async function pullCatalog(
   });
   if (!r.ok) throw new Error(`${label}: catalog pull ${r.status} from ${known.url}/models`);
   const catalog = FixtureSchema.parse(await r.json());
-  // the provider's OWN order; take keeps engine boot bounded
-  const rows = catalog.data.map((row) => row.id).slice(0, known.take ?? Infinity);
+  // the provider's OWN order; take keeps engine boot bounded (BYOC
+  // seats take the FULL list — the catalog rides verbatim)
+  const cap = "take" in known ? known.take : undefined;
+  const rows = catalog.data.map((row) => row.id).slice(0, cap ?? Infinity);
   return { label, rows };
 }
 
 export async function genRealEngineConfigs(outDir: string): Promise<void> {
   mkdirSync(outDir, { recursive: true });
+  // REAL_PROVIDERS filters the loop (wiring, not hand-authored
+  // files — a hub generating only its seat needs no other key)
+  const filter = process.env["REAL_PROVIDERS"]?.split(",").map((s) => s.trim());
   for (const label of Object.keys(KNOWN_PROVIDERS) as KnownProviderLabel[]) {
+    if (filter !== undefined && !filter.includes(label)) continue;
     const known = KNOWN_PROVIDERS[label];
+    // BYOC seat: the pass-through seam, verbatim caller token
+    if (known.user_token) {
+      writeFileSync(join(outDir, `${label}.litellm.yaml`), byocPassThroughOf(label, known.url));
+      console.log(`${outDir}/${label}.litellm.yaml: BYOC pass-through (caller token forwards)`);
+      continue;
+    }
     const { rows } = await pullCatalog(label);
     if (rows.length === 0)
       throw new Error(`${label}: live catalog empty — refusing to emit an empty engine`);
@@ -135,8 +191,8 @@ export async function genRealEngineConfigs(outDir: string): Promise<void> {
       ]) +
         lines.join("\n") +
         "\nlitellm_settings:\n  drop_params: true # tolerate Anthropic-only params the wires 400 on\n" +
-        // the engine gate: only a buckle holding keys/engine reaches the
-        // legs (anonymous + wrong key are 401 by litellm master_key)
+        // the engine gate: only a buckle holding keys/engine reaches
+        // the legs (anonymous + wrong key are 401 by litellm master_key)
         "\ngeneral_settings:\n  master_key: os.environ/ENGINE_MASTER_KEY\n",
     );
     console.log(`${outDir}/${label}.litellm.yaml: ${rows.length} real legs (${known.dialect})`);

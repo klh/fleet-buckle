@@ -60,9 +60,21 @@ function createFetchCall(parts: {
 type FetchCall = ReturnType<typeof createFetchCall>;
 
 /** the fetch's request headers: continued trace, the seat's key when
- *  one is configured, plus any headers the registry demands */
-function headersOf(entry: ProviderEntry, call: FetchCall): Record<string, string> {
-  const secret = entry.provider.key !== undefined ? call.tokenOf(entry.provider.key) : null;
+ *  one is configured, plus any headers the registry demands. A BYOC
+ *  provider (user_token) carries the CALLER's /w/ token instead —
+ *  no unit key exists for it, so the catalog rides the user's own
+ *  credential (never cached ACROSS users: the cache holds only the
+ *  seat-wide model list, never the credential) */
+function headersOf(
+  entry: ProviderEntry,
+  call: FetchCall,
+  userToken: string | null,
+): Record<string, string> {
+  const secret = entry.provider.user_token
+    ? userToken
+    : entry.provider.key !== undefined
+      ? call.tokenOf(entry.provider.key)
+      : null;
   const known = KNOWN_PROVIDERS[entry.label as KnownProviderLabel];
   return {
     traceparent: continueTraceparent(call.traceparent),
@@ -92,10 +104,11 @@ function wireRowsOf(data: unknown[], entry: ProviderEntry): BuckleModelWire[] {
 async function fetchRows(
   entry: ProviderEntry,
   call: FetchCall,
+  userToken: string | null,
 ): Promise<{ ok: true; rows: BuckleModelWire[] } | { ok: false; fault: Fault }> {
   const sent = await httpSend(
     `${entry.url.replace(/\/$/, "")}/models`,
-    { headers: headersOf(entry, call) },
+    { headers: headersOf(entry, call, userToken) },
     call.timeouts.provider_fetch_ms,
   );
   if (!sent.ok) return { ok: false, fault: sent.fault };
@@ -126,12 +139,24 @@ function cacheEmpty(
   return [];
 }
 
-async function fetchProvider(entry: ProviderEntry, call: FetchCall): Promise<BuckleModelWire[]> {
+async function fetchProvider(
+  entry: ProviderEntry,
+  call: FetchCall,
+  userToken: string | null,
+): Promise<BuckleModelWire[]> {
+  // a BYOC provider without a caller token triggers NOTHING: no
+  // fetch, no delete — warm rows (the seat-wide list, identical for
+  // every dev) stay readable, a cold cache answers honest emptiness
+  // (the refusal names the /w/ contract at the pipeline)
   const key = `${entry.label}|${entry.url}`;
+  if (entry.provider.user_token && userToken === null) {
+    const warm = cache.get(key);
+    return warm !== undefined && Date.now() - warm.at < call.graceMs ? warm.rows : [];
+  }
   const hit = cache.get(key);
   if (hit !== undefined && Date.now() - hit.at < call.ttlMs) return hit.rows;
 
-  const fetched = await fetchRows(entry, call);
+  const fetched = await fetchRows(entry, call, userToken);
   if (!fetched.ok) {
     logFault("catalog.fetch", key, fetched.fault);
     return cacheEmpty(key, hit, call.graceMs);
@@ -144,11 +169,16 @@ export async function buildCatalog(
   settings: BuckleSettings,
   traceparent: string,
   tokenOf: TokenReader = () => null,
+  userToken: string | null = null,
 ): Promise<BuckleModelsResponse> {
   const call = createFetchCall({ tokenOf, traceparent, timeouts: settings.timeouts });
   const batches = await Promise.all(
     Object.entries(settings.providers ?? {}).map(([label, provider]) =>
-      fetchProvider(ProviderFetchSchema.parse({ label, url: provider.url, provider }), call),
+      fetchProvider(
+        ProviderFetchSchema.parse({ label, url: provider.url, provider }),
+        call,
+        userToken,
+      ),
     ),
   );
   return { hub: settings.hub.label, models: batches.flat() };

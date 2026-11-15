@@ -1,0 +1,38 @@
+// azure.settings.json5 — the tabula-rasa hub for the ~50-dev Azure
+// deployment: Entra-identified humans, Copilot BYOC seats, ONE GUI.
+// What is deliberately ABSENT: provider keys (BYOC — no key ever
+// exists for mscopilot on this unit), an engine (no litellm yet),
+// lanes (slugs are free-form attribution). The over layer (mounted
+// at /state/over.json5, BUCKLE_SETTINGS_OVER) is where /admin/hubs
+// lands runtime edits.
+{
+  hub: {
+    label: "azure",
+    ports: { buckle: 4111 },
+  },
+  keys: {
+    // the shared /state volume: GUI + admin principal keys (0600,
+    // minted on the hub, never baked into images)
+    principals_dir: "/state/keys",
+  },
+  access: {
+    principals: [
+      { id: "gui@azure", kind: "service", groups: [] },
+      { id: "owner@azure", kind: "human", groups: [] },
+    ],
+    grants: [
+      {
+        principal: "gui@azure",
+        scopes: ["admin", "models.list", "stats.read", "tree.read"],
+      },
+      { principal: "owner@azure", scopes: ["models.list", "models.use", "stats.read"] },
+    ],
+    tiers: [],
+  },
+  providers: {
+    // BYOC by registry default: url+dialect+catalog headers resolve
+    // from KNOWN_PROVIDERS; the credential is ALWAYS the caller's
+    // /w/<lane>/<token> — nothing to configure here, ever
+    mscopilot: {},
+  },
+}

@@ -89,8 +89,9 @@ export async function buildFederatedCatalog(
   principal: string,
   tokenOf: TokenReader,
   traceparent: string,
+  userToken: string | null = null,
 ): Promise<BuckleModelsResponse> {
-  const own = await buildCatalog(settings, traceparent, tokenOf);
+  const own = await buildCatalog(settings, traceparent, tokenOf, userToken);
   const admitted = admittedPeers(settings, principal);
   const set = createModelSet();
 

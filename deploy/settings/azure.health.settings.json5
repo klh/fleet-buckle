@@ -1,0 +1,12 @@
+{
+  // azure.health.settings.json5 — the sidecar for the azure hub:
+  // poll the buckle's healthz over the container network, serve the
+  // verdict on the sidecar's own port (health is outside-process).
+  probe: {
+    target: "http://buckle:4111/healthz",
+  },
+  serve: {
+    port: 4112,
+    bind: "0.0.0.0",
+  },
+}

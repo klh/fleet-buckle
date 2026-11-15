@@ -1,0 +1,66 @@
+# compose.azure.test.yaml — the E2E tabula-rasa topology: the azure
+# hub (buckle + GUI + the litellm ENGINE) against the mscopilot STUB
+# (hermetic — nothing real, no egress; the BYOC seat's url rides the
+# test settings file). The chat chain is the production one:
+# dev → buckle /w/<lane>/<token> → ENGINE (keyless BYOC deployments,
+# the caller's token forwarded) → mscopilot-stub. The over layer
+# lives on the shared `state` volume and starts EMPTY — the spec
+# lands a provider edit through /admin/hubs (the exact runtime path
+# production rides). Host ports: GUI 4761 · buckle 4762 · stub
+# /_seen evidence face 4764 · engine 4765.
+services:
+  mscopilot-stub:
+    build: ../kit/stub
+    volumes:
+      - ../deploy/fixtures/mscopilot.models.json:/etc/stub/models.json:ro
+    ports:
+      - "4764:8080"
+
+  # the LITELLM ENGINE — the BYOC seat's keyless deployments ride
+  # here (config GENERATED from the same fixture the stub serves, so
+  # catalog and legs can never drift). Ungated: the caller's own
+  # token is the credential; the engine forwards it verbatim.
+  engine:
+    image: ghcr.io/berriai/litellm:v1.103.0 # digest-pin at v0.0.1 tag
+    command: ["--config", "/etc/engine/mscopilot.litellm.yaml", "--port", "4000"]
+    volumes:
+      - ./engine/mscopilot.litellm.yaml:/etc/engine/mscopilot.litellm.yaml:ro
+    ports:
+      - "4765:4000"
+
+  # the second seat — the /admin/hubs edit lands openrouter HERE (its
+  # own fixture: ids DISJOINT from the mscopilot seat, so the live-swap
+  # proof sees the new provider's own rows, not a duplicate)
+  openrouter-stub:
+    build: ../kit/stub
+    volumes:
+      - ../deploy/fixtures/openrouter.models.json:/etc/stub/models.json:ro
+
+  buckle:
+    build: ../..
+    environment:
+      BUCKLE_SETTINGS: /etc/buckle/settings.json5
+      BUCKLE_DEFAULTS: /etc/buckle/default.settings.json5
+      BUCKLE_SETTINGS_OVER: /state/over.json5
+    volumes:
+      - ../../deploy/settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
+      - ./settings/azure.settings.json5:/etc/buckle/settings.json5:ro
+      - ./keys/.azure:/state/keys
+      - state:/state
+    ports:
+      - "4762:4111"
+    depends_on: [mscopilot-stub, engine]
+
+  gui:
+    build: ../../deploy/gui
+    environment:
+      BUCKLE_URL: http://buckle:4111
+      GUI_KEY_FILE: /state/keys/principal.gui@azure.key
+    volumes:
+      - ./keys/.azure:/state/keys:ro
+    ports:
+      - "4761:8080"
+    depends_on: [buckle]
+
+volumes:
+  state:

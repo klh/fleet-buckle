@@ -33,6 +33,12 @@ const seen: {
   systemMark: boolean;
   system: string | null;
   contract: string | null;
+  /** the credential that arrived (BYOC proofs: whose token rode) */
+  auth: string | null;
+  /** the copilot seat's integration id, when the caller sent one */
+  copilotId: string | null;
+  /** who made the ride (BYOC-through-the-engine proofs: litellm's UA) */
+  ua: string | null;
 }[] = [];
 
 function recordSeen(
@@ -41,8 +47,11 @@ function recordSeen(
   systemMark: boolean,
   contract: string | null,
   system: string | null,
+  auth: string | null = null,
+  copilotId: string | null = null,
+  ua: string | null = null,
 ): void {
-  seen.push({ at: Date.now(), face, model, systemMark, system, contract });
+  seen.push({ at: Date.now(), face, model, systemMark, system, contract, auth, copilotId, ua });
   if (seen.length > 100) seen.splice(0, seen.length - 100);
 }
 
@@ -152,7 +161,7 @@ const server = Bun.serve({
       } catch {
         // non-JSON body: still a passthrough stub
       }
-      recordSeen("chat", model, systemMark, contract, systemHead);
+      recordSeen("chat", model, systemMark, contract, systemHead, req.headers.get("authorization"), req.headers.get("copilot-integration-id"), req.headers.get("user-agent"));
       return Response.json({
         id: "stub-chat",
         object: "chat.completion",
@@ -203,7 +212,7 @@ const server = Bun.serve({
       } catch {
         // non-JSON body: still a passthrough stub
       }
-      recordSeen("messages", model, systemMark, contract, systemHead);
+      recordSeen("messages", model, systemMark, contract, systemHead, req.headers.get("authorization"), req.headers.get("copilot-integration-id"), req.headers.get("user-agent"));
       return Response.json({
         id: "stub-msg",
         type: "message",
@@ -275,7 +284,7 @@ const server = Bun.serve({
       } catch {
         // non-JSON body: still a passthrough stub
       }
-      recordSeen("responses", model, systemMark, contract, systemHead);
+      recordSeen("responses", model, systemMark, contract, systemHead, req.headers.get("authorization"), req.headers.get("copilot-integration-id"), req.headers.get("user-agent"));
       return Response.json({
         id: "resp-stub",
         object: "response",

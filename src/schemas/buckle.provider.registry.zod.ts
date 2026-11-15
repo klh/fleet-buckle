@@ -19,6 +19,10 @@ export const KnownProviderSchema = z.object({
   key_env: z.string(),
   /** muramasa default key file (tilde-expanded by the launcher, env-overridable) */
   key_file: z.string(),
+  /** BYOC default: when true, this seat rides the CALLER's /w/ token
+   *  upstream — no unit-level key file ever exists for it (the
+   *  Copilot seat: every dev forwards their own token) */
+  user_token: z.boolean().optional(),
 });
 export type KnownProvider = z.output<typeof KnownProviderSchema>;
 
@@ -30,6 +34,7 @@ export const KNOWN_PROVIDERS = {
     take: 40,
     key_env: "OPENROUTER_API_KEY",
     key_file: "~/.claude/local-llm/openrouter.key",
+    user_token: false,
   },
   mscopilot: {
     url: "https://api.githubcopilot.com",
@@ -37,7 +42,7 @@ export const KNOWN_PROVIDERS = {
     catalog_headers: { "copilot-integration-id": "vscode-chat" },
     key_env: "COPILOT_API_KEY",
     key_file: "~/.claude/local-llm/copilot.key",
-    take: 42, // the seat's full list
+    user_token: true, // per-dev tokens ride /w/<lane>/<token>/… — never stored
   },
   zai: {
     url: "https://api.z.ai/api/coding/paas/v4",
@@ -46,6 +51,7 @@ export const KNOWN_PROVIDERS = {
     key_env: "ZAI_API_KEY",
     key_file: "~/.claude/local-llm/zai.key",
     take: 12, // the coding plan's full list
+    user_token: false,
   },
 } as const satisfies Record<string, KnownProvider>;
 

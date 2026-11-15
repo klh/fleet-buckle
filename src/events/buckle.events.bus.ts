@@ -15,7 +15,7 @@ import { pick } from "../pick.ts";
 const FaultKind = z.enum(["timeout", "unreachable", "denied", "malformed", "io"]);
 
 /** which leg carried the request */
-const LegKind = z.enum(["engine", "hop"]);
+const LegKind = z.enum(["engine", "hop", "user"]);
 
 /** what actually happens on the forward path — three named event
  *  schemas (the constructors derive from THESE, never a hand-typed

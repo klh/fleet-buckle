@@ -27,6 +27,11 @@ export const BuckleProviderEntry = z
     limits: BuckleLimits.optional(),
     /** c.1 — per-model OVERRIDES only; the list itself is fetched. */
     models: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+    /** BYOC (bring-your-own-credential): the CALLER's /w/ token is
+     *  the upstream credential — no key file ever exists for this
+     *  provider on this unit. True by registry default for seats
+     *  that only ever ride user tokens (the Copilot seat). */
+    user_token: z.boolean().optional(),
   })
   .strict();
 export type BuckleProviderEntry = z.output<typeof BuckleProviderEntry>;
@@ -41,6 +46,8 @@ export const BuckleProvider = z
     limits: BuckleLimits.optional(),
     /** c.1 — per-model OVERRIDES only; the list itself is fetched. */
     models: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+    /** resolved BYOC flag: entry row ⊕ registry default, always concrete */
+    user_token: z.boolean(),
   })
   .strict();
 export type BuckleProvider = z.output<typeof BuckleProvider>;
@@ -70,7 +77,17 @@ export const BuckleProviders = z
       const url = entry.url ?? known?.url;
       const dialect = entry.dialect ?? known?.dialect;
       if (url === undefined || dialect === undefined) continue;
-      resolved[label] = { ...entry, url, dialect };
+      resolved[label] = {
+        ...entry,
+        url,
+        dialect,
+        // the registry's user_token default is a TABULA-RASA default:
+        // it applies only when the entry configures NO unit key (BYOC
+        // = no unit key ever exists). A keyed provider stays CLASSIC
+        // unless the entry EXPLICITLY says user_token: true.
+        user_token:
+          entry.user_token ?? (entry.key === undefined ? (known?.user_token ?? false) : false),
+      };
     }
     return resolved;
   });
@@ -232,6 +249,20 @@ export type BuckleSettingsFile = z.output<typeof BuckleSettingsFile>;
 export function mergeSettings(base: unknown, override: unknown): BuckleSettings {
   const merged = deepMerge(base, override);
   return BuckleSettings.parse(merged);
+}
+
+/** the non-throwing twin: drift decomposes to a detail string instead
+ *  of an exception (callers outside the settings.ts catch budget turn
+ *  a failed merge into a loud rejection, never a thrown one). */
+export function mergeSettingsSafe(
+  base: unknown,
+  override: unknown,
+): { ok: true; settings: BuckleSettings } | { ok: false; detail: string } {
+  const merged = deepMerge(base, override);
+  const parsed = BuckleSettings.safeParse(merged);
+  return parsed.success
+    ? { ok: true, settings: parsed.data }
+    : { ok: false, detail: parsed.error.message };
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {

@@ -18,6 +18,8 @@ import { BuckleModelsResponse } from "../schemas/buckle.model.wire.zod.ts";
 
 const DIR = mintKeyDir({ "principal.wire@fleet.test.key": "bksk_wire_test" });
 const AUTH = { authorization: "Bearer bksk_wire_test" };
+/** a dev's own copilot-seat credential for the /w/<lane>/<token> rides */
+const BYOC_TOKEN = "ghp_" + "wire4test2wire4test2wire4test2wire4test";
 const ACCESS: AccessRegistry = BuckleAccessRegistry.parse({
   principals: [{ id: "wire@fleet.test", kind: "service", groups: [] }],
   grants: [{ principal: "wire@fleet.test", scopes: ["models.list", "models.use"] }],
@@ -99,7 +101,15 @@ describe("/v1/models (fetch, never declare)", () => {
       mscopilot: `http://127.0.0.1:${provider.port}`,
     });
     try {
-      const r = await fetch(`${base}/v1/models`, { headers: AUTH });
+      // the copilot seat is BYOC by registry default: a key-only
+      // caller pulls NOTHING (no unit credential exists to ride)
+      const bare = await fetch(`${base}/v1/models`, { headers: AUTH });
+      expect(BuckleModelsResponse.parse(await bare.json()).models).toEqual([]);
+      // the SAME caller on /w/<lane>/<token>/… pulls the seat's
+      // full list riding THEIR token — metadata verbatim
+      const r = await fetch(`${base}/w/copilot/${BYOC_TOKEN}/v1/models`, {
+        headers: AUTH,
+      });
       const body = BuckleModelsResponse.parse(await r.json());
       expect(body.models.length).toBe(1);
       const m = body.models[0]!;

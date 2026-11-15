@@ -39,8 +39,15 @@ import { buildTree } from "./catalog/buckle.catalog.topology.ts";
 import { createForwardCtx } from "./proxy/buckle.proxy.ctx.ts";
 import { forwardChat, problemResponse, type ChatRoute } from "./proxy/buckle.proxy.pipeline.ts";
 import { passThrough } from "./proxy/buckle.proxy.passthrough.ts";
-import { lanePrefixOf } from "./lane.ts";
+import { lanePrefixOf, userIdOf } from "./lane.ts";
 import { pick } from "./pick.ts";
+import {
+  AdminKeyMintRequest,
+  AdminHubEditRequest,
+  adminState,
+  applyHubEdit,
+  mintPrincipalKey,
+} from "./admin/buckle.admin.control.ts";
 
 /** the server-scoped state every face shares — composed once at boot.
  *  Factory-typed (the live-values idiom: ReturnType of the one
@@ -55,6 +62,9 @@ function createServerState(parts: {
   stats: ReturnType<typeof createStatsCache>;
   engine: EngineTelemetrySource;
   judge: ContextJudge;
+  /** the load paths — hub edits reload through them (null = the
+   *  caller booted without paths: /admin/hubs refuses, no-over) */
+  paths: SettingsPaths | null;
 }) {
   return parts;
 }
@@ -69,6 +79,9 @@ type Face = (
     req: Request;
     tp: string;
     principal: string | null;
+    /** the /w/<lane>/<token> BYOC credential when the URL carried one
+     *  (a SECRET — never logged, never echoed; rides the user leg) */
+    userToken: string | null;
     /** the bare (lane-stripped) path */
     path: string;
     /** the raw query string (`?…`, or "" — pass-through relays it) */
@@ -110,17 +123,29 @@ function admitPrincipal(srv: ServerState, principal: string | null): Response | 
 const noStore = { "cache-control": "no-store" };
 
 const chatFace: Face = async (srv, rq) => {
-  const denied = requireScope(srv, rq.principal, "models.use");
-  if (denied !== null) return denied;
-  const refused = admitPrincipal(srv, rq.principal);
-  if (refused !== null) return refused;
+  // the BYOC identity: a caller whose ONLY credential is the /w/
+  // token (no principal key) rides a pseudonymous principal — the
+  // pipeline's BYOC gate (3.5) admits them to user_token providers
+  // and REFUSES them everywhere else, so no scope check fires here
+  // for them (a token is not a principal key)
+  const principal =
+    rq.principal ?? (rq.userToken !== null ? userIdOf(rq.userToken) : null);
+  if (principal === null)
+    return problemResponse("unauthenticated", "a principal key is required");
+  if (rq.principal !== null) {
+    const denied = requireScope(srv, rq.principal, "models.use");
+    if (denied !== null) return denied;
+    const refused = admitPrincipal(srv, rq.principal);
+    if (refused !== null) return refused;
+  }
   return forwardChat(
     createForwardCtx({
       settings: srv.settings,
       bus: srv.bus,
       judge: srv.judge,
-      principal: rq.principal as string,
+      principal,
       tokenOf: srv.tokenOf,
+      userToken: rq.userToken,
     }),
     rq.req,
     rq.tp,
@@ -129,10 +154,24 @@ const chatFace: Face = async (srv, rq) => {
 };
 
 const modelsFace: Face = async (srv, rq) => {
-  const denied = requireScope(srv, rq.principal, "models.list");
-  if (denied !== null) return denied;
+  // BYOC callers (token, no key) may list too — their catalog pull
+  // rides their own credential for user_token seats
+  const principal =
+    rq.principal ?? (rq.userToken !== null ? userIdOf(rq.userToken) : null);
+  if (principal === null)
+    return problemResponse("unauthenticated", "a principal key is required");
+  if (rq.principal !== null) {
+    const denied = requireScope(srv, rq.principal, "models.list");
+    if (denied !== null) return denied;
+  }
   return Response.json(
-    await buildFederatedCatalog(srv.settings, rq.principal as string, srv.tokenOf, rq.tp),
+    await buildFederatedCatalog(
+      srv.settings,
+      principal,
+      srv.tokenOf,
+      rq.tp,
+      rq.userToken,
+    ),
     { headers: noStore },
   );
 };
@@ -170,6 +209,53 @@ const metricsFace: Face = async (srv) =>
     headers: { "content-type": "text/plain; version=0.0.4" },
   });
 
+/** the admin seam — the GUI's control faces. Every one demands a
+ *  keyed principal holding `admin`; the roster + scopes live in
+ *  settings (code), the keys are minted secrets (0600 files). */
+const adminGuard = (srv: ServerState, principal: string | null): Response | null =>
+  requireScope(srv, principal, "admin");
+
+const adminStateFace: Face = async (srv, rq) => {
+  const denied = adminGuard(srv, rq.principal);
+  if (denied !== null) return denied;
+  return Response.json(adminState(srv.settings), { headers: noStore });
+};
+
+const adminKeysFace: Face = async (srv, rq) => {
+  const denied = adminGuard(srv, rq.principal);
+  if (denied !== null) return denied;
+  const body = AdminKeyMintRequest.safeParse(await rq.req.json().catch(() => null));
+  if (!body.success)
+    return problemResponse("validation", 'body must be {"principal": "…"}', body.error.message);
+  const out = mintPrincipalKey(srv.settings, body.data);
+  if (out.kind === "minted")
+    return Response.json({ principal: out.principal, key: out.key }, { status: 201, headers: noStore });
+  if (out.kind === "already-keyed")
+    return problemResponse("conflict", `${out.principal} already holds a key — revoke it first`, out.file);
+  if (out.kind === "unknown-principal")
+    return problemResponse("not-found", `${out.principal} is not declared in settings access.principals`);
+  return problemResponse("validation", "keys.principals_dir is not configured");
+};
+
+const adminHubsFace: Face = async (srv, rq) => {
+  const denied = adminGuard(srv, rq.principal);
+  if (denied !== null) return denied;
+  const body = AdminHubEditRequest.safeParse(await rq.req.json().catch(() => null));
+  if (!body.success)
+    return problemResponse("validation", "body must be {providers?|hubs?|lanes?} rows", body.error.message);
+  const out = await applyHubEdit(srv.paths, srv.settings, body.data);
+  if (out.kind === "applied") {
+    srv.settings = out.settings; // the LIVE swap — no restart
+    return Response.json(
+      { ok: true, over: out.over, hub: adminState(out.settings) },
+      { headers: noStore },
+    );
+  }
+  if (out.kind === "no-over")
+    return problemResponse("conflict", "this buckle has no over layer to write", out.detail);
+  return problemResponse("validation", "the edit does not parse through the settings schema", out.detail);
+};
+
 /** THE route table — one row per face; anything NOT here rides the
  *  VERBATIM pass-through leg to the engine (the catch-all: every
  *  litellm face stays reachable through buckle exactly as litellm
@@ -182,6 +268,9 @@ const routes: Record<string, Face> = {
   "GET /v1/tree": treeFace,
   "GET /healthz": healthzFace,
   "GET /metrics": metricsFace,
+  "GET /admin/state": adminStateFace,
+  "POST /admin/keys": adminKeysFace,
+  "POST /admin/hubs": adminHubsFace,
 };
 
 const passThroughFace: Face = async (srv, rq) => {
@@ -190,7 +279,12 @@ const passThroughFace: Face = async (srv, rq) => {
   return passThrough(srv.settings, rq.req, `${rq.path}${rq.search ?? ""}`, srv.tokenOf);
 };
 
-export function bootServer(input: { settings: BuckleSettings; port?: number }) {
+export function bootServer(input: {
+  settings: BuckleSettings;
+  port?: number;
+  /** the load paths — hub edits reload through them */
+  paths?: SettingsPaths;
+}) {
   // the EVENT BUS: the pipeline's one write seam; collectors
   // subscribe here — the faces never know who is counting
   const bus = createEventBus();
@@ -213,52 +307,60 @@ export function bootServer(input: { settings: BuckleSettings; port?: number }) {
     stats: createStatsCache(input.settings, readToken),
     engine: createEngineCollector(input.settings, readToken),
     judge,
+    paths: input.paths ?? null,
   });
   const { settings } = srv;
   return Bun.serve({
     hostname: "0.0.0.0",
     port: input.port ?? settings.hub.ports.buckle,
-    fetch: async (req) => {
-      const startedAt = Date.now();
-      const tp = continueTraceparent(req.headers.get("traceparent"));
-      // the /w/<slug> LANE PREFIX: attribution + launch pin from the
-      // URL itself — stripped BEFORE dispatch (faces and the engine
-      // both see the bare path; the slug rides as a fact + echo)
-      const url = new URL(req.url);
-      const { lane: laneSlug, path } = lanePrefixOf(url.pathname);
-      const face = routes[`${req.method} ${path}`] ?? passThroughFace;
-      const res = await face(srv, {
-        req,
-        tp,
-        principal: authenticate(settings, bearerOf(req)),
-        path,
-        search: url.search,
-        route: path === "/v1/messages" ? "messages" : "chat",
-        laneSlug,
-      });
-      exportSpan(
-        {
-          name: `${req.method} ${path}`,
-          traceparent: tp,
-          startedAt,
-          endedAt: Date.now(),
-          attributes: {
-            "http.status": res.status,
-            "buckle.label": settings.hub.label,
-            ...pick("buckle.lane", laneSlug === "" ? undefined : laneSlug),
-          },
-        },
-        settings,
-      );
-      return res;
-    },
+    fetch: (req) => serveRequest(srv, req),
   });
+}
+
+/** the one dispatch: lane-prefix strip → face (or the verbatim
+ *  pass-through) → span export. Extracted from bootServer so the
+ *  boot path reads as composition, not control flow. */
+async function serveRequest(srv: ServerState, req: Request): Promise<Response> {
+  const { settings } = srv;
+  const startedAt = Date.now();
+  const tp = continueTraceparent(req.headers.get("traceparent"));
+  // the /w/<slug> LANE PREFIX: attribution + launch pin from the
+  // URL itself — stripped BEFORE dispatch (faces and the engine
+  // both see the bare path; the slug rides as a fact + echo)
+  const url = new URL(req.url);
+  const { lane: laneSlug, path, userToken } = lanePrefixOf(url.pathname);
+  const face = routes[`${req.method} ${path}`] ?? passThroughFace;
+  const res = await face(srv, {
+    req,
+    tp,
+    principal: authenticate(srv.settings, bearerOf(req)),
+    userToken,
+    path,
+    search: url.search,
+    route: path === "/v1/messages" ? "messages" : "chat",
+    laneSlug,
+  });
+  exportSpan(
+    {
+      name: `${req.method} ${path}`,
+      traceparent: tp,
+      startedAt,
+      endedAt: Date.now(),
+      attributes: {
+        "http.status": res.status,
+        "buckle.label": srv.settings.hub.label,
+        ...pick("buckle.lane", laneSlug === "" ? undefined : laneSlug),
+      },
+    },
+    settings,
+  );
+  return res;
 }
 
 async function main(paths: SettingsPaths & { port?: number }) {
   const settings = await loadSettings(paths);
   const port = paths.port ?? settings.hub.ports.buckle;
-  bootServer({ settings, port });
+  bootServer({ settings, port, paths });
   console.log(`fleet-buckle ${settings.hub.label} on :${port} (trace id ${newTraceId()})`);
 }
 

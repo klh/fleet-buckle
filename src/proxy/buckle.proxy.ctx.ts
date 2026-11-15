@@ -13,13 +13,19 @@ import type { TokenReader } from "../federation/buckle.federation.peer.ts";
  *  the principal's KIND from the registry ONCE (absent row = no kind
  *  — the tracker renders the row without one). Factory-typed (the
  *  codebase idiom for live values: ReturnType of the one
- *  constructor — never a fake z.custom parse). */
+ *  constructor — never a fake z.custom parse).
+ *
+ *  userToken: the caller's /w/<lane>/<token> BYOC credential when
+ *  present (null otherwise) — a SECRET: it rides the user_token
+ *  provider leg as the upstream Bearer and NOTHING else (never an
+ *  event, never a log, never a response). */
 export function createForwardCtx(parts: {
   settings: BuckleSettings;
   bus: EventBus;
   judge?: ContextJudge;
   principal: string;
   tokenOf: TokenReader;
+  userToken: string | null;
 }) {
   const row = parts.settings.access?.principals.find((p) => p.id === parts.principal);
   // the judge defaults INERT: no injection unless a policy says so

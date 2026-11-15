@@ -7,7 +7,7 @@
 // filesystem read: every knob (timeouts, telemetry, engine url,
 // ports, key PATHS) lives in settings — one home — and the token/dir
 // readers classify + log their faults instead of swallowing.
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { z } from "zod";
 import { classifyFault, logFault } from "./fault.ts";
 import { mergeSettings, type BuckleSettings } from "./schemas/buckle.settings.zod.ts";
@@ -40,7 +40,9 @@ export async function loadSettings(paths: SettingsPaths): Promise<BuckleSettings
   const base = (await import(paths.defaults, { with: { type: "json5" } })).default;
   const unit = (await import(paths.settings, { with: { type: "json5" } })).default;
   const merged = [base, unit];
-  if (paths.over !== undefined)
+  // a MISSING over file is an EMPTY layer (a fresh /state volume boots
+  // clean); a PRESENT but malformed one still fails loud at parse
+  if (paths.over !== undefined && existsSync(paths.over))
     merged.push((await import(paths.over, { with: { type: "json5" } })).default);
   return merged.reduce((acc, layer) => mergeSettings(acc, layer));
 }
