@@ -1,10 +1,16 @@
-# compose.azure.yaml — the TABULA RASA hub for the ~50-dev Azure
-# deployment: buckle + its health sidecar + the GUI. NOTHING else —
-# no engine (no litellm yet), no provider keys anywhere. The ONE
-# shared /state volume carries the principal keys (0600, minted on
-# the hub by the one-shot `mint` profile) and the over layer
-# (/state/over.json5 — the file /admin/hubs lands edits through).
-# WIRING ONLY — all config lives in settings/azure.settings.json5.
+# compose.azure.yaml — the Azure hub topology, mirroring the LIVE
+# VM shape: buckle + engine (litellm, engine-held seats) + health
+# sidecar + GUI + repoagent worker. NO key material in this file —
+# the engine's PAT rides the 0600 .env (COPILOT_API_KEY,
+# ENGINE_MASTER_KEY, GITHUB_COPILOT_TOKEN_DIR); principal keys are
+# minted into the shared /state volume by the one-shot `mint`
+# profile; the over layer lives at /state/over.json5 (the file
+# /admin/hubs lands edits through).
+# deploy/engine/mscopilot.litellm.yaml is GENERATED — regenerate:
+#   MSCOPPILOT_KEY_PATH=~/.claude/local-llm/copilot.key REAL_PROVIDERS=mscopilot \\
+#     ENGINE_HELD_SEATS=mscopilot REAL_OUT=deploy/engine \\
+#     bun tools/src/buckle.gen-engine-config.ts --real
+# WIRING ONLY — all buckle config lives in settings/azure.settings.json5.
 services:
   buckle:
     build: ..
@@ -18,6 +24,23 @@ services:
       - state:/state
     ports:
       - "4111:4111"
+    depends_on: [engine]
+
+  # the engine leg — litellm holding the seat credentials (the
+  # PAT never crosses into buckle or the worker; they auth as
+  # principals and the engine spends the PAT for them)
+  engine:
+    image: ghcr.io/berriai/litellm:latest
+    command: ["--config", "/etc/engine/mscopilot.litellm.yaml", "--port", "4000"]
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./engine/mscopilot.litellm.yaml:/etc/engine/mscopilot.litellm.yaml:ro
+      # pre-seeded github_copilot token cache (device flow never fires)
+      - ./engine/tokens:/etc/engine/tokens
+    ports:
+      - "4000:4000"
 
   # the outside-process health verdict (never the served process)
   health:
@@ -61,6 +84,33 @@ services:
       - ./settings/default.settings.json5:/etc/buckle/default.settings.json5:ro
       - ./settings/azure.settings.json5:/etc/buckle/settings.json5:ro
       - state:/state
+
+  # the repoagent worker — picks its model at boot from the seed
+  # dir (/.prefer hub=ikea + provider=mscopilot + frontier ladder,
+  # hubs.json label→URL map, persona.md + template.md). The buckle
+  # key is the MINTED worker@azure principal key (the PAT stays
+  # engine-side ONLY, in the 0600 .env); worker_token is the GitHub
+  # API leg. Durable journal: /state/worker.sqlite (survives
+  # restarts; sweeps resume mid-cycle).
+  worker:
+    image: ${WORKER_IMAGE:-fleetbuckle467.azurecr.io/worker:e72086d}
+    restart: on-failure
+    environment:
+      WORKER_REPO: ${WORKER_REPO:-icomdev/Vanilla-JavaScript-Calculator}
+      WORKER_GH_URL: https://api.github.com
+      WORKER_TOKEN_FILE: /run/secrets/worker_token
+      BUCKLE_URL: http://buckle:4111
+      BUCKLE_KEY_FILE: /run/secrets/buckle_key
+      WORKER_LANE: b3-repoagent-v1-calculon
+      WORKER_STORE: /state/worker.sqlite
+      WORKER_POLL_SECONDS: "20"
+      WORKER_BYOC: "false"
+    volumes:
+      - ./secrets/worker_token:/run/secrets/worker_token:ro
+      - ./secrets/buckle_key:/run/secrets/buckle_key:ro
+      - ./worker:/etc/worker:ro
+      - state:/state
+    depends_on: [buckle]
 
 volumes:
   state:

@@ -1,0 +1,290 @@
+# GENERATED from the LIVE mscopilot catalog (https://api.githubcopilot.com/models)
+# at 2026-11-16T14:41:26.197Z — never hand-edited.
+# Keys ride os.environ/COPILOT_API_KEY (never this file).
+model_list:
+  - model_name: "claude-haiku-5.5"
+    litellm_params:
+      model: "github_copilot/claude-haiku-5.5"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "claude-opus-4.8"
+    litellm_params:
+      model: "github_copilot/claude-opus-4.8"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "claude-opus-5.5"
+    litellm_params:
+      model: "github_copilot/claude-opus-5.5"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "claude-opus-5"
+    litellm_params:
+      model: "github_copilot/claude-opus-5"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "claude-sonnet-5.5"
+    litellm_params:
+      model: "github_copilot/claude-sonnet-5.5"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "claude-sonnet-5"
+    litellm_params:
+      model: "github_copilot/claude-sonnet-5"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gemini-3.8-flash"
+    litellm_params:
+      model: "github_copilot/gemini-3.8-flash"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gemini-4-argon"
+    litellm_params:
+      model: "github_copilot/gemini-4-argon"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gemini-4-carbon"
+    litellm_params:
+      model: "github_copilot/gemini-4-carbon"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gemini-4-hydrogen"
+    litellm_params:
+      model: "github_copilot/gemini-4-hydrogen"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-5.3-codex"
+    litellm_params:
+      model: "github_copilot/gpt-5.3-codex"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-5.4-nano"
+    litellm_params:
+      model: "github_copilot/gpt-5.4-nano"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-5.6-luna"
+    litellm_params:
+      model: "github_copilot/gpt-5.6-luna"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-5.6-sol"
+    litellm_params:
+      model: "github_copilot/gpt-5.6-sol"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-5.6-terra"
+    litellm_params:
+      model: "github_copilot/gpt-5.6-terra"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-6.1-sol"
+    litellm_params:
+      model: "github_copilot/gpt-6.1-sol"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-6.1-terra"
+    litellm_params:
+      model: "github_copilot/gpt-6.1-terra"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-6-astra"
+    litellm_params:
+      model: "github_copilot/gpt-6-astra"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-6-luna-decisions"
+    litellm_params:
+      model: "github_copilot/gpt-6-luna-decisions"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-6-luna"
+    litellm_params:
+      model: "github_copilot/gpt-6-luna"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-6-sol"
+    litellm_params:
+      model: "github_copilot/gpt-6-sol"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "grok-4.6"
+    litellm_params:
+      model: "github_copilot/grok-4.6"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "grok-4.7"
+    litellm_params:
+      model: "github_copilot/grok-4.7"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "mai-code-1.1-flash"
+    litellm_params:
+      model: "github_copilot/mai-code-1.1-flash"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-4o-mini-2024-07-18"
+    litellm_params:
+      model: "github_copilot/gpt-4o-mini-2024-07-18"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-4o-2024-11-20"
+    litellm_params:
+      model: "github_copilot/gpt-4o-2024-11-20"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-4o-2024-08-06"
+    litellm_params:
+      model: "github_copilot/gpt-4o-2024-08-06"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "text-embedding-3-small"
+    litellm_params:
+      model: "github_copilot/text-embedding-3-small"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "text-embedding-3-small-inference"
+    litellm_params:
+      model: "github_copilot/text-embedding-3-small-inference"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "claude-haiku-4.5"
+    litellm_params:
+      model: "github_copilot/claude-haiku-4.5"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-4.1-2025-04-14"
+    litellm_params:
+      model: "github_copilot/gpt-4.1-2025-04-14"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-3.5-turbo-0613"
+    litellm_params:
+      model: "github_copilot/gpt-3.5-turbo-0613"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-4"
+    litellm_params:
+      model: "github_copilot/gpt-4"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-4-0613"
+    litellm_params:
+      model: "github_copilot/gpt-4-0613"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-4-0125-preview"
+    litellm_params:
+      model: "github_copilot/gpt-4-0125-preview"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-4o-2024-05-13"
+    litellm_params:
+      model: "github_copilot/gpt-4o-2024-05-13"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-4-o-preview"
+    litellm_params:
+      model: "github_copilot/gpt-4-o-preview"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-4.1"
+    litellm_params:
+      model: "github_copilot/gpt-4.1"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-3.5-turbo"
+    litellm_params:
+      model: "github_copilot/gpt-3.5-turbo"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-4o-mini"
+    litellm_params:
+      model: "github_copilot/gpt-4o-mini"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "gpt-4o"
+    litellm_params:
+      model: "github_copilot/gpt-4o"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+  - model_name: "text-embedding-ada-002"
+    litellm_params:
+      model: "github_copilot/text-embedding-ada-002"
+      api_key: "os.environ/COPILOT_API_KEY"
+    model_info:
+      disable_background_health_check: true
+litellm_settings:
+  drop_params: true # tolerate wire params the seat 400s on
+
+general_settings:
+  master_key: os.environ/ENGINE_MASTER_KEY
+  pass_through_endpoints:
+# GENERATED for the BYOC seat mscopilot — never hand-edited.
+# Pass-through seam: the caller's token IS the credential — litellm
+# forwards the incoming Authorization verbatim (forward_headers),
+# registry catalog_headers ride static config. Buckle's userleg
+# calls /v1/byoc/mscopilot/<subpath>. Seat route rows come
+# first (byoc_routes in the registry — the live seat is not
+# path-uniform); the catch-all forwards everything else verbatim.
+    - path: "/v1/byoc/mscopilot/v1/chat/completions"
+      target: "https://api.githubcopilot.com/chat/completions"
+      forward_headers: true
+      headers:
+        "copilot-integration-id": "vscode-chat"
+    - path: "/v1/byoc/mscopilot/v1/messages"
+      target: "https://api.githubcopilot.com/v1/messages"
+      forward_headers: true
+      headers:
+        "copilot-integration-id": "vscode-chat"
+    - path: "/v1/byoc/mscopilot/v1/responses"
+      target: "https://api.githubcopilot.com/responses"
+      forward_headers: true
+      headers:
+        "copilot-integration-id": "vscode-chat"
+    - path: "/v1/byoc/mscopilot"
+      target: "https://api.githubcopilot.com"
+      include_subpath: true
+      forward_headers: true
+      headers:
+        "copilot-integration-id": "vscode-chat"
