@@ -22,6 +22,8 @@ This roadmap does not authorize one lane to build all of P0–P5.
      fall back to a baked-in list of DEFAULTS and try those in order.
    - `must=a,b` — ordered hard list; if none work, the worker **errors
      out** (refuses to run on a wrong model).
+   - `tag=` / `color=` — identification keys (label the worker in logs/
+     dashboards); no routing effect.
 2. **Worker auth topology**: the worker requests whatever auth it needs
    from buckle and rides buckle → litellm (engine-held credentials). A
    baked-in fallback endpoint is acceptable if needed.
