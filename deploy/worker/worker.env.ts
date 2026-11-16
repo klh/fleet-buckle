@@ -14,8 +14,11 @@ const readSecret = (path: string, envName: string): string => {
   }
 };
 
+const REPO_DEFAULT = "icomdev/calculon";
+const repo = process.env["WORKER_REPO"] ?? REPO_DEFAULT;
+
 export const env = {
-  repo: process.env["WORKER_REPO"] ?? "icomdev/calculon",
+  repo,
   ghUrl: process.env["WORKER_GH_URL"] ?? "https://api.github.com",
   token: readSecret(process.env["WORKER_TOKEN_FILE"] ?? "/run/secrets/worker_token", "WORKER_TOKEN"),
   buckle: process.env["BUCKLE_URL"] ?? "http://buckle3:4111",
@@ -31,7 +34,11 @@ export const env = {
   storePath: process.env["WORKER_STORE"] ?? "/state/worker.sqlite",
   pollSeconds: Number(process.env["WORKER_POLL_SECONDS"] ?? 20),
   dockerSock: process.env["DOCKER_SOCK"] ?? "/var/run/docker.sock",
-  pagesUrl: process.env["WORKER_PAGES_URL"] ?? `https://icomdev.github.io/calculon/`,
+  // the MERGED site (GitHub Pages, owner/name derived); per-BRANCH
+  // previews ride raw.githack (computed at the call site)
+  pagesUrl:
+    process.env["WORKER_PAGES_URL"] ??
+    `https://${repo.split("/")[0]}.github.io/${repo.split("/")[1]}/`,
   // the WAKE face: GitHub webhooks (or the gh-stub) POST here for an
   // immediate sweep; the poll stays the reconciliation backstop
   wakeAddr: process.env["WORKER_WAKE_ADDR"] ?? "",

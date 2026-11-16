@@ -167,21 +167,39 @@ const raisePull = async (n: number, branch: string, summary: string): Promise<st
   return pr.html_url;
 };
 
+/** bounded text-file contents for the plan context — the model
+ *  must SEE what it rewrites (a blind full-file rewrite is an honest
+ *  no-op: the live seat refused to guess contents it never saw).
+ *  Missing/binary files stay absent (they are new files). */
+const currentContents = async (paths: string[], ref: string): Promise<string> => {
+  const textRe = /\.(html|css|js|md|json|txt)$/i;
+  const out: string[] = [];
+  for (const p of paths.filter((x) => textRe.test(x)).slice(0, 8)) {
+    const c = await gh<{ content?: string }>(
+      `/repos/${env.repo}/contents/${p}?ref=${ref}`,
+    ).catch(() => null);
+    if (c?.content === undefined) continue;
+    const body = Buffer.from(c.content, "base64").toString("utf8");
+    if (body.length <= 10_000) out.push(`### ${p}\n${body}`);
+  }
+  return out.join("\n\n");
+};
+
 /** ACCEPTED: plan the diff, syntax-check every file with
  *  microworkers, cut the branch, land the files, raise the PR, post
  *  the done-comment */
 const phaseDeliver = async (issue: Issue, comments: Comment[], row: PhaseRow): Promise<void> => {
   const thread = comments.map((c) => `${c.user.login}: ${c.body}`).join("\n");
+  const baseBranch = await defaultBranch();
   const tree = await gh<{ tree: { path: string }[] }>(
-    `/repos/${env.repo}/git/trees/${await defaultBranch()}?recursive=1`,
+    `/repos/${env.repo}/git/trees/${baseBranch}?recursive=1`,
   );
+  const paths = tree.tree.map((t) => t.path);
+  const contentsBlock = await currentContents(paths, baseBranch);
   const { summary, files } = await ask(
     Plan,
-    `You are implementing a GitHub issue on the ${env.repo} repo. Choose 1-5 files to create or rewrite IN FULL (content = the complete new file). Keep changes small and consistent with the repo. Available paths: ${tree.tree
-      .map((t) => t.path)
-      .slice(0, 120)
-      .join(", ")}`,
-    `issue #${issue.number}: ${issue.title}\nbody: ${issue.body ?? ""}\n\ncomments:\n${thread}`,
+    `You are implementing a GitHub issue on the ${env.repo} repo. The CURRENT contents of the existing text files are provided below — rewrite the affected ones IN FULL (content = the complete new file, preserving what should not change) or add new files. Keep changes small and consistent with the repo. Available paths: ${paths.slice(0, 120).join(", ")}`,
+    `issue #${issue.number}: ${issue.title}\nbody: ${issue.body ?? ""}\n\ncomments:\n${thread}\n\ncurrent file contents:\n${contentsBlock}`,
     { summary: "what changed", files: [{ path: "docs/x.md", content: "full file" }] },
   );
 
@@ -191,9 +209,12 @@ const phaseDeliver = async (issue: Issue, comments: Comment[], row: PhaseRow): P
   await cutBranch(branch);
   for (const f of files) await landFile(issue.number, branch, summary, f);
   const prUrl = await raisePull(issue.number, branch, summary);
+  const indexPath =
+    paths.find((p) => p === "index.html") ?? paths.find((p) => p.endsWith("index.html")) ?? "index.html";
+  const previewUrl = `https://raw.githack.com/${env.repo}/${branch}/${indexPath}`;
   await comment(
     issue.number,
-    `Done — PR ${prUrl} is up, connected to this issue. The microworkers ran clean. Once merged you can check the result on the Pages site: ${env.pagesUrl} 🎉`,
+    `Done — PR ${prUrl} is up, connected to this issue. The microworkers ran clean. Preview this branch live: ${previewUrl} — once merged, the site is at ${env.pagesUrl} 🎉`,
   );
   row.phase = "delivered";
 };
