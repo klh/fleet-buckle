@@ -19,9 +19,8 @@ export async function ask<T>(
   context: string,
 ): Promise<T> {
   const body = {
-    // pin-proof: the body model DIFFERS from the lane pin
-    // (glm-4.5-air) — a stub /_seen model of glm-4.5-air proves the
-    // lane pin won, not the body
+    // pin-proof: the body model DIFFERS from the lane pin — a stub
+    // /_seen model equal to the PIN proves the pin won, not the body
     model: "glm-4.5",
     messages: [
       {
@@ -51,6 +50,8 @@ export async function ask<T>(
   const text = chat.choices[0]?.message?.content ?? "";
   const jsonStart = text.indexOf("{");
   const jsonEnd = text.lastIndexOf("}");
+  if (jsonStart < 0 || jsonEnd < jsonStart)
+    throw new Error(`llm contract: no JSON object in reply: ${text.slice(0, 120)}`);
   const parsed = schema.safeParse(JSON.parse(text.slice(jsonStart, jsonEnd + 1)));
   if (!parsed.success)
     throw new Error(`llm contract: ${JSON.stringify(parsed.error.issues.slice(0, 3))}`);

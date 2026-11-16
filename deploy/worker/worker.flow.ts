@@ -58,14 +58,22 @@ const freshComments = async (
 };
 
 /** SEEN: classify, then either bow out (other) or ask the pin-down
- *  questions (feature/bug) — one model pass each */
+ *  questions (feature/bug) — one model pass each. Classifier drift
+ *  (model answers off-enum, prose-only, malformed JSON) BOWS OUT
+ *  visibly as "other" — never re-hammers the seat on a deterministic
+ *  parse failure; the comment invites the human to rephrase. */
 const phaseSeen = async (issue: Issue, row: PhaseRow): Promise<void> => {
   const subject = `title: ${issue.title}\nbody: ${issue.body ?? ""}`;
-  const { kind } = await ask(
-    Classification,
-    "Classify this GitHub issue for the calculon repo (a natural-language notepad calculator with a static demo site).",
-    subject,
-  );
+  let kind: z.infer<typeof Classification>["kind"];
+  try {
+    ({ kind } = await ask(
+      Classification,
+      `Classify this GitHub issue for the ${env.repo} repository.`,
+      subject,
+    ));
+  } catch {
+    kind = "other";
+  }
   if (kind === "other") {
     await comment(
       issue.number,
