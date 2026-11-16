@@ -71,7 +71,10 @@ const phaseSeen = async (issue: Issue, row: PhaseRow): Promise<void> => {
       `Classify this GitHub issue for the ${env.repo} repository.`,
       subject,
     ));
-  } catch {
+  } catch (e) {
+    // drift is OBSERVABLE (the error line names the reason) but never
+    // fatal here — a bow-out comment beats a seat-hammering retry loop
+    console.error(`[worker] classify drifted (${String(e).slice(0, 160)}); bowing out`);
     kind = "other";
   }
   if (kind === "other") {

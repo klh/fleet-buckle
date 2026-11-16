@@ -25,7 +25,9 @@ export async function ask<T>(
     messages: [
       {
         role: "user",
-        content: `${instruction}\n\nReply with STRICT JSON only, no prose, no code fence.\n\n---\n${context}`,
+        content:
+          `${instruction}\n\nReply with STRICT JSON only, no prose, no code fence, ` +
+          `exactly this shape:\n${JSON.stringify(z.toJSONSchema(schema))}\n\n---\n${context}`,
       },
     ],
   };
