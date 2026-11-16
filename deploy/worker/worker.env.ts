@@ -46,4 +46,17 @@ export const env = {
   // scope guard: when set, only issues whose TITLE starts with this
   // prefix are swept — the real-repo proof must never touch human work
   issuePrefix: process.env["WORKER_ISSUE_PREFIX"] ?? "",
+  // the .prefer startup file (owner ruling 2026-11-16): ordered model
+  // allow-list + hub candidates + knobs; absent file = picker off,
+  // the worker rides the lane topology as before
+  preferFile: process.env["WORKER_PREFER_FILE"] ?? "/etc/worker/.prefer",
+  // the seed dir (ro, baked into the image at /etc/worker — mounts
+  // overwrite): persona.md (character, rarely changes) + template.md
+  // (the incoming per-mission brief — the pi-durable template
+  // pattern) + .prefer (the model ladder)
+  personaFile: process.env["WORKER_PERSONA_FILE"] ?? "/etc/worker/persona.md",
+  templateFile: process.env["WORKER_TEMPLATE_FILE"] ?? "/etc/worker/template.md",
+  // the seed dir's hub label map — `hub=mscopopolit` in .prefer
+  // resolves through it (the fleet's hubs.json pattern)
+  hubsFile: process.env["WORKER_HUBS_FILE"] ?? "/etc/worker/hubs.json",
 } as const;

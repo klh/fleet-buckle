@@ -23,7 +23,7 @@
     "README.md"
   ],
   "scripts": {
-    "test": "bun test",
+    "test": "bun test && bun test ./deploy/worker",
     "typecheck": "tsc --noEmit && tsc --noEmit -p deploy/gui && tsc --noEmit -p deploy/worker",
     "test:smoke": "bun --bun playwright test --project=smoke",
     "test:e2e": "bun --bun playwright test --project=e2e",

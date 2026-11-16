@@ -1,8 +1,12 @@
 # Target architecture — buckle, the auth collapse, and the worker plane
 
-Status: DRAFT (the (b)+(c) document; grown to include the durable-worker
-plane now landing on b3). This file is the one place the direction lives —
-divergences from it are defects or edits here, whichever comes first.
+Status: SUPERSEDED design history, 2026-11-16. The current rollout is
+[`tasks/plan.md`](../tasks/plan.md), bounded by
+[`tasks/implementation-contract.md`](../tasks/implementation-contract.md)
+and this repository's AGENTS.md. The worker lift, Buckle model pins,
+auth collapse, and knowledge integration below are historical proposals,
+not implementation instructions. Existing code needs explicit migration
+tasks; this document authorizes no new worker or supervisor code in Buckle.
 
 ## 1. Three planes
 

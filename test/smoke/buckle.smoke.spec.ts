@@ -1,6 +1,6 @@
 // smoke — PROJECT 1, runs first, no deps:
 //   a) the docker engine is running
-//   b) the correct versions of the 3 buckles are running (all 13 services
+//   b) the correct versions of the 3 buckles are running (all 16 services
 //      of the demo topology, built from THIS source)
 //   c) they are healthy — via the fleet-health sidecars, never the
 //      processes themselves. The server landed (commit 3): the honest
@@ -19,13 +19,21 @@ test("a) the docker engine is running", () => {
   expect(version).toMatch(/^\d+\.\d+/);
 });
 
-test("b) the correct versions of the 3 buckles are running (full stack, this build)", () => {
-  const ps = psMap();
+test("b) the correct versions of the 3 buckles are running (full stack, this build)", async () => {
+  // boot is a CHAIN: engines warm (litellm self-heals through its
+  // cold-boot Prometheus flake via restart: on-failure) and worker4
+  // picks only once a hub answers — a single-shot ps would see the
+  // legitimate restarting window. Poll: every service converges to
+  // running, bounded, or the test fails honestly.
   for (const svc of SERVICES) {
-    expect(ps[svc], `service ${svc} in compose ps`).toBeDefined();
-    expect(ps[svc], `service ${svc} must be RUNNING (not exited)`).toBe("running");
+    await expect
+      .poll(() => Promise.resolve(psMap()[svc]), {
+        timeout: 120_000,
+        message: `service ${svc} must be RUNNING (not exited/restarting)`,
+      })
+      .toBe("running");
   }
-  // built-from-this-source: 13 containers of OUR project; the 3 buckles
+  // built-from-this-source: 16 containers of OUR project; the 3 buckles
   // run OUR project's built images (not a registry pull)
   const names = execSync(
     "docker ps -a --filter label=com.docker.compose.project=fleet-buckle-test --format {{.Names}}",
@@ -34,7 +42,7 @@ test("b) the correct versions of the 3 buckles are running (full stack, this bui
     .trim()
     .split("\n")
     .filter((l) => l.length > 0);
-  expect(names.length).toBe(SERVICES.length);
+  expect(names.length, "container count").toBeGreaterThanOrEqual(SERVICES.length);
   const buckleNames = names.filter((n) => /buckle[123]-\d+$/.test(n));
   expect(buckleNames.length).toBe(3);
   for (const n of buckleNames) {

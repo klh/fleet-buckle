@@ -24,17 +24,27 @@ This roadmap does not authorize one lane to build all of P0–P5.
      out** (refuses to run on a wrong model).
    - `tag=` / `color=` — identification keys (label the worker in logs/
      dashboards); no routing effect.
-2. **Worker auth topology**: the worker requests whatever auth it needs
-   from buckle and rides buckle → litellm (engine-held credentials). A
-   baked-in fallback endpoint is acceptable if needed.
-3. **The PAT is engine-only.** Buckle never mounts user tokens; it gets
-   `engine.url` + an engine key. (Already law; restated as an anchor.)
-4. **Keep litellm updated to latest** on the engine leg. Known class:
-   claude-via-copilot 422s are usually thinking/param translation — the
-   litellm copilot lane handles it.
+2. **Worker auth topology**: pilot workers act as the owner and call
+   Buckle through the authenticated deployment boundary. The operator's
+   bootstrap supplies admission credentials; Buckle is not a new login
+   or credential-issuing service. Worker pilot engine-held credentials
+   are a separate mode from human BYOC, as specified below. Endpoint
+   fallback uses only configured, authorized Buckle endpoints preserving
+   the same identity/grant contract; never direct-provider bypass.
+3. **PAT custody has two explicit modes.** Humans supply their own PAT
+   by URL or Bearer; Buckle relays it transiently. The isolated owner-worker
+   pilot may instead provision the owner's PAT only at its LiteLLM engine;
+   Buckle gets an engine key, never a mounted worker PAT. A human BYOC
+   request must never fall back to that owner-worker credential.
+4. **Keep LiteLLM current through qualified upgrades.** Test the latest
+   candidate against catalog, both auth modes, Messages, tools and SSE;
+   then deploy that exact image digest and retain the previous digest.
+   Never deploy a moving `latest` tag or auto-upgrade outside this check.
+   LiteLLM owns provider parameter translation; record concrete failures.
 5. **Later, not now**: launching workers from GUI / CLI / MCP-skill, and a
-   sqlite ledger (in buckle or suspenders on the VMSS) remembering what
-   runs where. Hardcoded startup file until then.
+   job-placement ledger in Suspenders remembering what runs where.
+   Hardcoded startup file until then; Buckle's request/usage ledger is
+   separate and does not acquire scheduling or job-state responsibilities.
 6. **No max_tokens or limits on worker asks (for now)** — proven root
    cause 2026-11-16: the copilot seat 422s when input + default
    completion allowance exceeds the SKU's budget (max_tokens=256 → 200,
@@ -43,12 +53,14 @@ This roadmap does not authorize one lane to build all of P0–P5.
    model that cannot serve it unlimited. `.prefer` may still carry
    operational knobs — `max_tokens`, `max_loops`, and similar — where
    ABSENCE or 0 means no limits (the default stays unlimited).
-7. **8-lane durable crash-recovery demo (goal state)**: azure buckle
-   spins up 8 pi-durable worker lanes, well-primed for the tasks we need;
-   landed work gets thorough review against our patterns; push the new
-   image to ACR as the crash event — everything dies — and the durable
-   workers retake their work from the journal and continue. This is the
-   P1.5→P3 arc's acceptance demo.
+7. **8-lane durable crash-recovery demo (goal state)**: fleet-worker's
+   deployment launcher starts eight scoped Pi Durable workers on Azure;
+   Suspenders owns their admission and recovery as that integration lands.
+   Buckle serves their model traffic. Each lane has its own worktree,
+   write scope, stable run ID and journal. Publishing to ACR is preparation;
+   an explicit deployment/restart action is the failure event. The
+   [recovery procedure](#eight-worker-recovery-procedure) below defines
+   the P1.5→P3 demo and does not make Buckle a worker launcher.
 8. **Prime the 8 workers from the pi-durable template examples to work
    on fleet itself** (fleet-buckle + fleet-worker once extracted): needs
    one new example.md variant for working on the fleet repos — the
@@ -84,7 +96,9 @@ flowchart LR
   request, and injects policy-bearing context where configured. It must
   preserve LiteLLM's supported API and provider capabilities rather than
   duplicate LiteLLM routing, model lists, limits, or per-user controls.
-  Model choice and provider deployment configuration belong to LiteLLM.
+  Clients/workers choose the requested model; LiteLLM owns deployment
+  resolution, aliases and provider routing. Worker `.prefer` behavior
+  remains client policy and is being implemented in a separate lane.
 - **Human identity and Copilot:** APIM validates the user's Entra ID/AD
   token and endpoint access. The user token and verified stable identity
   continue to Buckle; Buckle maps the user for federation, context policy,
@@ -98,8 +112,10 @@ flowchart LR
   For the first rollout, trust the authenticated caller's supplied PAT;
   do not add an Entra-to-GitHub account binding requirement.
 - **Pilot worker identity:** workers use the owner's authenticated identity
-  and owner-supplied Copilot PAT for now, with distinct Fleet run IDs for
-  attribution. Dedicated worker identities/tokens are a later milestone;
+  for now, with distinct Fleet run IDs for attribution. BYOC workers relay
+  an owner-supplied PAT; the explicitly isolated engine-held pilot keeps
+  that PAT only at its dedicated LiteLLM engine. Record the mode in each
+  receipt; never switch modes on auth failure. Dedicated identities are later;
   do not claim service identity or independent seat entitlement yet.
 - **fleet-worker** (new repo) = Pi Durable parent/child runtime, OCI image,
   versioned capability seeds, journal, and whole-cycle e2e. A parent may
@@ -118,9 +134,10 @@ flowchart LR
 Current evidence: the plan records `/dev/kvm` on the 2-vCPU/7-GB VMSS;
 recheck usable virtualization at deployment. `fleet-buckle` already has
 Docker federation and Azure/BYOC tests plus an OCI worker prototype whose
-Docker microworkers perform file checks. An uncommitted engine-held-seat
-generator experiment emitted 42 Copilot legs; that is **not** the chosen
-personal-PAT rollout and does not prove the VMSS serves them. The current
+Docker microworkers perform file checks. An engine-held-seat generator
+experiment emitted 42 Copilot legs; that does not prove the VMSS serves
+them or verify personal BYOC. Use it only for the isolated worker mode
+after a live receipt; it is not the human credential configuration. The current
 worker is not yet a microVM-hosted Pi supervisor. Label Docker Desktop,
 emulated QEMU, VMSS, and real Xeon evidence separately. This plan records
 intended work, not deployment state.
@@ -134,9 +151,11 @@ old lane pin. Neither is the desired Entra-bound, catalog-selected flow.
 
 ## P0 — personal-Copilot-PAT cycle on the live Azure VMSS — FIRST
 
-Prove the intended MITM + LiteLLM + Entra + client-supplied PAT chain
-before extraction. The current engine-held-seat experiment is not the
-rollout baseline. Select a model from the live catalog for each test;
+Prove the human MITM + LiteLLM + Entra + client-supplied PAT chain and
+one explicitly recorded worker auth mode before extraction. Engine-held
+worker credentials never substitute for the human BYOC proof. P0's
+owner-pilot exit is separate from its later org-readiness gate.
+Select a model from the live catalog for each test;
 do not add a Buckle model pin or a hardcoded catalog row.
 
 - **P0.1** deploy the intended BYOC LiteLLM pass-through on the VMSS.
@@ -144,9 +163,12 @@ do not add a Buckle model pin or a hardcoded catalog row.
   policy-bearing context where configured, then forwards the request
   through LiteLLM to Copilot. Keep LiteLLM responsible for model/provider
   capabilities; prove the relevant API faces and streaming survive both
-  proxy hops. Do not promote `ENGINE_HELD_SEATS` into the pilot path.
+  proxy hops. Keep `ENGINE_HELD_SEATS` confined to a separate worker
+  engine configuration; never enable it as the human BYOC fallback.
 - **P0.1a** remove the worker's hardcoded `glm-4.5` body-model and the
-  lane-pin proof as rollout assumptions. The client/worker selects from
+  lane-pin proof as rollout assumptions. Consume the separate `.prefer`
+  lane's changes and receipt; do not duplicate or alter its semantics in
+  this rollout lane. Verify the resulting client/worker selects from
   the live authorized catalog; LiteLLM resolves the deployment and any
   model alias, balancing, or fallback. Buckle preserves that request and
   records the served result without maintaining a second model router.
@@ -174,8 +196,10 @@ do not add a Buckle model pin or a hardcoded catalog row.
   Keep the PAT in user-side CLI/worker
   configuration; Buckle and LiteLLM relay it only for the request.
   Prove the current client and LiteLLM version can carry both without
-  one overwriting the other. No shared PAT in VMSS env, engine config,
-  image, or database. The pilot worker acts under the owner's identity.
+  one overwriting the other. Human BYOC stores no shared PAT in VMSS env,
+  engine config, image or database. The isolated engine-held worker pilot
+  mounts its owner PAT only as an engine secret, never into Buckle or an
+  image. Both worker modes act under the owner's identity.
   Support both `Authorization: Bearer <PAT>` and the existing
   `/w/<lane>/<PAT>/v1` path where a client requires it. On Bearer-PAT
   calls, carry the Entra token in a separate named header validated by
@@ -233,8 +257,9 @@ do not add a Buckle model pin or a hardcoded catalog row.
   no Buckle runtime dependency or production auth subsystem is added.
   The script does not replace APIM validation or the per-request identity
   contract. Record the live owner pilot separately from org readiness.
-- **P0.2e org readiness** ship a mechanical local login/bootstrap command before
-  declaring Claude CLI ready. It checks the Entra token cache silently,
+- **ORG.1 (deferred; not a P0 exit requirement)** ship the permanent
+  login/bootstrap command before general org access. The temporary script
+  is sufficient for the owner pilot and extraction. The command checks the Entra token cache silently,
   opens the system browser for interactive sign-in when required, and
   offers device code as a fallback. It requests the APIM API audience,
   stores the token in an OS-protected user cache, and preflights a safe
@@ -253,24 +278,28 @@ do not add a Buckle model pin or a hardcoded catalog row.
   and [Claude Code's credential helper](https://code.claude.com/docs/en/llm-gateway-connect)
   are the implementation references.
 - **P0.3** run the current Pi Durable worker under the owner's verified
-  identity and owner-supplied PAT for this pilot. Keep a separate Fleet
-  run ID, but do not imply a separate Copilot seat or worker identity.
+  identity in the declared BYOC or isolated engine-held mode. Keep a
+  separate Fleet run ID; neither mode is a separate Copilot seat or
+  independent worker identity. Provision admission credentials through
+  the operator bootstrap; do not build a Buckle credential broker.
   From the live catalog choose an available model, prove direct LiteLLM
   chat and Buckle chat/stream with the actual served model, then run the
   full repoagent cycle on issue #6 if still suitable (real diff, PR,
   branch preview). Restart mid-cycle and record recovery and failures.
 
-**AC**: APIM validates the owner and passes the verified identity and
-original Entra token to Buckle. Native LiteLLM user mapping is proven
+**Owner-pilot exit (unblocks P1)**: APIM validates the owner and passes
+the verified identity and original Entra token to Buckle. Native LiteLLM user mapping is proven
 where available; otherwise record the pilot limitation and block broad
 multi-user rollout until per-user binding is tested. Both URL-PAT and
 Bearer-PAT paths preserve the same user attribution;
-the owner's client-provided PAT reaches Copilot through Buckle and LiteLLM
-without a server-held shared PAT. Catalog, chat, stream, context injection,
+the human client's owner-provided PAT reaches Copilot through Buckle and
+LiteLLM without a server-held shared PAT on the human route. The worker
+cycle uses the separately recorded auth mode. Catalog, chat, stream, context injection,
 usage attribution, and denial without a valid user/PAT are observed live.
-Test missing, expired, and wrong-user Entra tokens; missing and invalid
-PATs; conflicting URL and Bearer PATs; and two users with isolated
-catalogs, logs, and usage. Redact URL credentials from APIM, Buckle,
+Test missing, expired and invalid Entra tokens; missing and invalid
+BYOC PATs; conflicting URL and Bearer PATs; and refusal to use the
+owner-worker engine credential on a failed human request. Redact URL
+credentials from APIM, Buckle,
 LiteLLM, reverse-proxy, and trace records.
 Cold-start login must open the browser before any model call. The owner
 pilot may recover an expired token by rerunning the temporary script;
@@ -278,8 +307,16 @@ automatic renewal is an org-readiness gate. A denied principal receives
 a clear error without a sign-in loop.
 The worker cycle produces a real PR and resumes the same submission after
 restart. Record commands, source SHA, image digests, VMSS instance,
-selected and served model, result links, and timestamps. Docker Desktop
-tests pass on the same source with two distinct users and isolated PATs.
+selected and served model, declared auth mode, result links and timestamps.
+Relevant Docker Desktop tests pass on the same source. Synthetic two-user
+credential-isolation tests are required; two live developer accounts and
+the permanent login tooling are not prerequisites for the owner pilot.
+
+**Org-readiness exit (before broad access; does not block P1/P2)**:
+complete ORG.1 and prove two real Entra users with their own PATs have
+isolated catalogs, policy context, logs and usage through APIM and the
+selected LiteLLM user binding. Test cross-user/spoofed identity, revocation
+and token renewal. Record known pilot gaps until those tests pass.
 
 **Checkpoint**: this exact system is what fleet-worker extracts.
 
@@ -322,6 +359,31 @@ landing commits cross-reference shas; image builds:
 `docker build -t ghcr.io/klh/fleet-worker:<sha> .`
 
 **Checkpoint**: `fleet-worker` builds an image that passes its own e2e.
+
+### Eight-worker recovery procedure
+
+The launcher and this procedure belong to fleet-worker's deployment
+tooling; Suspenders supplies admission/recovery integration as it lands.
+Buckle has no worker-spawn API or deployment supervisor for this demo.
+
+1. Start eight scoped workers on the pinned current image. Record each
+   run ID, assigned work, worktree, journal/checkpoint and writer epoch.
+   Place each journal on an explicitly identified persistent volume,
+   outside its replaceable container; verify it is remounted on restart.
+2. Publish the replacement image to ACR and record its digest. Publishing
+   alone is not the crash. While work is active, explicitly stop/kill all
+   eight worker containers using the deployment tool. Record that exact
+   command, the affected VMSS instance and the interruption timestamps.
+   Buckle/LiteLLM may stay running; record separately if they also restart.
+3. Deploy the new digest and start the workers against their original
+   journals and run IDs. Acquire new writer epochs and refuse old writers.
+   Reconcile GitHub effects before retrying so comments, PRs and commits
+   are not duplicated. Resume the same work rather than create new jobs.
+4. Prove all eight resume from recorded checkpoints and produce reviewed
+   outcomes. Record old/new image digests, recovery times, reconciliation
+   evidence and rollback. A volume surviving container replacement is
+   not proof of VMSS reimage/host-loss recovery; test those separately
+   with storage that survives that failure before claiming host recovery.
 
 ## P2 — real microVM tool execution on the existing VMSS
 
@@ -387,7 +449,8 @@ usage, patches, reviews, and recovery. The parent chooses solo work or
 children. Children receive separate Fleet run identities, budgets,
 worktrees, and nonoverlapping write scopes; the parent integrates and
 checks their patches. In the pilot, their Copilot requests still ride
-the owner's user identity and PAT. Dedicated worker identities and
+the owner's identity, with PAT custody determined by the recorded BYOC
+or isolated worker-engine mode. Dedicated worker identities and
 Copilot entitlements require a later explicit migration and access test.
 A no-split choice is a valid recorded outcome.
 
@@ -416,7 +479,9 @@ rather than create a second unreconciled Fleet work ledger.
 
 ---
 
-Dependency order: **P0 → P1 → P2 → P3 → P4 → P5**. Inventory and
+Dependency order: **P0 owner-pilot exit → P1 → P2 → P3 → P4 → P5**.
+The separate org-readiness exit gates broad access, not extraction or
+the owner-worker demo. Inventory and
 federation preparation may run alongside extraction, but every Azure or
 on premises claim needs its own live exit receipt. The immediate work is
 P0 on the running Azure VMSS.

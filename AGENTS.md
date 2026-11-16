@@ -61,10 +61,11 @@ GitHub PAT per request, in the URL lane or a Bearer header according to
 the client. If Bearer carries the PAT, APIM validates the Entra token
 from a separate header, strips spoofable identity assertions, and
 forwards the verified identity and original user token. Buckle and
-LiteLLM relay the PAT transiently; neither stores a shared Copilot PAT
-as a provider or engine credential. Pilot
-workers use the owner's Entra identity and owner-provided PAT, tagged
-with distinct Fleet run IDs. Separate worker identities and seat tokens
+LiteLLM relay the human PAT transiently; human BYOC has no shared engine
+PAT. The isolated owner-worker pilot may mount the owner's PAT only at
+its dedicated LiteLLM engine, with an engine key at Buckle. Human BYOC
+must never fall back to that credential. Record the worker auth mode and
+owner identity with distinct Fleet run IDs. Separate worker identities and seat tokens
 are a later rollout step. Keep the Entra identity, Buckle admission
 credential, and upstream PAT distinct. The rollout sequence and live
 acceptance gates are in `tasks/plan.md`; read it before Azure, worker,
@@ -174,7 +175,8 @@ law).
   W3081 lessons), and writes 0600 `real.env`. Runtime home
   `~/.config/fleet-buckle/`. `compose.real.yaml` shares the 47xx ports
   with the stub stack — never both up. This legacy shared-PAT test
-  shape is not the Azure personal-BYOC rollout in `tasks/plan.md`.
+  shape is not the human personal-BYOC route. It may support the isolated
+  owner-worker engine mode only after the live proof in `tasks/plan.md`.
 - **Engine gate**: settings `keys.engine` names a key file; when
   readable the engine leg carries `Bearer` and every litellm enforces
   it as `master_key` (litellm only ENFORCES `sk-`-prefixed values —

@@ -1,7 +1,11 @@
 # Supervisor skills and session handoff
 
-Status: target workflow. The catalog, promotion flow, and remote runner
-controls described here are design requirements, not deployed UI.
+Status: future worker/control workflow, not Buckle implementation scope.
+The catalog, promotion flow, and remote runner controls described here
+belong to fleet-worker and Fleet Suspenders under `tasks/plan.md` and
+`tasks/implementation-contract.md`. No catalog, scheduler, runner or
+session-handoff subsystem is authorized inside the Buckle gateway.
+The older `target-architecture.md` link below is design history.
 
 A **supervisor skill** is a reusable, versioned definition of what a
 durable supervisor does. It contains a brief, decision rules for doing

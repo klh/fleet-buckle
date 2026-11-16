@@ -10,8 +10,63 @@
 //                       principal key; the provider key rides upstream
 //                       (the hermetic rig's dave@fleet world).
 // The durable rework keeps the seam; asks become generation tasks.
+// ENGINE MODE (owner ruling 2026-11-16): when a .prefer file picked a
+// model, asks ride <hub>/v1/chat/completions DIRECTLY with the picked
+// body model (the engine serves the seat SKUs; lane pinning retired).
 import { z } from "zod";
 import { env } from "./worker.env.ts";
+import type { Pick } from "./worker.prefer.ts";
+
+let pick: Pick | undefined;
+// the seed dir persona chain (baked into the image; mounts overwrite):
+// persona.md (character) THEN template.md (the incoming brief) are
+// prepended to every ask, before the task instruction — the
+// pi-durable instructions pattern as mounted files.
+let personaText = "";
+let templateText = "";
+
+/** stamp the boot-time .prefer pick (worker.main.ts); asks use it after */
+export const setPick = (p: Pick): void => {
+  pick = p;
+};
+
+/** stamp the seed dir's persona.md character (worker.main.ts) */
+export const setPersona = (t: string): void => {
+  personaText = t.trim();
+};
+
+/** stamp the seed dir's template.md incoming brief (worker.main.ts) */
+export const setTemplate = (t: string): void => {
+  templateText = t.trim();
+};
+
+/**
+ * The seed files' VARIABLE EXPANSION — the pi-durable port. There,
+ * prompt state is sections: `section(key, (input) => text)` where
+ * the render runs AT REQUEST PREPARATION over the live input
+ * (conversation, agent, env, committed doc reads) — no string
+ * template engine exists in the library. The faithful equivalent
+ * for file-based seeds: render at ASK time (not boot, so the picked
+ * model lands in the prompt) over the worker's live facts. Unknown
+ * tokens pass through verbatim — a section returning undefined just
+ * omits; we degrade to the literal instead.
+ */
+const expandSeed = (text: string, vars: Readonly<Record<string, string>>): string =>
+  text.replace(/\{\{(\w+)\}\}/g, (whole, token: string) => vars[token] ?? whole);
+
+/** the live render input for one ask — pi-durable's PromptInput shape */
+const seedVars = (): Readonly<Record<string, string>> => ({
+  repo: env.repo,
+  lane: env.lane,
+  hub: pick?.hub ?? env.buckle,
+  hubLabel: pick?.hubLabel ?? "env",
+  provider: pick?.provider ?? "-",
+  model: pick?.model ?? "lane-pinned",
+  tier: pick?.tier ?? "lane",
+  tag: pick?.tag ?? "-",
+  color: pick?.color ?? "-",
+  issuePrefix: env.issuePrefix,
+});
 
 export async function ask<T>(
   schema: z.ZodType<T>,
@@ -19,22 +74,29 @@ export async function ask<T>(
   context: string,
   example: object,
 ): Promise<T> {
+  const vars = seedVars();
+  const persona = personaText ? `${expandSeed(personaText, vars)}\n\n` : "";
+  const template = templateText ? `${expandSeed(templateText, vars)}\n\n` : "";
   const body = {
     // pin-proof: the body model DIFFERS from the lane pin — a stub
-    // /_seen model equal to the PIN proves the pin won, not the body
-    model: "glm-4.5",
+    // /_seen model equal to the PIN proves the pin won, not the body.
+    // Engine mode overrides: the body model IS the picked seat SKU.
+    model: pick?.model ?? "glm-4.5",
+    ...(pick && pick.maxTokens > 0 ? { max_tokens: pick.maxTokens } : {}),
     messages: [
       {
         role: "user",
         content:
-          `${instruction}\n\nReply with STRICT JSON only, no prose, no code fence, matching this shape:\n${JSON.stringify(z.toJSONSchema(schema))}\nExample reply — same structure, but choose the CORRECT values for this input:\n${JSON.stringify(example)}\n\n---\n${context}`,
+          `${persona}${template}${instruction}\n\nReply with STRICT JSON only, no prose, no code fence, matching this shape:\n${JSON.stringify(z.toJSONSchema(schema))}\nExample reply — same structure, but choose the CORRECT values for this input:\n${JSON.stringify(example)}\n\n---\n${context}`,
       },
     ],
   };
   const r = await fetch(
     env.byoc
       ? `${env.buckle}/w/${env.lane}/${env.buckleKey}/v1/chat/completions`
-      : `${env.buckle}/w/${env.lane}/v1/chat/completions`,
+      : pick
+        ? `${pick.hub}/v1/chat/completions`
+        : `${env.buckle}/w/${env.lane}/v1/chat/completions`,
     {
       method: "POST",
       headers: {

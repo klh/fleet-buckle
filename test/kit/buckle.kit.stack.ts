@@ -54,4 +54,5 @@ export const SERVICES = [
   "buckle3",
   "gh-stub",
   "worker3",
+  "worker4",
 ] as const;

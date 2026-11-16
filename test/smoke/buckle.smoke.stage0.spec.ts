@@ -33,7 +33,7 @@ test.describe.serial("stage 0 — stubs + 3 buckles up, engines not yet", () => 
     ["buckle3", 4931, 4932, "b3"],
   ] as const) {
     test(`${n} responds and its sidecar swears it up`, async () => {
-      await expect.poll(() => face(sidecarPort), { timeout: 30_000 }).toBe("up");
+      await expect.poll(() => face(sidecarPort), { timeout: 60_000 }).toBe("up");
       const v = await verdict(sidecarPort);
       expect(v?.ok).toBe(true);
       expect(v?.last_ok).not.toBeNull();

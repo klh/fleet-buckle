@@ -46,6 +46,10 @@ services:
   # ── unit 1 ──
   litellm1:
     image: ghcr.io/berriai/litellm:v1.103.0 # digest-pin at v0.0.1 tag
+    # cold-boot flake: litellm's embedded Prometheus face sometimes misses
+    # its own 30s readiness window under a full-stack boot and exits 1 —
+    # compose restart is the durable retry (same posture as worker4)
+    restart: on-failure
     # engine config is GENERATED at boot from the JSON catalog (commit 3);
     # CLI flags are wiring, never authored yaml. Dummy value: test fixture,
     # not a secret — provider keys are PATHS in settings.json5.
@@ -90,6 +94,7 @@ services:
   # ── unit 2 ──
   litellm2:
     image: ghcr.io/berriai/litellm:v1.103.0
+    restart: on-failure
     command:
       [
         "--config",
@@ -128,6 +133,7 @@ services:
   # ── unit 3 ──
   litellm3:
     image: ghcr.io/berriai/litellm:v1.103.0
+    restart: on-failure
     command:
       [
         "--config",
@@ -188,6 +194,10 @@ services:
       WORKER_STORE: /state/worker.sqlite
       WORKER_POLL_SECONDS: 30
       WORKER_ISSUE_PREFIX: "[agent]"
+      # baked .prefer exists now (seed dir) — the LANE spec stays
+      # lane-pinned: empty string disables the picker (existsSync("")
+      # is false), keeping glm-4.5-air pin-proof semantics intact
+      WORKER_PREFER_FILE: ""
       WORKER_WAKE_ADDR: 0.0.0.0:8090
       WORKER_WEBHOOK_SECRET: hermetic-wake-secret
       BUCKLE_KEY_FILE: /run/secrets/buckle_key
@@ -203,8 +213,43 @@ services:
         target: buckle_key
     depends_on: [buckle3, gh-stub]
 
+  # the PICKER WORKER (worker4): same repo, same stub world — but it
+  # carries a .prefer startup file, so at boot it resolves its own hub
+  # (buckle3 answers /v1/models), walks its must= ladder by probing
+  # the HEAVIEST ask shape against each candidate, and then rides the
+  # DIRECT engine path with the catalog's own model id — no lane pin,
+  # no lane context injection. Issue ownership stays split by prefix.
+  worker4:
+    build: ../../deploy/worker
+    # boot races (hub still warming when the picker probes) exit the
+    # process by design (must-list exhaustion is fatal) — compose
+    # restart is the durable retry
+    restart: on-failure
+    environment:
+      WORKER_REPO: icomdev/calculon
+      WORKER_GH_URL: http://gh-stub:8080
+      BUCKLE_URL: http://buckle3:4111
+      WORKER_LANE: b3-repoagent-v1-calculon
+      WORKER_STORE: /state/worker.sqlite
+      WORKER_POLL_SECONDS: 5
+      WORKER_ISSUE_PREFIX: "[picker]"
+      WORKER_WAKE_ADDR: 0.0.0.0:8090
+      WORKER_WEBHOOK_SECRET: hermetic-wake-secret
+      BUCKLE_KEY_FILE: /run/secrets/buckle_key
+      WORKER_PREFER_FILE: /etc/worker/.prefer
+    volumes:
+      - worker4-state:/state
+      - ./worker4:/etc/worker:ro
+    secrets:
+      - source: worker_token
+        target: worker_token
+      - source: buckle_key
+        target: buckle_key
+    depends_on: [buckle3, gh-stub]
+
 volumes:
   worker3-state:
+  worker4-state:
 
 secrets:
   worker_token:

@@ -26,6 +26,24 @@ functionality in fleet-worker after extraction. Do not copy source from
 the fleet monorepo into Buckle, add sibling filesystem dependencies, or
 make Buckle's build/install require a monorepo checkout.
 
+## Credential and deployment boundaries
+
+Human BYOC relays the caller's URL/Bearer PAT. The owner-worker pilot
+may use a separate engine-held mode: its dedicated LiteLLM engine alone
+mounts the owner's PAT; Buckle carries an engine key. Record the mode
+and owner admission identity in each receipt; never switch modes on an
+auth failure or use the worker credential for a human BYOC call.
+Bootstrap supplies admission credentials; Buckle does not become a
+login/token broker. Fallback targets are configured authorized Buckles
+with the same identity/grant contract, never direct provider endpoints.
+
+Qualify the latest LiteLLM candidate through the existing tests, then
+deploy its immutable digest with the previous digest retained for rollback.
+Worker startup, journal storage and the eight-worker crash demonstration
+belong to fleet-worker deployment tooling and Suspenders integration.
+ACR publication is preparation; the explicit stop/redeploy and durable
+journal remount are the tested failure/recovery actions.
+
 ## Lane brief required before edits
 
 Each implementation item names one repository, one behavior, an exact
@@ -57,20 +75,24 @@ These are brief boundaries, not additional work IDs. Register ownership
 in the work graph used by the implementing repository. Later phases are
 a roadmap; a Phase 0 assignment does not authorize implementing them.
 
-| Slice                          | Owner and permitted area                                                      | Exit evidence                                                                                                                        |
-| ------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| A. Characterize current chain  | Buckle; read-only source/runtime inspection and a test receipt                | Actual VMSS/engine version, license, current BYOC wire, failing/passing endpoint cases and clean-checkout gate baseline              |
-| B. Fix credential contract     | Contract review before auth code                                              | Exact Entra/PAT carriers, APIM identity fields, trusted backend boundary, engine credential/user binding and conflict/error behavior |
-| C. Prove engine BYOC           | Buckle engine generator/config and existing engine tests                      | Two isolated caller PATs through LiteLLM; no stored shared PAT or model rewrite                                                      |
-| D. Add generic gateway binding | Buckle access/settings/proxy seams and their tests, exact files chosen from A | URL and Bearer PATs, verified user attribution and denial/spoof tests; no Entra login runtime                                        |
-| E. Configure APIM              | Deployment policy/profile only; runtime values outside source                 | Model API access enforced, both carriers accepted, direct backend bypass denied, verified user identity forwarded                    |
-| F. Pilot login script          | Isolated `test/manual/entra-login/` package; no gateway imports/dependencies  | Browser MFA, API token, temporary CLI settings and APIM preflight; rerun on expiry                                                   |
-| G. Verify Claude CLI           | Client test setup plus published Buckle/engine images                         | Settings JSON, catalog, Messages, tools, streaming and model switch on Azure; script rerun proves pilot expiry recovery              |
-| H. Prove legacy worker cycle   | Existing `deploy/worker` and cycle test only                                  | Catalog-selected model, real PR, restart recovery; no new supervisor/runner features                                                 |
+| Slice                          | Owner and permitted area                                                      | Exit evidence                                                                                                                          |
+| ------------------------------ | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| A. Characterize current chain  | Buckle; read-only source/runtime inspection and a test receipt                | Actual VMSS/engine version, license, current BYOC wire, failing/passing endpoint cases and clean-checkout gate baseline                |
+| B. Fix credential contract     | Contract review before auth code                                              | Exact Entra/PAT carriers, APIM identity fields, trusted backend boundary, engine credential/user binding and conflict/error behavior   |
+| C. Prove engine credentials    | Buckle engine generator/config and existing engine tests                      | Human BYOC uses isolated synthetic caller PATs; worker engine-held mode is separate and cannot act as human fallback; no model rewrite |
+| D. Add generic gateway binding | Buckle access/settings/proxy seams and their tests, exact files chosen from A | URL and Bearer PATs, verified user attribution and denial/spoof tests; no Entra login runtime                                          |
+| E. Configure APIM              | Deployment policy/profile only; runtime values outside source                 | Model API access enforced, both carriers accepted, direct backend bypass denied, verified user identity forwarded                      |
+| F. Pilot login script          | Isolated `test/manual/entra-login/` package; no gateway imports/dependencies  | Browser MFA, API token, temporary CLI settings and APIM preflight; rerun on expiry                                                     |
+| G. Verify Claude CLI           | Client test setup plus published Buckle/engine images                         | Settings JSON, catalog, Messages, tools, streaming and model switch on Azure; script rerun proves pilot expiry recovery                |
+| H. Prove legacy worker cycle   | Existing `deploy/worker` and cycle test only                                  | Catalog-selected model, real PR, restart recovery; no new supervisor/runner features                                                   |
 
 Do A, then B. C and D use B's contract; E and F use the same contract.
 G follows C–F; H follows G. Engine and access settings share files, so
 C/D must serialize edits or reserve disjoint files before implementation.
+H consumes the separately owned `.prefer` lane's changes; do not assign
+a second implementation of worker model selection. P1 requires only
+the owner-pilot exit. ORG.1, two live user accounts and automatic renewal
+gate general org access and do not block extraction or the worker demo.
 Do not dispatch a single lane to "implement P0". The first executable
 assignment is A; B must be concrete before C–F can be dispatched.
 

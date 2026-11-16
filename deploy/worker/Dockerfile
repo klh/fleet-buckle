@@ -9,4 +9,9 @@ WORKDIR /app
 COPY package.json ./
 RUN bun install
 COPY worker.*.ts ./
+# the SEED DIR — persona.md (character) + template.md (the incoming
+# per-launch brief, the pi-durable template pattern) + .prefer (the
+# model ladder) bake in at /etc/worker; a compose mount over that
+# path overwrites any or all of them per deployment.
+COPY seed/ /etc/worker/
 CMD ["bun", "worker.main.ts"]

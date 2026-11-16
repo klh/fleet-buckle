@@ -107,6 +107,9 @@ const withSession = (extra: Record<string, string> = {}): Record<string, string>
 });
 
 test.describe.serial("the azure tabula-rasa hub", () => {
+  // engine boot polls run up to 60s — the default 30s test timeout
+  // would cut them mid-poll (masked while the engine booted fast)
+  test.setTimeout(120_000);
   test.beforeAll(() => {
     // the engine config is GENERATED from the same fixture the stub
     // serves (catalog and legs can never drift) — before compose up

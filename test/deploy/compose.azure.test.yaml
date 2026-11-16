@@ -23,6 +23,10 @@ services:
   # token is the credential; the engine forwards it verbatim.
   engine:
     image: ghcr.io/berriai/litellm:v1.103.0 # digest-pin at v0.0.1 tag
+    # cold-boot flake: litellm's embedded Prometheus face sometimes
+    # misses its own 30s readiness window and exits 1 — compose
+    # restart is the durable retry (same posture as the main rig)
+    restart: on-failure
     command: ["--config", "/etc/engine/mscopilot.litellm.yaml", "--port", "4000"]
     volumes:
       - ./engine/mscopilot.litellm.yaml:/etc/engine/mscopilot.litellm.yaml:ro

@@ -1,5 +1,17 @@
 # BYOC engine verification — buckle serves MS Copilot
 
+**Scope:** this records the earlier BYOC/GUI test topology. For the
+Azure organization rollout, follow `tasks/plan.md`: APIM validates the
+Entra user on the **model wire**, forwards identity/token to Buckle,
+and each client supplies its own Copilot PAT in the URL lane or Bearer
+header. Bearer-PAT requests carry Entra in a separate APIM-validated
+header; neither carrier is a substitute for Entra admission.
+The GUI-only OIDC test below does not prove that APIM boundary or
+LiteLLM per-user attribution.
+The organization path also requires a local, model-independent Entra
+login helper and APIM preflight before Claude Code starts; a GUI MFA
+test cannot substitute for that CLI bootstrap.
+
 The MVP test, in one sentence: **the Copilot CLI/TUI just works when the only
 thing that changes is the URL** — `https://api.githubcopilot.com` becomes
 `http://<hub>/w/copilot/<token>/v1` — full live catalog, chats and streams,
