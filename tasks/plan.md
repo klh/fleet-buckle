@@ -35,6 +35,24 @@ This roadmap does not authorize one lane to build all of P0–P5.
 5. **Later, not now**: launching workers from GUI / CLI / MCP-skill, and a
    sqlite ledger (in buckle or suspenders on the VMSS) remembering what
    runs where. Hardcoded startup file until then.
+6. **No max_tokens or limits on worker asks (for now)** — proven root
+   cause 2026-11-16: the copilot seat 422s when input + default
+   completion allowance exceeds the SKU's budget (max_tokens=256 → 200,
+   1024+ → 422 on the same ask). Resolution is model PICKING, not
+   capping: the .prefer probe uses the heaviest ask shape and skips any
+   model that cannot serve it unlimited. `.prefer` may still carry
+   operational knobs — `max_tokens`, `max_loops`, and similar — where
+   ABSENCE or 0 means no limits (the default stays unlimited).
+7. **8-lane durable crash-recovery demo (goal state)**: azure buckle
+   spins up 8 pi-durable worker lanes, well-primed for the tasks we need;
+   landed work gets thorough review against our patterns; push the new
+   image to ACR as the crash event — everything dies — and the durable
+   workers retake their work from the journal and continue. This is the
+   P1.5→P3 arc's acceptance demo.
+8. **Prime the 8 workers from the pi-durable template examples to work
+   on fleet itself** (fleet-buckle + fleet-worker once extracted): needs
+   one new example.md variant for working on the fleet repos — the
+   repoagent example pattern pointed at our own repos.
 
 Architecture (owner ruling, 2026-11-16; Azure VMSS is the live target):
 
