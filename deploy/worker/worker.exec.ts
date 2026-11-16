@@ -22,10 +22,22 @@ const dockerCall = async (
   });
 
 const createContainer = async (image: string, cmd: string[]): Promise<string> => {
-  const r = await dockerCall("/containers/create", {
-    method: "POST",
-    body: JSON.stringify({ Image: image, Cmd: cmd, HostConfig: { AutoRemove: false } }),
-  });
+  const attempt = async (): Promise<Response> =>
+    await dockerCall("/containers/create", {
+      method: "POST",
+      body: JSON.stringify({ Image: image, Cmd: cmd, HostConfig: { AutoRemove: false } }),
+    });
+  let r = await attempt();
+  if (r.status === 404) {
+    // a remote host does not have the microworker image pre-pulled
+    // (the rig does) — pull it once, then retry the create
+    const pull = await dockerCall(`/images/create?fromImage=${encodeURIComponent(image)}`, {
+      method: "POST",
+    });
+    if (!pull.ok) throw new Error(`docker pull ${image}: ${pull.status} ${await pull.text()}`);
+    await pull.body?.cancel();
+    r = await attempt();
+  }
   if (!r.ok) throw new Error(`docker create: ${r.status} ${await r.text()}`);
   return z.object({ Id: z.string() }).parse(await r.json()).Id;
 };
