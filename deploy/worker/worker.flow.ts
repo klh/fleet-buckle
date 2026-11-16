@@ -70,6 +70,7 @@ const phaseSeen = async (issue: Issue, row: PhaseRow): Promise<void> => {
       Classification,
       `Classify this GitHub issue for the ${env.repo} repository.`,
       subject,
+      { kind: "bug" },
     ));
   } catch (e) {
     // drift is OBSERVABLE (the error line names the reason) but never
@@ -89,6 +90,7 @@ const phaseSeen = async (issue: Issue, row: PhaseRow): Promise<void> => {
     Clarification,
     "The writer filed this. Ask the 1-4 pin-down questions you need before implementing it (each one concrete and answerable in a line).",
     subject,
+    { questions: ["Which …?"] },
   );
   await comment(
     issue.number,
@@ -165,11 +167,12 @@ const phaseDeliver = async (issue: Issue, comments: Comment[], row: PhaseRow): P
   );
   const { summary, files } = await ask(
     Plan,
-    `You are implementing a GitHub issue on the calculon repo. Choose 1-5 files to create or rewrite IN FULL (content = the complete new file). Keep changes small and consistent with the repo. Available paths: ${tree.tree
+    `You are implementing a GitHub issue on the ${env.repo} repo. Choose 1-5 files to create or rewrite IN FULL (content = the complete new file). Keep changes small and consistent with the repo. Available paths: ${tree.tree
       .map((t) => t.path)
       .slice(0, 120)
       .join(", ")}`,
     `issue #${issue.number}: ${issue.title}\nbody: ${issue.body ?? ""}\n\ncomments:\n${thread}`,
+    { summary: "what changed", files: [{ path: "docs/x.md", content: "full file" }] },
   );
 
   for (const f of files) await checkFile(f.path, f.content);

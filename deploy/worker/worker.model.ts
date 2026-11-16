@@ -17,6 +17,7 @@ export async function ask<T>(
   schema: z.ZodType<T>,
   instruction: string,
   context: string,
+  example: object,
 ): Promise<T> {
   const body = {
     // pin-proof: the body model DIFFERS from the lane pin — a stub
@@ -26,8 +27,7 @@ export async function ask<T>(
       {
         role: "user",
         content:
-          `${instruction}\n\nReply with STRICT JSON only, no prose, no code fence, ` +
-          `exactly this shape:\n${JSON.stringify(z.toJSONSchema(schema))}\n\n---\n${context}`,
+          `${instruction}\n\nReply with STRICT JSON only, no prose, no code fence, matching this shape:\n${JSON.stringify(z.toJSONSchema(schema))}\nExample reply — same structure, but choose the CORRECT values for this input:\n${JSON.stringify(example)}\n\n---\n${context}`,
       },
     ],
   };
