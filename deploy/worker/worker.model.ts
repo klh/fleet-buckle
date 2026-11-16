@@ -1,8 +1,15 @@
 // worker.model.ts — the LLM leg compartment: every model ask rides
-// the buckle launch URL /w/<lane>/v1/chat/completions (the LANE pins
-// the model — the body model is a pin-PROOF, deliberately different
-// from the pin so stub /_seen evidence proves the pin won). The
-// durable rework keeps the seam; asks become generation tasks.
+// the buckle launch lane (the LANE pins the model — the body model is
+// a pin-PROOF, deliberately different from the pin so stub /_seen
+// evidence proves the pin won). TWO auth topologies, one knob:
+//   WORKER_BYOC=true  → /w/<lane>/<token>/v1/chat/completions, the
+//                       caller's seat credential forwards verbatim
+//                       (live-proven on the azure hub: header → 401
+//                       "a principal key is required", URL → 200)
+//   WORKER_BYOC=false → /w/<lane>/v1/chat/completions + Bearer
+//                       principal key; the provider key rides upstream
+//                       (the hermetic rig's dave@fleet world).
+// The durable rework keeps the seam; asks become generation tasks.
 import { z } from "zod";
 import { env } from "./worker.env.ts";
 
@@ -23,14 +30,19 @@ export async function ask<T>(
       },
     ],
   };
-  const r = await fetch(`${env.buckle}/w/${env.lane}/v1/chat/completions`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${env.buckleKey}`,
+  const r = await fetch(
+    env.byoc
+      ? `${env.buckle}/w/${env.lane}/${env.buckleKey}/v1/chat/completions`
+      : `${env.buckle}/w/${env.lane}/v1/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(!env.byoc && { authorization: `Bearer ${env.buckleKey}` }),
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+  );
   if (!r.ok) throw new Error(`buckle chat: ${r.status} ${await r.text()}`);
   const chat = z
     .object({ choices: z.array(z.object({ message: z.object({ content: z.string() }) })) })

@@ -38,7 +38,7 @@ describe("loadSettings — the hot over layer", () => {
   });
 
   test("a malformed over file fails LOUD (never a silent stale read)", () => {
-    writeFileSync(over, "{ not json");
+    writeFileSync(over, "{ not json5");
     expect(loadSettings({ defaults, settings, over })).rejects.toThrow(/malformed/);
   });
 });

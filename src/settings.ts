@@ -38,19 +38,21 @@ export function resolveSettingsPaths(args: string[]): SettingsPaths {
 
 /** the over layer is the ONE runtime-written settings file
  * (applyHubEdit rewrites it on every /admin/hubs edit) — it must
- * NEVER ride the module cache: a dynamic import() of the same path
- * returns the FIRST parse forever (live-verified 2026-11-15 on the
- * azure hub: edit #1 applied, edit #2 landed on disk but the reload
- * served the cached module — the swap seam was write-only). The
- * admin writer emits strict JSON (JSON.stringify), so bytes +
- * JSON.parse is the exact contract; a malformed over file fails
- * LOUD here (settings.ts is one of the two sanctioned catch sites). */
-function loadOverLayer(file: string): Record<string, unknown> {
+ * NEVER ride the module cache: a plain dynamic import() of the same
+ * path returns the FIRST parse forever (live-verified 2026-11-15 on
+ * the azure hub: edit #1 applied, edit #2 landed on disk but the
+ * reload served the cached module — the swap seam was write-only).
+ * The cache-busting query makes every read fresh while keeping the
+ * JSON5 loader (the layer has TWO writers: the admin face emits
+ * strict JSON, hands author JSON5 — both parse). A malformed over
+ * file fails LOUD here (settings.ts is one of the two sanctioned
+ * catch sites). */
+async function loadOverLayer(file: string): Promise<unknown> {
   try {
-    return JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+    return (await import(`${file}?cb=${Date.now()}`, { with: { type: "json5" } })).default;
   } catch (e) {
     throw new Error(
-      `over layer ${file} is malformed (the admin writer emits strict JSON): ${classifyFault(e)}`,
+      `over layer ${file} is malformed: ${classifyFault(e)}`,
     );
   }
 }
@@ -64,7 +66,7 @@ export async function loadSettings(paths: SettingsPaths): Promise<BuckleSettings
   // a MISSING over file is an EMPTY layer (a fresh /state volume boots
   // clean); a PRESENT but malformed one fails loud above
   if (paths.over !== undefined && existsSync(paths.over))
-    acc = mergeSettings(acc, loadOverLayer(paths.over));
+    acc = mergeSettings(acc, await loadOverLayer(paths.over));
   return acc;
 }
 
