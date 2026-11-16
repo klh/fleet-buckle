@@ -2,6 +2,33 @@
 
 One page. Every rule has a check (`tools/src/buckle.check-laws.ts`) or it is a wish.
 
+## Owner plan file (tasks/plan.md)
+
+Read `tasks/plan.md` at the start of every session — its "Anchored owner
+directives" section is binding owner ruling. NEVER edit `tasks/plan.md`
+without asking the owner first: propose the exact edit and wait for
+approval. Anchoring a new ruling is the owner's call.
+
+## Standalone repository boundary
+
+Read `tasks/implementation-contract.md` before rollout edits. Each lane
+owns one repository and an explicit file allowlist. This repository's
+config, schema, dependency, test and code-shape laws govern Buckle; do
+not import the fleet monorepo's package layout or governance runtime.
+No source copies or filesystem imports from fleet/sibling checkouts.
+Published standalone dependencies and HTTP/image contracts are the seams.
+Existing agent/worker code is extraction debt, not permission to grow it.
+Browser login/token caches belong to local client tooling; scheduling,
+Pi runtime, seeds and microVMs belong to their worker/control owners.
+Owner-approved pilot exception: a Node/Bun login script may live in
+`test/manual/entra-login/` with its own dependency package. It opens
+Entra browser login, obtains an API access token and launches the CLI
+using private temporary settings; rerun on expiry is sufficient for
+the owner pilot. It adds no imports or dependencies to Buckle runtime.
+`docs/target-architecture.md` is superseded and grants no implementation
+scope. Propose a bounded migration for existing code; preserve unrelated
+work and do not relax laws or tests to make a change pass.
+
 ## What buckle IS (the MITM law)
 
 buckle is a **man-in-the-middle interface** for LLM traffic: fiddling,
@@ -19,7 +46,47 @@ in-loop:
    access grants.
 
 Never reimplement engine faces. Never add a "smart" feature that the
-engine already has.
+engine already has. The Azure rollout contract is one APIM-fronted,
+Entra/AD-identified developer endpoint, a live federated model catalog,
+context injection with policy-bearing items, and access to LiteLLM's supported
+capabilities. LiteLLM owns model deployments, aliases, balancing,
+fallback, and user-specific controls. APIM validates access and forwards
+the user token and verified identity. Buckle maps that identity for
+federation, context, and logs; prefer native LiteLLM user mapping when
+the deployed version and license support it. Buckle does not hardcode
+model lists or pin a model for the rollout.
+
+MS Copilot is personal BYOC: each user's client supplies that user's
+GitHub PAT per request, in the URL lane or a Bearer header according to
+the client. If Bearer carries the PAT, APIM validates the Entra token
+from a separate header, strips spoofable identity assertions, and
+forwards the verified identity and original user token. Buckle and
+LiteLLM relay the PAT transiently; neither stores a shared Copilot PAT
+as a provider or engine credential. Pilot
+workers use the owner's Entra identity and owner-provided PAT, tagged
+with distinct Fleet run IDs. Separate worker identities and seat tokens
+are a later rollout step. Keep the Entra identity, Buckle admission
+credential, and upstream PAT distinct. The rollout sequence and live
+acceptance gates are in `tasks/plan.md`; read it before Azure, worker,
+or federation work.
+
+Developer CLI target: an unmodified Claude Code can point
+`ANTHROPIC_BASE_URL` at the APIM Buckle URL through its user settings
+JSON. For Copilot BYOC, a Bearer PAT uses `ANTHROPIC_AUTH_TOKEN` with
+the separate Entra token in `ANTHROPIC_CUSTOM_HEADERS`. A URL PAT uses
+`/w/<lane>/<PAT>` with the Entra token in `ANTHROPIC_AUTH_TOKEN`.
+Preserve the Anthropic Messages, streaming, tools, and `/v1/models`
+gateway faces through LiteLLM.
+Prove this with the real CLI; a future local Fleet helper can acquire
+and refresh tokens and install the settings. APIM 401/login recovery
+must use a mechanical local command: silent Entra cache first,
+system-browser sign-in or device code fallback, then a safe preflight.
+No LLM session is required to authenticate. Keep a PAT out of
+non-Copilot upstream requests. LiteLLM owns the translation between
+Claude Code's Anthropic Messages API and GLM or other provider APIs.
+Buckle preserves that capability through federation and context
+injection. Live CLI tests verify our deployed chain; Anthropic's vendor
+support policy is not an architecture gate.
 
 ## Port doctrine (the anti-mess ratchet)
 
@@ -64,9 +131,12 @@ API / HTTP key minting (static JSON5 grants + the on-machine mint
 tool); aids/pipeline machinery (context injection lands as NEW code
 per `docs/context_injection.md`); eval harness (blam's job); OTLP
 export + dashboards/read-models (`/v1/stats`, `/v1/tree`, `/metrics`,
-jaeger are the whole face); repo tiers, identity headers, overlays,
-residency, jwt, systemone (enterprise identity plane); servicemon
-richness (the health sidecar owns verdicts — outside-process law).
+jaeger are the whole face); repo tiers, unverified client identity
+headers, overlays,
+residency, a bespoke enterprise identity plane (APIM verifies Entra;
+reuse LiteLLM user/JWT controls if the deployed version/license allows);
+servicemon richness (the health sidecar owns verdicts — outside-process
+law).
 
 ## Config
 
@@ -95,14 +165,16 @@ richness (the health sidecar owns verdicts — outside-process law).
 - **Fetch, don't declare**: model lists are FETCHED from providers and
   peers. Settings declare providers, keys, peers, grants, limits, and
   per-model OVERRIDES only.
-- **Real mode**: `bun tools/src/buckle.real.ts render|up|status|down`
-  is the launcher. Render mints topology keys, copies muramasa
-  provider keys, pre-seeds the copilot PAT cache, generates engine
+- **Existing local real-mode test launcher**:
+  `bun tools/src/buckle.real.ts render|up|status|down` mints topology
+  keys, copies muramasa provider keys, pre-seeds a Copilot PAT cache,
+  and generates engine
   yamls from the LIVE catalogs (`os.environ` keys only — never values;
   `drop_params` + per-leg `disable_background_health_check` are the
   W3081 lessons), and writes 0600 `real.env`. Runtime home
   `~/.config/fleet-buckle/`. `compose.real.yaml` shares the 47xx ports
-  with the stub stack — never both up.
+  with the stub stack — never both up. This legacy shared-PAT test
+  shape is not the Azure personal-BYOC rollout in `tasks/plan.md`.
 - **Engine gate**: settings `keys.engine` names a key file; when
   readable the engine leg carries `Bearer` and every litellm enforces
   it as `master_key` (litellm only ENFORCES `sk-`-prefixed values —
@@ -137,9 +209,13 @@ provider`), so a chain (b1→b2→b3) plus a direct edge (b1→b3) still
   counts b3's models once.
   A peer model outside the requesting grant's `peers` is
   indistinguishable from an unknown model (404 — no topology leak).
-- Identity is **Entra-mappable, not Entra**: principals
-  (`human|developer|agent|service`), groups, per-kind tiers, per-user
-  overrides.
+- Current code has generic principals (`human|developer|agent|service`),
+  groups, tiers, and overrides. Azure rollout: APIM validates the Entra
+  access token and forwards the verified user identity plus token to
+  Buckle. Buckle maps that identity for federation, context policy, and
+  logs, and uses LiteLLM's native user/team controls where the deployed
+  version and license support them. The model wire must reject APIM
+  bypass; GUI-only OIDC is not a substitute.
 
 ## Code
 
