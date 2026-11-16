@@ -35,7 +35,9 @@ const createContainer = async (image: string, cmd: string[]): Promise<string> =>
       method: "POST",
     });
     if (!pull.ok) throw new Error(`docker pull ${image}: ${pull.status} ${await pull.text()}`);
-    await pull.body?.cancel();
+    // drain the pull stream to COMPLETION — cancel() aborts the pull
+    // mid-download and the image never lands
+    await new Response(pull.body).text();
     r = await attempt();
   }
   if (!r.ok) throw new Error(`docker create: ${r.status} ${await r.text()}`);
