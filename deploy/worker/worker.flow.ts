@@ -134,8 +134,18 @@ const landFile = async (
   });
 };
 
+/** the repo's true default branch (a fork keeps its parent's — master,
+ *  NOT main; hardcoding main 404s the tree/ref/PR-base legs — live
+ *  lesson from the Vanilla-JavaScript-Calculator fork) */
+const defaultBranch = async (): Promise<string> => {
+  const repo = await gh<{ default_branch: string }>(`/repos/${env.repo}`);
+  return repo.default_branch;
+};
+
 const cutBranch = async (branch: string): Promise<void> => {
-  const mainRef = await gh<{ object: { sha: string } }>(`/repos/${env.repo}/git/ref/heads/main`);
+  const mainRef = await gh<{ object: { sha: string } }>(
+    `/repos/${env.repo}/git/ref/heads/${await defaultBranch()}`,
+  );
   await gh(`/repos/${env.repo}/git/refs`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -150,7 +160,7 @@ const raisePull = async (n: number, branch: string, summary: string): Promise<st
     body: JSON.stringify({
       title: `${summary} (#${n})`,
       head: branch,
-      base: "main",
+      base: await defaultBranch(),
       body: `Closes #${n}\n\nImplemented by the durable worker (lane \`${env.lane}\`, microworkers ran the syntax checks). Review and merge — the GitHub Pages site updates from \`docs/\` on merge.`,
     }),
   });
@@ -163,7 +173,7 @@ const raisePull = async (n: number, branch: string, summary: string): Promise<st
 const phaseDeliver = async (issue: Issue, comments: Comment[], row: PhaseRow): Promise<void> => {
   const thread = comments.map((c) => `${c.user.login}: ${c.body}`).join("\n");
   const tree = await gh<{ tree: { path: string }[] }>(
-    `/repos/${env.repo}/git/trees/main?recursive=1`,
+    `/repos/${env.repo}/git/trees/${await defaultBranch()}?recursive=1`,
   );
   const { summary, files } = await ask(
     Plan,
