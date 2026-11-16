@@ -173,15 +173,29 @@ export async function genRealEngineConfigs(outDir: string): Promise<void> {
   // REAL_PROVIDERS filters the loop (wiring, not hand-authored
   // files — a hub generating only its seat needs no other key)
   const filter = process.env["REAL_PROVIDERS"]?.split(",").map((s) => s.trim());
+  // ENGINE_HELD_SEATS: user_token seats the HUB holds a credential
+  // for (W2595: the azure VMSS fronts the IKEA MS Copilot seat — the
+  // hub's own PAT rides os.environ, github_copilot/ legs serve the
+  // FULL catalog as chat-completions deployments, and the pass-through
+  // seam stays for per-dev BYOC callers). Both worlds in one file.
+  const engineHeld =
+    process.env["ENGINE_HELD_SEATS"]?.split(",").map((s) => s.trim()) ?? [];
   for (const label of Object.keys(KNOWN_PROVIDERS) as KnownProviderLabel[]) {
     if (filter !== undefined && !filter.includes(label)) continue;
     const known = KNOWN_PROVIDERS[label];
-    // BYOC seat: the pass-through seam, verbatim caller token
-    if (known.user_token) {
+    // BYOC seat NOT held by the hub: the pass-through seam only
+    if (known.user_token && !engineHeld.includes(label)) {
       writeFileSync(join(outDir, `${label}.litellm.yaml`), byocPassThroughOf(label, known.url));
       console.log(`${outDir}/${label}.litellm.yaml: BYOC pass-through (caller token forwards)`);
       continue;
     }
+    const passThrough =
+      known.user_token && engineHeld.includes(label)
+        ? byocPassThroughOf(label, known.url).replace(
+            "general_settings:\n  pass_through_endpoints:\n",
+            "",
+          )
+        : "";
     const { rows } = await pullCatalog(label);
     if (rows.length === 0)
       throw new Error(`${label}: live catalog empty — refusing to emit an empty engine`);
@@ -201,12 +215,15 @@ export async function genRealEngineConfigs(outDir: string): Promise<void> {
         `Keys ride os.environ/${known.key_env} (never this file).`,
       ]) +
         lines.join("\n") +
-        "\nlitellm_settings:\n  drop_params: true # tolerate Anthropic-only params the wires 400 on\n" +
+        "\nlitellm_settings:\n  drop_params: true # tolerate wire params the seat 400s on\n" +
         // the engine gate: only a buckle holding keys/engine reaches
         // the legs (anonymous + wrong key are 401 by litellm master_key)
-        "\ngeneral_settings:\n  master_key: os.environ/ENGINE_MASTER_KEY\n",
+        "\ngeneral_settings:\n  master_key: os.environ/ENGINE_MASTER_KEY\n" +
+        (passThrough !== "" ? "  pass_through_endpoints:\n" + passThrough : ""),
     );
-    console.log(`${outDir}/${label}.litellm.yaml: ${rows.length} real legs (${known.dialect})`);
+    console.log(
+      `${outDir}/${label}.litellm.yaml: ${rows.length} real legs (${known.dialect})${passThrough !== "" ? " + BYOC pass-through" : ""}`,
+    );
   }
 }
 
