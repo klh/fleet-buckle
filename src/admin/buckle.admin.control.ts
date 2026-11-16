@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import {
+  deepMerge,
   mergeSettingsSafe,
   type BuckleSettings,
 } from "../schemas/buckle.settings.zod.ts";
@@ -164,9 +165,36 @@ export async function applyHubEdit(
   // exception at this boundary)
   const merged = mergeSettingsSafe(current, edit);
   if (!merged.ok) return { kind: "rejected", detail: `the edit does not parse: ${merged.detail}` };
-  // the over layer holds EXACTLY the edit (unit file stays pristine)
-  atomicSecret(paths.over, `${JSON.stringify(edit, null, 2)}\n`);
+  // the over layer is an ACCUMULATING LEDGER: the edit merges into
+  // whatever the over file already holds (a second edit must never
+  // erase the first — pinning a lane then adding a provider keeps
+  // both). The unit file stays pristine.
+  const ledger = await readOverLedger(paths.over);
+  if (!ledger.ok) return { kind: "rejected", detail: ledger.detail };
+  const nextOver = deepMerge(ledger.rows, edit);
+  atomicSecret(paths.over, `${JSON.stringify(nextOver, null, 2)}\n`);
   return appliedEdit(await loadSettings(paths), paths.over);
+}
+
+/** the current over rows (machine-written strict JSON — the ONE
+ *  shape this seam ever writes). A malformed ledger REFUSES the
+ *  edit instead of wiping it: never write over unreadable state. */
+const OverLedger = z
+  .string()
+  .transform((raw) => JSON.parse(raw))
+  .pipe(z.record(z.string(), z.unknown()));
+
+async function readOverLedger(
+  file: string,
+): Promise<{ ok: true; rows: Record<string, unknown> } | { ok: false; detail: string }> {
+  if (!existsSync(file)) return { ok: true, rows: {} };
+  const rows = OverLedger.safeParse(readFileSync(file, "utf8"));
+  if (!rows.success)
+    return {
+      ok: false,
+      detail: `the over layer at ${file} is not a JSON object ledger — refusing to overwrite it`,
+    };
+  return { ok: true, rows: rows.data };
 }
 
 /** the one secret-write idiom: tmp file + rename, 0600 — the SAME

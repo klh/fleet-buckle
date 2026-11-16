@@ -278,7 +278,10 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-function deepMerge(base: unknown, override: unknown): unknown {
+/** the RAW row merge (objects merge, scalars/arrays replace, NO
+ *  parse) — exported for the over-ledger: /admin/hubs edits
+ *  ACCUMULATE into the current over content, never replace it. */
+export function deepMerge(base: unknown, override: unknown): unknown {
   if (!isPlainObject(base) || !isPlainObject(override)) return override;
   const out: Record<string, unknown> = { ...base };
   for (const [k, v] of Object.entries(override)) {

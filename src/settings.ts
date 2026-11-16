@@ -47,9 +47,19 @@ export function resolveSettingsPaths(args: string[]): SettingsPaths {
  * strict JSON, hands author JSON5 — both parse). A malformed over
  * file fails LOUD here (settings.ts is one of the two sanctioned
  * catch sites). */
+/** monotonic per-process sequence — Date.now() ALONE collides when two
+ * loads land in the same millisecond (edit #2 after edit #1, an admin
+ * repin in the boot ms): identical query → Bun serves the cached
+ * first parse → stale settings (live-suite verified 2026-11-16:
+ * settings.test edit#2 / malformed / the admin swap seam all raced on
+ * it). The counter makes every read's cache key unique, forever. */
+let overBust = 0;
+
 async function loadOverLayer(file: string): Promise<unknown> {
   try {
-    return (await import(`${file}?cb=${Date.now()}`, { with: { type: "json5" } })).default;
+    return (
+      await import(`${file}?cb=${Date.now()}.${++overBust}`, { with: { type: "json5" } })
+    ).default;
   } catch (e) {
     throw new Error(
       `over layer ${file} is malformed: ${classifyFault(e)}`,

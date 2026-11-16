@@ -132,9 +132,16 @@ const server = Bun.serve({
       });
 
     // ── the repo prefix: /repos/<owner>/<repo>/… ──
-    const repo = /^\/repos\/[^/]+\/[^/]+\/(.*)$/.exec(path);
+    const repo = /^\/repos\/([^/]+)\/([^/]+)(?:\/(.*))?$/.exec(path);
     if (repo === null) return json({ message: "Not Found" }, 404);
-    const rest = repo[1] ?? "";
+    const owner = repo[1] ?? "";
+    const name = repo[2] ?? "";
+    const rest = repo[3] ?? "";
+
+    // repo metadata (the worker resolves the default branch from it —
+    // the live fork lesson: never assume "main")
+    if (req.method === "GET" && rest === "")
+      return json({ default_branch: "main", full_name: `${owner}/${name}` });
 
     // issues list (open only — the stub never closes)
     if (req.method === "GET" && rest === "issues") return json(issues);

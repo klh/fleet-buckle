@@ -150,15 +150,23 @@ describe("the admin seam", () => {
       const out = HubEditOk.parse(await r.json());
       expect(out.ok).toBe(true);
       expect(out.hub.providers.length).toBe(1);
-      // the over file holds EXACTLY the edit (JSON — valid JSON5), and
-      // the LIVE state (same server, no restart) already serves it
-      expect(JSON.parse(readFileSync(out.over, "utf8"))).toEqual({
-        providers: { mscopilot: { url: `http://127.0.0.1:${seat.port}` } },
-      });
+      // the over layer is an ACCUMULATING LEDGER: the edit lands ON
+      // TOP of the rows the world booted with — hub label, access,
+      // principals dir all SURVIVE the edit (a second edit must
+      // never erase the first, and the live swap must keep serving
+      // the boot identity)
+      const ledger = JSON.parse(readFileSync(out.over, "utf8"));
+      expect(ledger.providers.mscopilot.url).toBe(`http://127.0.0.1:${seat.port}`);
+      expect(ledger.hub.label).toBe("az1");
+      expect(ledger.access.principals.length).toBe(2);
       const state = AdminState.parse(
         await (await fetch(`${base}/admin/state`, { headers: GUI })).json(),
       );
       expect(state.providers.map((p) => p.label)).toEqual(["mscopilot"]);
+      // the boot identity survives the LIVE swap (the 401 regression:
+      // a wiped ledger took principals_dir with it)
+      expect(state.hub).toBe("az1");
+      expect(state.principals.length).toBe(2);
     } finally {
       world.stop();
       seat.stop();
