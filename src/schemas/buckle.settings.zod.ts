@@ -127,7 +127,7 @@ const ContextMatch = z
     principal: z.string().min(1).optional(),
     /** a principal GROUP the caller must carry */
     group: z.string().min(1).optional(),
-    /** the ingress dialect this rule fires on (chat | messages) */
+    /** the ingress dialect this rule fires on (chat | messages | responses) */
     route: ChatRouteSchema.optional(),
     /** model group filters: exact or prefix */
     models: z.array(z.string().min(1)).optional(),

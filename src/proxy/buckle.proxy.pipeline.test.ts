@@ -6,7 +6,14 @@
 // wire schema (never hand-cast).
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { bootBuckle, mintKeyDir, stubEngine, stubProvider, type AccessRegistry } from "../kit.ts";
+import {
+  bootBuckle,
+  mintKeyDir,
+  stubByocSeat,
+  stubEngine,
+  stubProvider,
+  type AccessRegistry,
+} from "../kit.ts";
 import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
 import { BuckleProblem } from "../schemas/buckle.problem.zod.ts";
 import { ServedOutcomeSchema } from "./buckle.proxy.pipeline.ts";
@@ -31,9 +38,9 @@ const CHAT = {
 };
 
 /** one world: provider + engine stubs owned by the caller */
-async function booted() {
+async function booted(opts: { sse?: string } = {}) {
   const provider = stubProvider([{ id: "openrouter/qwen3-coder" }]);
-  const engine = stubEngine();
+  const engine = stubEngine(opts.sse !== undefined ? { sse: opts.sse } : {});
   const world = await bootBuckle({
     label: "b1",
     dir: DIR,
@@ -119,6 +126,129 @@ describe("the MITM forward loop", () => {
     } finally {
       world.stop();
       engine.stop();
+    }
+  });
+});
+
+/** the OpenAI Responses wire ask (the third dialect's shape) */
+const RESPONSES_ASK = {
+  model: "openrouter/qwen3-coder",
+  instructions: "you are terse",
+  input: [{ role: "user", content: [{ type: "input_text", text: "hi" }] }],
+};
+
+/** the seat's responses echo (what the BYOC leg relays back) */
+const SeatEcho = z.object({ object: z.literal("response") }).passthrough();
+
+/** one ride as the recorder saw it */
+const Ride = z.object({ path: z.string(), auth: z.string().nullable(), raw: z.string() });
+
+/** native Responses SSE bytes — the pass-through proof must see
+ *  every byte back, in order */
+const SSE_BYTES = [
+  "event: response.created",
+  'data: {"type":"response.created","response":{"id":"resp_1","model":"m"}}',
+  "",
+  "event: response.output_text.delta",
+  'data: {"type":"response.output_text.delta","delta":"hel"}',
+  "",
+  "event: response.completed",
+  'data: {"type":"response.completed","response":{"id":"resp_1","usage":{"total_tokens":7}}}',
+  "",
+  "",
+].join("\n");
+
+async function askResponses(base: string, body: unknown): Promise<Response> {
+  return fetch(`${base}/v1/responses`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...AUTH },
+    body: typeof body === "string" ? body : JSON.stringify(body),
+  });
+}
+
+describe("the responses dialect (/v1/responses)", () => {
+  test("rides the engine at /v1/responses, body verbatim, answer untouched", async () => {
+    const { world, base, engine } = await booted();
+    try {
+      const r = await askResponses(base, RESPONSES_ASK);
+      expect(r.status).toBe(200);
+      expect(EchoBody.parse(await r.json()).id).toBe("engine-echo"); // the engine's answer, not rewritten
+      expect(engine.seen.length).toBe(1);
+      expect(engine.seen[0]?.path).toBe("/v1/responses"); // the dialect's engine leg
+      const seen = ForwardedChat.parse(JSON.parse(engine.seen[0]?.raw ?? "{}"));
+      expect(seen.model).toBe("openrouter/qwen3-coder");
+      expect(seen["instructions"]).toBe("you are terse");
+      expect(seen["input"]).toEqual(RESPONSES_ASK.input);
+    } finally {
+      world.stop();
+      engine.stop();
+    }
+  });
+
+  test("model-less and malformed bodies fail LOUD (problem+json 422, the validation kind)", async () => {
+    const { world, base, engine } = await booted();
+    try {
+      for (const bad of [{ input: "hi" }, "not json"]) {
+        const r = await askResponses(base, bad);
+        expect(r.status).toBe(422);
+        expect(r.headers.get("content-type")).toContain("application/problem+json");
+        expect(BuckleProblem.parse(await r.json()).kind).toBe("validation");
+      }
+      expect(engine.seen.length).toBe(0); // never reached the engine
+    } finally {
+      world.stop();
+      engine.stop();
+    }
+  });
+
+  test("SSE answers pass through byte-identical (native dialect, no reframing)", async () => {
+    const { world, base, engine } = await booted({ sse: SSE_BYTES });
+    try {
+      const r = await askResponses(base, { ...RESPONSES_ASK, stream: true });
+      expect(r.status).toBe(200);
+      expect(r.headers.get("content-type")).toContain("text/event-stream");
+      expect(await r.text()).toBe(SSE_BYTES); // every engine byte, in order
+      expect(engine.seen[0]?.path).toBe("/v1/responses");
+      expect(JSON.parse(engine.seen[0]?.raw ?? "{}").stream).toBe(true);
+    } finally {
+      world.stop();
+      engine.stop();
+    }
+  });
+});
+
+describe("the BYOC /w/ lane on the responses dialect", () => {
+  test("the caller's token relays the seat at /v1/responses (engineless unit)", async () => {
+    const PAT = "ghp_" + "cccc4cccc4cccc4cccc4cccc4cccc4cccc4cccc";
+    const seat = stubByocSeat([{ id: "mscopilot/gpt-6-astra" }]);
+    const openrouter = stubProvider([{ id: "openrouter/qwen3-coder" }]);
+    const world = await bootBuckle({
+      label: "b1",
+      dir: DIR,
+      access: ACCESS,
+      providers: {
+        mscopilot: `http://127.0.0.1:${seat.port}`,
+        openrouter: `http://127.0.0.1:${openrouter.port}`,
+      },
+      hubs: {},
+      // engineless — the BYOC leg relays the seat DIRECT
+    });
+    try {
+      const r = await fetch(`${world.base}/w/copilot/${PAT}/v1/responses`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: "mscopilot/gpt-6-astra", input: "hi" }),
+      });
+      expect(r.status).toBe(200);
+      expect(SeatEcho.parse(await r.json()).object).toBe("response");
+      const rides = Ride.array().parse(seat.seen.filter((s) => s.path === "/v1/responses"));
+      expect(rides.length).toBe(1);
+      expect(rides[0]?.auth).toBe(`Bearer ${PAT}`); // THEIR credential reached the seat
+      expect(JSON.parse(rides[0]?.raw ?? "{}").model).toBe("mscopilot/gpt-6-astra");
+    } finally {
+      world.stop();
+      seat.stop();
+      openrouter.stop();
     }
   });
 });

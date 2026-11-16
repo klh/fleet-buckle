@@ -87,10 +87,11 @@ export function stubProvider(rows: { id: string }[]): {
 }
 
 /** a BYOC seat stub — the copilot-shaped provider: the /models
- *  catalog PLUS direct /v1/chat/completions + /v1/messages legs
- *  (the user leg posts the provider DIRECT, no engine between),
- *  every ride recorded with the headers that arrived (the BYOC
- *  proof reads exactly which credential reached the seat) */
+ *  catalog PLUS direct chat legs (/v1/chat/completions,
+ *  /v1/messages, /v1/responses — the user leg posts the provider
+ *  DIRECT, no engine between), every ride recorded with the headers
+ *  that arrived (the BYOC proof reads exactly which credential
+ *  reached the seat) */
 export function stubByocSeat(rows: { id: string }[]): {
   port: number;
   stop: () => void;
@@ -103,8 +104,24 @@ export function stubByocSeat(rows: { id: string }[]): {
       const pathname = new URL(req.url).pathname;
       if (req.method === "GET" && pathname === "/models")
         return Response.json({ data: rows });
-      if (req.method === "POST" && (pathname === "/v1/chat/completions" || pathname === "/v1/messages")) {
+      if (
+        req.method === "POST" &&
+        (pathname === "/v1/chat/completions" ||
+          pathname === "/v1/messages" ||
+          pathname === "/v1/responses")
+      ) {
         seen.push(sawOf(req, await req.text()));
+        if (pathname === "/v1/responses")
+          return Response.json({
+            id: "resp_seat-echo",
+            object: "response",
+            status: "completed",
+            model: "seat",
+            output: [
+              { type: "message", role: "assistant", content: [{ type: "output_text", text: "ok" }] },
+            ],
+            usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+          });
         return Response.json({
           id: "copilot-seat-echo",
           object: "chat.completion",
@@ -120,9 +137,13 @@ export function stubByocSeat(rows: { id: string }[]): {
   return { port: server.port ?? 0, stop: () => server.stop(true), seen };
 }
 
-/** the engine stub: answers /v1/chat/completions with a well-formed
- *  body (id/usage/sleep parameterizable) and records the ride */
-export function stubEngine(opts: { id?: string; totalTokens?: number; sleepMs?: number } = {}): {
+/** the engine stub: answers chat legs with a well-formed body
+ *  (id/usage/sleep parameterizable; `sse` swaps the answer for RAW
+ *  event-stream bytes — the streaming pass-through proofs) and
+ *  records the ride */
+export function stubEngine(
+  opts: { id?: string; totalTokens?: number; sleepMs?: number; sse?: string } = {},
+): {
   port: number;
   stop: () => void;
   seen: SawRequest[];
@@ -136,8 +157,13 @@ export function stubEngine(opts: { id?: string; totalTokens?: number; sleepMs?: 
       // telemetry scrapes instantly — sleeping those would stall the
       // stats face's telemetry pull behind the chat it measures)
       const path = new URL(req.url).pathname;
-      const isChat = path.endsWith("/chat/completions") || path.endsWith("/messages");
+      const isChat =
+        path.endsWith("/chat/completions") || path.endsWith("/messages") || path.endsWith("/responses");
       if (opts.sleepMs !== undefined && isChat) await Bun.sleep(opts.sleepMs);
+      if (opts.sse !== undefined && isChat)
+        return new Response(opts.sse, {
+          headers: { "content-type": "text/event-stream" },
+        });
       return Response.json({
         id: opts.id ?? "engine-echo",
         object: "chat.completion",

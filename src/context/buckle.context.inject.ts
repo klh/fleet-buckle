@@ -1,6 +1,6 @@
 // context/buckle.context.inject.ts — the TWO sanctioned body
-// rewrites, dialect-aware (chat + messages): the injection merge
-// (the proven W3081 semantics) and the /w/<slug> lane pin. Values
+// rewrites, dialect-aware (chat + messages + responses): the injection
+// merge (the proven W3081 semantics) and the /w/<slug> lane pin. Values
 // in files, shapes in schemas; a body the shape does not recognize
 // rides UNTOUCHED — injection never corrupts what it does not
 // understand.
@@ -14,7 +14,13 @@ export type { ChatRoute };
 export const ENGINE_PATH: Record<ChatRoute, string> = {
   chat: "/v1/chat/completions",
   messages: "/v1/messages",
+  responses: "/v1/responses",
 };
+
+/** a responses body we may prepend into: `instructions` is the
+ *  dialect's system channel (a string — the OpenAI Responses
+ *  shape); anything else rides passthrough */
+const InjectableResponsesBody = z.object({ instructions: z.string().optional() }).passthrough();
 
 /** a chat body we may prepend into: messages is an array, everything
  *  else rides passthrough (the engine owns its own face) */
@@ -73,16 +79,31 @@ function injectAnthropic(body: z.output<typeof InjectableChatBody>, stanza: stri
   else body["system"] = [{ type: "text", text: stanza }, ...system.data];
 }
 
+/** the responses dialect's merge: the stanza rides the TOP-LEVEL
+ *  instructions (absent one becomes the stanza — the same law as
+ *  the anthropic top-level system) */
+function injectResponses(body: z.output<typeof InjectableResponsesBody>, stanza: string): void {
+  body["instructions"] =
+    body.instructions === undefined ? stanza : `${stanza}\n\n${body.instructions}`;
+}
+
 /** the ONE sanctioned body rewrite, dialect-aware (the proven W3081
  *  semantics): openai — a leading system message gets the stanza
  *  PREPENDED into it, absent one the stanza becomes the first
  *  system message; anthropic — the TOP-LEVEL system (string or
- *  block array) merges the same way, absent one becomes the stanza.
+ *  block array) merges the same way, absent one becomes the stanza;
+ *  responses — the TOP-LEVEL instructions merges the same way.
  *  A non-chat-shaped body is returned untouched — injection never
  *  corrupts what it does not understand. */
 export function injectedBodyOf(raw: string, stanza: string, route: ChatRoute): string {
   const json = parseJson(raw);
   if (!json.ok) return raw;
+  if (route === "responses") {
+    const body = InjectableResponsesBody.safeParse(json.data);
+    if (!body.success) return raw;
+    injectResponses(body.data, stanza);
+    return JSON.stringify(body.data);
+  }
   const body = InjectableChatBody.safeParse(json.data);
   if (!body.success) return raw;
   if (route === "chat") injectOpenai(body.data.messages, stanza);

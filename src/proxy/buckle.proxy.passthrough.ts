@@ -3,7 +3,7 @@
 // byte-identical (method, path, query, headers, body stream). The
 // buckle owns three jobs — multihop, the access proxy, context
 // injection — every other litellm face (models admin, count_tokens,
-// /v1/responses, guardrails, spend, health…) stays reachable
+// guardrails, spend, health…) stays reachable
 // THROUGH the buckle exactly as litellm serves it. Streaming both
 // ways (never buffered); hop-internal headers never ride; the
 // engine's own authz sees the engine token, the caller's buckle key

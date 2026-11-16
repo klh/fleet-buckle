@@ -86,7 +86,7 @@ type Face = (
     path: string;
     /** the raw query string (`?…`, or "" — pass-through relays it) */
     search: string;
-    /** the chat dialect for the two handled LLM faces */
+    /** the wire dialect for the handled LLM faces */
     route: ChatRoute;
     /** the /w/<slug> slug riding this request ("" on bare paths) */
     laneSlug: string;
@@ -267,10 +267,11 @@ const adminHubsFace: Face = async (srv, rq) => {
 /** THE route table — one row per face; anything NOT here rides the
  *  VERBATIM pass-through leg to the engine (the catch-all: every
  *  litellm face stays reachable through buckle exactly as litellm
- *  serves it — /v1/responses, count_tokens, guardrails, the UI…) */
+ *  serves it — count_tokens, guardrails, the UI…) */
 const routes: Record<string, Face> = {
   "POST /v1/chat/completions": chatFace,
   "POST /v1/messages": chatFace,
+  "POST /v1/responses": chatFace,
   "GET /v1/models": modelsFace,
   "GET /v1/stats": statsFace,
   "GET /v1/tree": treeFace,
@@ -285,6 +286,12 @@ const passThroughFace: Face = async (srv, rq) => {
   const refused = admitPrincipal(srv, rq.principal);
   if (refused !== null) return refused;
   return passThrough(srv.settings, rq.req, `${rq.path}${rq.search}`, srv.tokenOf);
+};
+
+/** the wire dialect by bare path — chat is the default face */
+const ROUTE_BY_PATH: Record<string, ChatRoute> = {
+  "/v1/messages": "messages",
+  "/v1/responses": "responses",
 };
 
 export function bootServer(input: {
@@ -345,7 +352,7 @@ async function serveRequest(srv: ServerState, req: Request): Promise<Response> {
     userToken,
     path,
     search: url.search,
-    route: path === "/v1/messages" ? "messages" : "chat",
+    route: ROUTE_BY_PATH[path] ?? "chat",
     laneSlug,
   });
   exportSpan(
