@@ -5,11 +5,16 @@
 import { z } from "zod";
 import { env } from "./worker.env.ts";
 
+// the docker engine version we SPEAK — engines enforce a floor
+// (the azure VMSS rejects <1.44); 1.44 is safe across modern hosts
+// and the hermetic rig alike.
+const DOCKER_API = "v1.44";
+
 const dockerCall = async (
   path: string,
   init: { method?: string; body?: string } = {},
 ): Promise<Response> =>
-  await fetch(`http://docker/v1.41${path}`, {
+  await fetch(`http://docker/${DOCKER_API}${path}`, {
     method: init.method ?? "GET",
     unix: env.dockerSock,
     headers: init.body === undefined ? undefined : { "content-type": "application/json" },
