@@ -36,15 +36,36 @@ export function resolveSettingsPaths(args: string[]): SettingsPaths {
   return over === undefined || over === "" ? { defaults, settings } : { defaults, settings, over };
 }
 
+/** the over layer is the ONE runtime-written settings file
+ * (applyHubEdit rewrites it on every /admin/hubs edit) — it must
+ * NEVER ride the module cache: a dynamic import() of the same path
+ * returns the FIRST parse forever (live-verified 2026-11-15 on the
+ * azure hub: edit #1 applied, edit #2 landed on disk but the reload
+ * served the cached module — the swap seam was write-only). The
+ * admin writer emits strict JSON (JSON.stringify), so bytes +
+ * JSON.parse is the exact contract; a malformed over file fails
+ * LOUD here (settings.ts is one of the two sanctioned catch sites). */
+function loadOverLayer(file: string): Record<string, unknown> {
+  try {
+    return JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+  } catch (e) {
+    throw new Error(
+      `over layer ${file} is malformed (the admin writer emits strict JSON): ${classifyFault(e)}`,
+    );
+  }
+}
+
 export async function loadSettings(paths: SettingsPaths): Promise<BuckleSettings> {
   const base = (await import(paths.defaults, { with: { type: "json5" } })).default;
   const unit = (await import(paths.settings, { with: { type: "json5" } })).default;
-  const merged = [base, unit];
+  // base + unit never change at runtime (restart covers them) — the
+  // import cache is CORRECT for them; only the over layer is hot
+  let acc = mergeSettings(base, unit);
   // a MISSING over file is an EMPTY layer (a fresh /state volume boots
-  // clean); a PRESENT but malformed one still fails loud at parse
+  // clean); a PRESENT but malformed one fails loud above
   if (paths.over !== undefined && existsSync(paths.over))
-    merged.push((await import(paths.over, { with: { type: "json5" } })).default);
-  return merged.reduce((acc, layer) => mergeSettings(acc, layer));
+    acc = mergeSettings(acc, loadOverLayer(paths.over));
+  return acc;
 }
 
 /** unreadable-token paths are logged ONCE each (per-request reads must
