@@ -50,17 +50,23 @@ export async function userChat(call: {
   token: string;
 }): Promise<UserLegOutcome> {
   const engine = call.settings.engine?.url.replace(/\/$/, "");
+  // the registry headers ride BOTH carriers — the engine pass-through
+  // relays incoming headers verbatim, so the copilot seat's integration
+  // id must be on the engine leg too (without it Copilot 400s /v1/
+  // messages with "no model endpoints available given user constraints")
+  const extra =
+    KNOWN_PROVIDERS[call.label as KnownProviderLabel]?.catalog_headers ?? {};
   const sent =
     engine !== undefined
       ? await relayTo(
           call,
           `${engine}/v1/byoc/${call.label}${ENGINE_PATH[call.route]}`,
-          {},
+          extra,
         )
       : await relayTo(
           call,
           `${call.url.replace(/\/$/, "")}${ENGINE_PATH[call.route]}`,
-          KNOWN_PROVIDERS[call.label as KnownProviderLabel]?.catalog_headers ?? {},
+          extra,
         );
   if (!sent.ok) return { kind: "fault", fault: sent.fault };
   const body = await bodyText(sent);

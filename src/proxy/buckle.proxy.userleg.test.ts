@@ -86,6 +86,9 @@ describe("the BYOC leg (/w/<lane>/<token>)", () => {
       // the BYOC path convention — the engine's pass-through row
       expect(rides[0]?.path).toBe(`/v1/byoc/mscopilot${ENGINE_PATH.chat}`);
       expect(rides[0]?.auth).toBe(`Bearer ${PAT_A}`); // THEIR token reached the engine
+      // registry headers ride the engine leg TOO (forward_headers
+      // relays them; Copilot 400s /v1/messages without the integration id)
+      expect(rides[0]?.copilotId).toBe("vscode-chat");
       expect(chatRides(seat.seen).length).toBe(0); // the seat leg is the engine's, not buckle's
     } finally {
       world.stop();
