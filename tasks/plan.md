@@ -16,11 +16,11 @@
 - [x] P5 first slice — matched trials solo/concurrent/split run + docs/TRIALS.md (full BLAM deliberately not ported — owner directive)
 - [ ] ChatGPT review fixes (13 findings, 2026-11-17) — MINTED & MOSTLY LANDED: #1 catch-all auth and #2 Buckle SSE landed in code + live-path verified (anon→401 both engine and lane paths; SSE through lane 200 text/event-stream with real seat deltas). #13 litellm digest pinning landed as fleet-buckle PR #2 (1393027, law buckle.laws.images.ts; index digest sha256:bd089afd…). Worker-plane findings minted as klh/fleet-worker #28–#35: LANDED via squash merges #29→PR#37, #30→PR#36, #32→PR#42(+ported supervisor pagination hunk), #33→PR#39, #34→PR#38; fleet-worker main ebb6109 (165 tests) rolled to VMSS. OPEN: #28 auth needs wiring (PR#40 bounced — module good, never wired; RE-MINTED as ready task 2026-11-17 triage), #31 red gate settles-done (CLOSED done 2026-11-17: landed twice, tasks 75/92 done), #35 Last-Event-ID resume (RE-MINTED task 93; root cause = seat stream cuts — new issue #136 for the bounded-reconnect fix). Triage 2026-11-17 evening: closed as DONE with store evidence — #5 (Responses dialect live in buckle f6ff9da), #68, #75 (POST /close), #76 (POST /retry-failed), #78 (terminal 409 guard in 5bdd486), #91, #97, #103; re-minted failed-but-real #95/#96 as ready tasks. Buckle-side #3 GUI parked design-first (see GUI row); #12 sidecar dispositioned docs/target-architecture.md §5 row 11.
 - [x] P6 first slices — MINTED (klh/fleet-worker #22/#23/#24): ALL LANDED — PR #25 (GET /watch typed SSE) / #26 (exactly-once effects) / #27 (durable journal resume) + wire-up 3e7da45. Follow-up slices: task_graph+conversation event kinds LANDED (PR #38); Last-Event-ID resume = open issue #35; watch auth folded into #28; GUI client parked design-first. Owner target directive + journal-proof gate recorded at the P6 section head; new mints #43 (probe must exercise BYOC lane leg), #44 (journal persistence + replay proof gate), #45 (job-parent-in-guest contract) — PRs #46/#47/#48 RAISED BY LANES AND MERGED (all closed 2026-11-17; 0 open PRs at triage). P6 gate evidence round re-minted as klh/fleet-worker #134 (kill/recreate receipts).
-- [x] Backlog saturation mint 2026-11-17 evening — queue had drained (149 tasks: 117 done/30 failed/2 cancelled; lanes exited "queue drained"). Minted: supervisor-mind wave #129–#132 (charter/templates, alarms+wake+spend fence, shatter face, mind lane — from the addendum below), P6 gate receipts #134, Copilot CLI smoke #135, seat-stream reconnect #136; re-minted #95/#96/#28/#35 as ready tasks. Parked rows (Entra client ID, krun, P3, GUI, zram/settings-pin/Mac-upstream, t-shirt) intentionally NOT minted.
+- [x] Backlog saturation mint 2026-11-17 evening — queue had drained (149 tasks: 117 done/30 failed/2 cancelled; lanes exited "queue drained"). Minted: historical supervisor-mind wave #129–#132 (now superseded by P6 correction: Pi root agent owns workflow; do not implement the former alarm/shatter/mind design), P6 gate receipts #134, Copilot CLI smoke #135, seat-stream reconnect #136; re-minted #95/#96/#28/#35 as ready tasks. Parked rows (Entra client ID, krun, P3, GUI, zram/settings-pin/Mac-upstream, t-shirt) intentionally NOT minted.
 - [ ] GUI — PARKED design-first (owner 2026-11-17): one-page design LANDED tasks/fleet-console-design.md (4c2affd) — read-only v1, no new server, one /api/fleet/board proxy onto supervisor GET /board; implementation slices mint ONLY after owner sign-off; premature task 84 cancelled; issue #3 carries the pointer.
 - [ ] zram on VMSS (m02251) · tracked-settings pin (m02917) · azure-buckle-as-Mac-upstream (m00957)
 - [ ] t-shirt store templatization — owner-queued, awaiting brief
-- [ ] P6 — one Pi Durable job lifecycle, wake and task-graph projections, and a thin operator UI; ordered plan at the end of this file
+- [ ] P6 — one Pi Durable runner lifecycle, native wake/task graph, and a thin operator UI; ordered plan at the end of this file
 
 Implementation status: the architecture is agreed; dispatch begins with
 the current-chain characterization in
@@ -889,7 +889,7 @@ last known-good deployment for rollback. Use the existing Fleet work
 graph and live coordination to assign implementation ownership; a DONE
 item or this plan alone does not prove a service is deployed.
 
-## P6 — one durable job lifecycle and an operator UI (planned 2026-11-17)
+## P6 — one Pi Durable runner lifecycle and an operator UI (planned 2026-11-17)
 
 P1–P5 record real pilot receipts. They do **not** prove that a retried
 supervisor assignment resumes the same Pi Durable conversation, that an
@@ -971,7 +971,7 @@ is live in the same queue (task 67 att2).
 
 | Owner                             | Authority and output                                                                                                                                                                                                 | Boundary                                                                                                                                                                                    |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fleet Suspenders                  | Global job admission, capacity, placement, writer epoch, operator cancel intent and audit.                                                                                                                           | The current `fleet-worker` supervisor is a production adapter awaiting migration. Migrate it deliberately; never run two independent authoritative schedulers for the same jobs.            |
+| Fleet Suspenders                  | Runner instance authorization, capacity, placement, writer epoch, operator stop intent and infrastructure audit.                                                                                                     | The current `fleet-worker` supervisor is a production adapter awaiting migration. Migrate it deliberately; never run two independent authoritative schedulers for the same jobs.            |
 | `fleet-worker` Pi guest (target)  | One process owns each journal. The durable job document and task graph own conversation/submission identity, local phase, child ownership, gate outcome and effect receipts. Expose versioned read and command APIs. | Do not mint global Fleet work or open one journal in two processes. An external control DB and a Pi journal cannot share a transaction; reconcile with stable keys and idempotent commands. |
 | `fleet-worker` execution adapters | Assignment-scoped workspace, GitHub effects, Gondolin lane guests and interim tool guests. The target guest runs Pi, models and tools; its journal survives guest replacement.                                       | The host owns placement and fencing; only the active guest writes its journal. Never clean a workspace still used by a live conversation.                                                   |
 | `fleet-buckle` and LiteLLM        | Buckle owns identity, context, traffic and usage observation; LiteLLM owns model routing.                                                                                                                            | Neither schedules workers or owns Pi task state.                                                                                                                                            |
@@ -1841,13 +1841,13 @@ by a config row, successful boot or dashboard screenshot alone.
 
 #### Runtime wiring by actor
 
-| Actor                    | Intended path                                                                                                                                                                                                                                               | Authority and proof                                                                                                                                                                                                |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Remote Pi worker         | Pi OpenAI chat adapter → Buckle `/w/<lane>` → LiteLLM Auto Router alias → selected Copilot model; tool calls stay in the Pi durable task.                                                                                                                   | Worker carries job/epoch/submission IDs. `must` concrete pins bypass Auto Router; eligible defaults ride it. Journal the selected model, classifier/fallback and usage; Lens receives Pi model/tool spans.         |
-| Supervisor / coordinator | Suspenders admits, places, fences and cancels jobs; its own inference rides Buckle → LiteLLM. A2A is an external invocation face for remote workers, while MCP presents scoped coordinator commands.                                                        | Work ledger and Pi journal remain authoritative. A2A task ID maps to one Fleet job/epoch; MCP mutations call the existing command API with idempotency and audit. Neither gateway schedules work.                  |
-| Buckle                   | Authenticate principal and lane, enforce its ingress policy, preserve trace headers and stream bodies, then route model, A2A and MCP requests to the one LiteLLM gateway.                                                                                   | Expose only approved paths/scopes. Map each caller to a scoped LiteLLM identity/key and prove revocation and grants at both layers; never use the engine master key as a shared runtime credential.                |
-| LiteLLM                  | Auto Router chooses model tier; deployment router handles retries/fallbacks; virtual keys/teams gate models, agents and tools; Prometheus/spend/OTel supply model evidence; A2A and MCP gateway expose native protocols.                                    | One pinned deployment/config source, one explicit owner per policy, observed served model and attempt ledger, failure tests and rollback. Lens is a separate trace service.                                        |
-| Local CLI session        | **Not for now:** Fleet's existing Vercel-skills-based installer remains the setup path for detected clients and harnesses. Current proof is Claude Code through Buckle/LiteLLM to a Copilot seat, plus a bounded GitHub Copilot harness Buckle-route probe. | Do not infer a governed model route from detection, skill installation or hook wiring. Broader Pi/Codex/other CLI setup, Auto Router opt-in, MCP wiring and Lens exports wait for a later client-integration pass. |
+| Actor                    | Intended path                                                                                                                                                                                                                                                      | Authority and proof                                                                                                                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Remote Pi worker         | Pi OpenAI chat adapter → Buckle `/w/<lane>` → LiteLLM Auto Router alias → selected Copilot model; tool calls stay in the Pi durable task.                                                                                                                          | Worker carries job/epoch/submission IDs. `must` concrete pins bypass Auto Router; eligible defaults ride it. Journal the selected model, classifier/fallback and usage; Lens receives Pi model/tool spans.         |
+| Supervisor / coordinator | Pi root agent supervises its own workflow and children; Suspenders authorizes runner creation, placement and fencing. Its inference rides Buckle → LiteLLM. A2A is an external invocation face for remote workers, while MCP presents scoped coordinator commands. | Pi journal owns workflow state; placement metadata stays outside. A2A task ID maps to one Fleet job/epoch; MCP mutations call the existing command API with idempotency and audit. Neither gateway schedules work. |
+| Buckle                   | Authenticate principal and lane, enforce its ingress policy, preserve trace headers and stream bodies, then route model, A2A and MCP requests to the one LiteLLM gateway.                                                                                          | Expose only approved paths/scopes. Map each caller to a scoped LiteLLM identity/key and prove revocation and grants at both layers; never use the engine master key as a shared runtime credential.                |
+| LiteLLM                  | Auto Router chooses model tier; deployment router handles retries/fallbacks; virtual keys/teams gate models, agents and tools; Prometheus/spend/OTel supply model evidence; A2A and MCP gateway expose native protocols.                                           | One pinned deployment/config source, one explicit owner per policy, observed served model and attempt ledger, failure tests and rollback. Lens is a separate trace service.                                        |
+| Local CLI session        | **Not for now:** Fleet's existing Vercel-skills-based installer remains the setup path for detected clients and harnesses. Current proof is Claude Code through Buckle/LiteLLM to a Copilot seat, plus a bounded GitHub Copilot harness Buckle-route probe.        | Do not infer a governed model route from detection, skill installation or hook wiring. Broader Pi/Codex/other CLI setup, Auto Router opt-in, MCP wiring and Lens exports wait for a later client-integration pass. |
 
 **First adapter work, before gateway activation.** Extracted Azure
 `fleet-buckle/src/main.ts` sends unknown paths through
@@ -1997,115 +1997,83 @@ Steps 3–6 provide real data. Do not mark P6 done on a green unit suite
 or a queue-level PR receipt; require Step 9's crash and operator-view
 evidence.
 
-## Addendum — supervisor as a told mind, not a built machine (2026-11-17, owner directive)
+## P6 correction — the Pi Durable runner is the supervisor (2026-11-17)
 
-Owner review of the post-split supervisor (store → db/tasks/lanes/reports/gh/templates,
-PRs #127/#128, direct lands ee2ec60/5023dee/5bdd486) concluded the direction:
-the supervisor's _loop_ should not be mechanics at all. It is an LLM-era service —
-tell it what to do, give it a small fence, and let patterns be prose.
+This section supersedes the removed addendum that proposed a separate
+"supervisor mind", alarm table, wake journal and shatter endpoint. The
+reviewed **runner image digest + Markdown charter revision + resolved
+variables + instance settings** create one Pi Durable root conversation.
+The root agent interprets the charter as an ongoing mission: it may work,
+create a loop or schedule, wait for source events, ask a person, start
+specialists, fork context, review their results and stop them. A charter is
+not a compiled workflow or a one-issue script. Its instructions and chosen
+capabilities are recorded in `pi.agent` for that conversation.
 
-**Owner directives (verbatim anchors, conversation of 2026-11-17):**
+Pi Durable owns the conversation, atomic commits, scheduler, native tasks,
+waits, child graph, submissions, usage and durable state. The outside
+controller only authorizes runner instances, places/fences/restarts their
+guests and exposes a thin authenticated command and observation bridge.
+External source ingress and timers may wake Pi; they never create a second
+workflow ledger. Buckle and LiteLLM provide identity, model routing and
+scoped MCP/A2A access, not agent scheduling.
 
-- "isn't the task intake actually the templates that then are the directions? and
-  the supervisor then creates its own loop or task setup?"
-- "this is llms and ais and the supervisor runs as an llm - so why create the
-  mechanics? we can just tell the supervisor how to do it? - then the supervisor
-  just has 10 common patterns or so it matches up against or just wings it?"
-- The GitHub charter, dictated: "ingest issues form this uri, and for each new on
-  mint a task. if its a feature request converse untill you understand the ask and
-  finally ask the user if whatever was produced is ready tobe implemented, then
-  estimate complexity and iether do it yourself or shatter into agents and get it
-  done, when done raise a pr figure out if theres a way to preview you work and ask
-  the user in the issue for a review"
-- Drift handling: "if theres a drift in perf or way this is done it can be solved by
-  context in the supervisor beforehand or in the seed"
-- Boot model: templates are what the supervisor LAUNCHES with — "launch, get
-  template, unfold, create taskish, udpate list monitor, starts work or sleep".
+The current `fleet-worker` supervisor DB, task rows, alarm proposals and
+polling loops must be audited for competing workflow authority. Migrate
+or retire that authority before declaring this architecture implemented.
+Keep minimal placement/fencing metadata outside Pi and reconcile remote
+effects with stable idempotency keys. The runner's journal remains the
+workflow source of truth across guest replacement.
 
-**The shape:** templates are the _genome_; the supervisor-mind is an LLM lane (same
-species as the workers) born with the genome as its mission; boot = _unfold_
-(transcribe genome clauses into concrete runtime commitments: task lists, schedules,
-wake-ons) registered as data in its own ledger, monitored after the fact via
-board/watch. New patterns are new charter paragraphs — no code. The mind is
-stateless per wake: wake → read board + conversation → decide → act → sleep.
+### Pi Durable source map for the refactor
 
-> **Codex review — clarify the two Pi roles before implementation.** This
-> genome-driven mind is the control supervisor that interprets intake and
-> requests governed admission; the P6 Pi job parent inside a Gondolin guest
-> executes one admitted job. They may share a harness pattern, but cannot
-> share one mutable journal or both become placement authorities. “Stateless
-> per wake” must mean disposable process memory: reopen the _same durable
-> conversation and journal_ and reconcile its committed intents on wake.
-> Recreating a fresh LLM session each wake would discard the continuity P6
-> explicitly requires.
+Read the [full upstream README](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md)
+and check every API against the pinned 1.5.2 package before coding.
+The online `main` documentation may describe later APIs. Use these
+sections as implementation decisions, not as a list of features to copy:
 
-**The fence (the only code, and why):** dedup/lease/claim/attempt-cap invariants are
-the race surface between N concurrent lanes — this exact surface double-minted one
-issue into 4 task rows and produced duplicate PRs live. Prose cannot enforce a race
-condition. The mind touches the ledger only through tools that enforce invariants.
+| Pi Durable section                                                                                                                                                                                                                                                                                                                                                 | Fleet use                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Concepts](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#concepts), [Persist and Resume](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#persist-and-resume), [Storage](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#storage)                                                   | One journal and writer per runner; reopen the same root after a crash. Qualify storage beyond guest replacement.                                         |
+| [Extensions](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#extensions), [Tools](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#tools), [Code Mode](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#code-mode)                                                                     | Give the root agent typed capabilities and bounded composition; keep MCP/A2A calls as effects through approved tools.                                    |
+| [System Prompt](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#system-prompt), [Per-Conversation Agent](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#per-conversation-agent), [Settings](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#settings)                               | Install a versioned charter as root instructions; select model, tools, extensions and limits per conversation, including children.                       |
+| [Environment](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#environment), [Reload](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#reload)                                                                                                                                                                   | Bind workspace and runner image adapters; roll registry/environment changes with explicit compatibility and recovery proof.                              |
+| [Watching a Conversation](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#watching-a-conversation), [Busy Conversations](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#busy-conversations)                                                                                                                   | Bridge native snapshots/events and submit with stable request IDs; show queued, steering, follow-up and rejected states accurately.                      |
+| [Reset and Handoff](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#reset-and-handoff), [Compaction](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#compaction)                                                                                                                                               | Manage context continuity within the same journal, never re-create a runner on each wake.                                                                |
+| [Agent Events (Experimental)](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#agent-events-experimental), [Hooks](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#hooks)                                                                                                                                       | Verify version support; use supported hooks for approval, policy and end-of-run work, and treat experimental event contracts as gated.                   |
+| [More Conversations and Forks](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#more-conversations-and-forks), [Abort and Subagents](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#abort-and-subagents), [Child Tasks](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#child-tasks) | Let the root create owned specialists and wait/abort with native semantics; remote children get separate journals and parent-owned reconciliation tasks. |
+| [Task Graph](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#task-graph), [Your Own State](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#your-own-state)                                                                                                                                                     | Project Pi's live graph and commit small typed app documents beside it; do not mirror a second mutable task graph.                                       |
+| [Usage and Cost](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#usage-and-cost), [Errors](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#errors)                                                                                                                                                             | Enforce budgets and show failure reasons from real Pi receipts, including model/tool and recovery errors.                                                |
+| [Examples](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#examples), [Design Documents](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md#design-documents)                                                                                                                                                     | Port only examples matching the pinned release; use the linked design documents for invariants and crash tests.                                          |
 
-> **Codex review — make the boundary executable.** The fence also has to
-> enforce alarm admission, wake rate, spend, expiry, cancellation, and
-> effect idempotency before the LLM acts. The charter supplies judgment and
-> priority, while typed tools and storage enforce these limits. “Only code”
-> is too narrow: event ingress, timer dispatch, durable journal reopening,
-> and audit projection are small mechanical adapters with tests. A new
-> charter paragraph needs code only when it asks for a new capability or
-> permission, not for a new policy within an existing capability.
+### Buckle and seed refactor inventory (verified 2026-11-17)
 
-**Items of interest identified in design review (2026-11-17):**
+Before code changes, review **all** Buckle surfaces (`access/`,
+`admin/`, `admission/`, `agents/`, `catalog/`, `context/`, `events/`,
+`federation/`, `metrics/`, `proxy/`, `schemas/`, `trace/`, main entry
+points, deployment and tests). For each, record its caller, state owner,
+runner relevance and keep/move/retire decision. Verify real import and
+route reachability and seed image provenance; do not infer production
+use from a file's presence. Preserve working gateway behavior while
+removing duplicate agent runtime code behind explicit compatibility
+tests and rollout gates.
 
-1. Unfold idempotency — rebirth must not double-register; every registration keys
-   to its genome clause, ledger unique-indexes the key.
-2. Owner-locked spend cap — genome sets wakes/hour + lane-hours/day; runtime edits
-   may only lower, never raise.
-3. Registration TTL — alarms/lists die when their clause completes or expires; the
-   mind prunes its own stale rows on wake.
-4. Wake journal — one append-only row per wake (why woken, read, did, skipped,
-   slept); the drift detector that replaces tests for prose behavior.
-5. Genome is git-mutated only — genome edits are PRs to `seed/templates/`; the mind
-   folds runtime commitments but never rewrites its own genome.
-
-> **Codex review — pin registration and retirement semantics.** An unfolded
-> registration needs a stable supervisor namespace, clause identity, kind,
-> scope, and charter revision, with a unique ledger key. Revisions reconcile
-> or retire previous registrations atomically; changed prose must not leave
-> duplicate live alarms. Spend limits must come from owner-controlled,
-> versioned configuration and be checked at admission, every wake, and every
-> child launch against measured usage, not only planned lane-hours. TTL and
-> cancellation are enforced by the ledger/timer even if the mind never wakes.
-> Keep crash/invariant tests and charter behavior evaluations; the wake journal
-> is evidence for those tests and drift analysis, not their replacement.
-
-**Deliberately not added:** orchestrator DAG (task_deps already is one), per-pattern
-mechanics (they are prose by design), retry machinery beyond existing attempt caps,
-multi-mind arbitration (kind/repo scoping until a second genome exists), a priority
-engine (genome sets priority at mint; column exists).
-
-**Mapping onto existing machinery:** ingest=importOpenIssues, mint+`(repo,issue)`
-unique index, converse=clarify phase, ready-gate=acceptance keyword, PR=plan→branch
-→PR "Closes #n", preview=Pages note+review ask — all live. New: shatter (mint N
-children + addTaskDep dep-link; schema already exists), the mind lane, alarm rows +
-the one timer that honors them.
-
-> **Codex review — specify ingress and authority migration.** A sleeping
-> mind needs a bounded GitHub poller or webhook ingress that durably records
-> source event IDs and requests a wake; the timer alone cannot detect new
-> issues. Replays and missed deliveries must reconcile against source state.
-> `importOpenIssues` is currently a Worker-side adapter, while P6 assigns
-> global admission to Suspenders. Name the migration step and remove the
-> prior admission authority before the mind launches, so there is one task
-> mint path. Scope every registration by supervisor identity from day one,
-> even while only one mind runs.
-
-**Landing order (pending owner go):** charter.md (seed/templates) → alarms+timer →
-shatter face on POST /tasks → supervisor-mind lane. The ledger stays exactly as
-merged.
-
-> **Codex review — make the landing gate explicit.** Alarm, journal, budget,
-> and registration tables require additive migrations preserving existing
-> task/report rows; “exactly as merged” cannot mean no schema change. Gate
-> launch on tested duplicate delivery, crash between intent and effect,
-> restart/reopen, expiry without wake, budget exhaustion, and cancellation
-> of owned children. Record the charter revision and tool/effect receipts in
-> the wake journal so drift can be attributed.
+- `fleet-buckle/src/agents/` contains copied Pi Durable job/seed/writer
+  code, including `pi-durable@1.5.0` manifest literals, while Buckle's
+  package pins 1.5.0 and Worker pins 1.5.2. Search found no application
+  import of this directory outside itself and the boundary scanner.
+  Treat it as dormant until a runtime call path is proved. Move the
+  runner-specific contract/guard/writer to Worker or a narrow shared
+  package; keep only identity, routing, scoped access, traffic and
+  telemetry in Buckle. Do not maintain two manifest parsers.
+- `fleet-worker/seed/template.md` is a GitHub issue/PR charter; its
+  `{{token}}` expansion happens at ask time. The named templates in
+  `seed/templates/` are one-issue specialist briefs and repeat Git
+  instructions. Separate ongoing root charters from specialist briefs;
+  render and record the root charter once per runner revision, validate
+  every variable, and centralize Git policy in common instructions.
+- The published `tool-seed` supplies Bun, Playwright and CLI tools and
+  carries no Pi runtime. Historical `pi-durable-workers/seed/` contains
+  a distinct runtime seed and tool-seed recipe. Verify the deployed
+  digest before deleting or reusing either. The final runner image owns
+  Pi Durable, extensions and the journal mount; seed digest/policy is
+  an admission check, not another agent supervisor.
