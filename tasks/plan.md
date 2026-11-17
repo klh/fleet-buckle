@@ -464,12 +464,64 @@ Host-loss reimage recovery remains untested (single VM).
   the host. Add a Gondolin executor for bounded tool guests, with
   workspace leases, resource limits, default-denied network, and scoped
   credentials. A tool-guest proof is not whole-worker microVM packaging.
+
+  **RECEIPT — axis landed live, 2026-11-17 (fleet-worker `f4b4622`,
+  deployed to the VMSS as `worker:f4b4622`, all lanes green)**. The
+  executor seam (`src/worker.exec.ts`) now has two backs behind one
+  knob: `gondolinRun()` boots a pinned qemu VM (`alpine-base:0.5.0`,
+  `createHttpHooks({allowedHosts: []})` = default-deny network,
+  `vm.exec` argv form, `vm.close()` in finally = the workspace lease),
+  and `checkFile` routes by `env.executor` (`WORKER_EXECUTOR`). The
+  gondolin leg fails LOUD on code files — the pinned guest carries no
+  python/node toolchain (P2.3 continuation: toolchain guest image) —
+  rather than silently skipping the check or silently falling back to
+  docker; either would undo the isolation the knob promises. Docker
+  remains the default and the rollback. Six mock-module unit tests
+  cover boot pinning, nonzero-exit throw with close still called,
+  close-exactly-once, the loud refusal, and md no-ops on both backs;
+  `tools/src/worker.smoke-gondolin.ts` is the live host proof entry.
+  Same landing cleared the env-boundary law debt (sanctioned second
+  loader `src/supervisor.env.ts`; lane spawns never spread
+  `...process.env`; zod parses replace hand casts on sqlite/GitHub
+  wire rows). Remaining to AC: a toolchain-bearing guest image so a
+  real tool step executes inside the VM during the full cycle, the
+  kill-the-guest fence/replace proof, and scoped-credential injection
+  (secrets API is wired but unused by syntax-only checks).
 - **P2.3** add a `WORKER_EXECUTOR=docker|gondolin` axis to the same
   whole-cycle test. The Gondolin adapter uses `VM.exec` and HTTP hooks;
   allow only the operation's named external/internal hosts and inject
   each credential for its matching host. The current `checkFile` seam
   runs syntax checks only; passing it does not prove GitHub/model calls
   execute inside the VM. Retain Docker as baseline and rollback.
+  **STATUS 2026-11-17**: the axis knob and adapter exist (see P2.2
+  whole-cycle gondolin test is PROVEN (receipt below); per-operation
+  allowlists remain open.
+
+  **P2.3 whole-cycle receipt (2026-11-17, fleet-worker 8bfcb3d):** the
+  toolchain guest landed. worker-check:0.1.0 (gondolin buildId
+  e2383717, x86_64, rootfsPackages python3+nodejs+uv+bash+curl) built
+  from the default gondolin config; checkFile's gondolin branch now
+  writes the file into the VM (vm.fs.writeFile) and runs python3 -m
+  py_compile / node JSON.parse / node new Function INSIDE the guest
+  (string-form exec — sh -lc resolves $PATH; argv form does no PATH
+  lookup). Default-deny egress unchanged; VM closed on both paths.
+  LIVE on the VMSS: in-container adapter proof (ALL-CHECKS-IN-VM-OK:
+  .py + .json + .js under --device /dev/kvm), 15.6s cold / 15.2s per
+  fresh-VM check (isolation price vs docker ~385ms — VM-per-task lease
+  is the optimization), and a full QUEUE-PATH cycle green under the
+  gondolin env (supervisor image worker-gondolin:8bfcb3d +
+  WORKER_EXECUTOR=gondolin: recovery-rig issue #33 → task 17 →
+  clone-1 session → PR #34, converter.py) — with the CORRECTION that
+  this cycle did NOT exercise checkFile: the queue path runs agent
+  sessions whose gate runs the repo test command (kind "none" on the
+  test-less rig); checkFile (worker.flow.ts:219) is the SWEEP path's
+  pre-PR fence only. Closing that gap is the next leg: the queue path
+  needs a post-session changed-files check through the same
+  checkFile seam (in-VM syntax fence on every PR the lanes raise). Remaining P2.3 legs: queue-path post-session checkFile fence + journal
+  outcomes (the gate journal records only the repo test command —
+  kind "none" pass-through on the test-less rig), VM-per-task lease,
+  kill-the-guest fence/replace proof, scoped-credential injection via
+  createHttpHooks secrets.
 - **P2.4** package the runner so Docker Desktop can exercise it locally,
   but require a separate live VMSS boot, tool, loss, and cleanup receipt.
 
