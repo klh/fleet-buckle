@@ -974,9 +974,11 @@ Copilot seats. Per the
 [drop-params guide](https://docs.litellm.ai/docs/completion/drop_params),
 that silently discards unsupported OpenAI parameters; it does not prove
 the requested tool, reasoning, JSON or cache behavior actually reached
-the selected model. Build a model × client-wire × feature matrix for
-Pi chat, Claude Messages, Codex Responses and Auto Router. For each
-row, capture the outbound provider shape and the returned behavior.
+the selected model. For now, prove the Pi worker chat route and a small
+Claude Code → Buckle → LiteLLM → Copilot seat tool/SSE round trip. Check
+the outbound provider shape and returned behavior for those paths.
+The broader model × client-wire × feature matrix (including Codex
+Responses and every installed harness) is **deferred, not for now**.
 Prefer deployment-specific `additional_drop_params` for known bad
 fields and narrowly declared `allowed_openai_params` only after the
 provider accepts them. Reject a required capability that would be
@@ -1569,11 +1571,11 @@ rollback, security review and an end-to-end receipt:
   Buckle; Pi distinguishes pre-stream JSON failure from HTTP-200
   in-band SSE error. Failure injection proves no false success,
   unbounded retry or lost fallback-attempt evidence.
-- The model/client compatibility matrix proves which parameters are
-  forwarded, explicitly dropped or rejected. A required tool/reasoning
-  feature cannot silently disappear. Durable Pi tool history passes
-  without global sanitization masking a missing result; any opt-in
-  CLI repair has a visible, recorded before/after receipt.
+- The Pi worker and Claude Code/Copilot proof records which required
+  parameters are forwarded, dropped or rejected, with a real tool/SSE
+  round trip. Durable Pi tool history passes without global
+  sanitization masking a missing result. Full client compatibility
+  coverage and optional CLI repair are **deferred, not for now**.
 - Every enabled tool path names its actual executor and has a scoped
   authority, Pi journal or gateway trace receipt, cost attribution and
   replay rule. A gateway-executed search/advisor subcall cannot hide an
@@ -1611,13 +1613,13 @@ by a config row, successful boot or dashboard screenshot alone.
 
 #### Runtime wiring by actor
 
-| Actor                    | Intended path                                                                                                                                                                                                            | Authority and proof                                                                                                                                                                                                          |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Remote Pi worker         | Pi OpenAI chat adapter → Buckle `/w/<lane>` → LiteLLM Auto Router alias → selected Copilot model; tool calls stay in the Pi durable task.                                                                                | Worker carries job/epoch/submission IDs. `must` concrete pins bypass Auto Router; eligible defaults ride it. Journal the selected model, classifier/fallback and usage; Lens receives Pi model/tool spans.                   |
-| Supervisor / coordinator | Suspenders admits, places, fences and cancels jobs; its own inference rides Buckle → LiteLLM. A2A is an external invocation face for remote workers, while MCP presents scoped coordinator commands.                     | Work ledger and Pi journal remain authoritative. A2A task ID maps to one Fleet job/epoch; MCP mutations call the existing command API with idempotency and audit. Neither gateway schedules work.                            |
-| Buckle                   | Authenticate principal and lane, enforce its ingress policy, preserve trace headers and stream bodies, then route model, A2A and MCP requests to the one LiteLLM gateway.                                                | Expose only approved paths/scopes. Map each caller to a scoped LiteLLM identity/key and prove revocation and grants at both layers; never use the engine master key as a shared runtime credential.                          |
-| LiteLLM                  | Auto Router chooses model tier; deployment router handles retries/fallbacks; virtual keys/teams gate models, agents and tools; Prometheus/spend/OTel supply model evidence; A2A and MCP gateway expose native protocols. | One pinned deployment/config source, one explicit owner per policy, observed served model and attempt ledger, failure tests and rollback. Lens is a separate trace service.                                                  |
-| Local CLI session        | Interactive Pi, Claude or Codex uses its existing Buckle model route and may opt into an eligible Auto Router alias; a separately scoped MCP gateway connection gives authorized Fleet tools.                            | Human identity, model choice and session ID remain distinct from worker identity. Export supported session traces to Lens only with explicit content/retention policy; test each CLI wire and MCP client before enabling it. |
+| Actor                    | Intended path                                                                                                                                                                                                                                               | Authority and proof                                                                                                                                                                                                |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Remote Pi worker         | Pi OpenAI chat adapter → Buckle `/w/<lane>` → LiteLLM Auto Router alias → selected Copilot model; tool calls stay in the Pi durable task.                                                                                                                   | Worker carries job/epoch/submission IDs. `must` concrete pins bypass Auto Router; eligible defaults ride it. Journal the selected model, classifier/fallback and usage; Lens receives Pi model/tool spans.         |
+| Supervisor / coordinator | Suspenders admits, places, fences and cancels jobs; its own inference rides Buckle → LiteLLM. A2A is an external invocation face for remote workers, while MCP presents scoped coordinator commands.                                                        | Work ledger and Pi journal remain authoritative. A2A task ID maps to one Fleet job/epoch; MCP mutations call the existing command API with idempotency and audit. Neither gateway schedules work.                  |
+| Buckle                   | Authenticate principal and lane, enforce its ingress policy, preserve trace headers and stream bodies, then route model, A2A and MCP requests to the one LiteLLM gateway.                                                                                   | Expose only approved paths/scopes. Map each caller to a scoped LiteLLM identity/key and prove revocation and grants at both layers; never use the engine master key as a shared runtime credential.                |
+| LiteLLM                  | Auto Router chooses model tier; deployment router handles retries/fallbacks; virtual keys/teams gate models, agents and tools; Prometheus/spend/OTel supply model evidence; A2A and MCP gateway expose native protocols.                                    | One pinned deployment/config source, one explicit owner per policy, observed served model and attempt ledger, failure tests and rollback. Lens is a separate trace service.                                        |
+| Local CLI session        | **Not for now:** Fleet's existing Vercel-skills-based installer remains the setup path for detected clients and harnesses. Current proof is Claude Code through Buckle/LiteLLM to a Copilot seat, plus a bounded GitHub Copilot harness Buckle-route probe. | Do not infer a governed model route from detection, skill installation or hook wiring. Broader Pi/Codex/other CLI setup, Auto Router opt-in, MCP wiring and Lens exports wait for a later client-integration pass. |
 
 **First adapter work, before gateway activation.** Extracted Azure
 `fleet-buckle/src/main.ts` sends unknown paths through
@@ -1638,31 +1640,26 @@ read surfaces; it currently serves six read tools with Buckle key
 checks. Add a narrow remote command adapter only after the Step 3
 command contract exists, then register both behind LiteLLM MCP grants.
 
-**Local session profiles.** Managed Claude workers currently receive
-an empty strict MCP config in
-`packages/suspenders/hooks/lib/executors/claude.ts`. Add only approved
-LiteLLM MCP servers and tool grants when a worker needs them; never
-inherit a human's whole MCP inventory. Interactive Claude/Codex/Pi
-sessions use user-scoped keys, explicit server config and revocation.
-Test Claude Messages, Codex Responses and Pi chat routes separately;
-Auto Router's chat example does not prove every CLI wire. Use Lens's
-[coding-agent trace guide](https://docs.litellm.ai/docs/proxy/lens/coding-agents)
-for supported Claude/Codex sessions and a Pi exporter for Pi; verify a
-resumed session and tool span without exporting secrets.
+**Local client integration — deferred, not for now.** Fleet already
+uses the Vercel skills catalog to detect clients, install skills and
+wire supported harnesses. Reuse that installed path; do not create a
+parallel LiteLLM client installer in Buckle. Its capability registry
+separates detection, skill installation, hook wiring, headless spawn,
+resume and Buckle-route proof. Claude Code has Buckle-route evidence;
+GitHub Copilot's route is currently `unknown` in
+`packages/suspenders/hooks/lib/install/targets.ts`. First prove one
+GitHub Copilot harness request through the installed Fleet/Buckle path,
+alongside the already recorded Claude Code → Buckle → LiteLLM →
+Copilot-seat Messages/SSE proof. Record exact client, route, model,
+tool result and image/version. This is a bounded smoke, not broad
+client rollout.
 
-The [LiteLLM client setup matrix](https://docs.litellm.ai/docs/proxy/client_setup/overview)
-names distinct model and MCP connections. Codex CLI/Desktop use
-`/v1/responses`; Claude Code uses `/v1/messages`; a normal ChatGPT
-desktop chat is outside this gateway. Do not promise governance or
-Lens coverage for a chat that never traverses LiteLLM. Qualify each
-client's exact key/sign-in flow and model catalog against the pinned
-gateway and Buckle front. The guide says IdP SSO is free for up to
-five users and Enterprise beyond, while JWT auth is Enterprise at
-any size; verify the deployed license before selecting SSO as the
-production identity path. `lite configure codex` can write a long-lived
-Bearer token in plaintext config, so prefer a short-lived or scoped
-credential flow where available and test revocation on the actual
-client. Keep the MCP virtual key separate from upstream OAuth tokens.
+**Later client-integration pass (not for now):** Use the
+[LiteLLM client setup matrix](https://docs.litellm.ai/docs/proxy/client_setup/overview)
+to qualify other clients' model wires, MCP, identity, licensing,
+catalogs, credential storage, revocation and Lens exports. Keep
+client-scoped credentials separate from upstream OAuth tokens. None
+of this broader work blocks the Claude/Copilot smoke or Step 7A.
 
 8. **[ ] Step 8 — build the UI from Pi's typed view structures**
    (GUI owner in its own client surface; after 7 and 7A). Start with an API and
