@@ -38,7 +38,15 @@
     grants: [
       {
         principal: "carol@fleet",
-        scopes: ["models.list", "models.use", "stats.read", "tree.read"],
+        // engine.passthrough: the catch-all (engine territory — litellm
+        // admin faces) demands an explicit grant, never models.use alone
+        scopes: [
+          "models.list",
+          "models.use",
+          "stats.read",
+          "tree.read",
+          "engine.passthrough",
+        ],
       },
       {
         principal: "federation@fleet",

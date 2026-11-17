@@ -12,6 +12,7 @@ export const BuckleScope = z.enum([
   "stats.read",
   "tree.read",
   "admin",
+  "engine.passthrough",
 ]);
 export type BuckleScope = z.output<typeof BuckleScope>;
 

@@ -283,6 +283,14 @@ const routes: Record<string, Face> = {
 };
 
 const passThroughFace: Face = async (srv, rq) => {
+  // the catch-all is ENGINE territory, reached verbatim — every litellm
+  // admin face (keys, spend, config) sits behind it. It demands a
+  // principal key AND an explicit engine.passthrough grant: never
+  // anonymous, never on a models.use grant alone.
+  if (rq.principal === null)
+    return problemResponse("unauthenticated", "a principal key is required");
+  const denied = requireScope(srv, rq.principal, "engine.passthrough");
+  if (denied !== null) return denied;
   const refused = admitPrincipal(srv, rq.principal);
   if (refused !== null) return refused;
   return passThrough(srv.settings, rq.req, `${rq.path}${rq.search}`, srv.tokenOf);

@@ -1,5 +1,22 @@
 # Rollout plan — Azure Buckle, Fleet workers, and on premises models
 
+## TODO index (2026-11-17)
+
+- [x] P0 — PAT cycle LIVE on VMSS (issue→seat→PR, PRs #79–#112); BYOC URL-token lanes; Responses dialect f6ff9da live (gpt-6.1-terra 200); copilot-integration-id on both branches
+- [ ] P0 CLI verification — Copilot CLI + `claude` against the lane URL (claude CLI hang traps logged in fleet-worker docs/did-not-work.md)
+- [ ] P0.2d Entra GUI device-flow — BLOCKED on owner pasting Entra client ID (P0.2 APIM same blocker)
+- [x] P1 — fleet-worker extraction (f8073fb; version matrix docs/worker-moved.md; rollback worker:e72086d)
+- [x] P2.1–P2.3 — qemu-TCG/kvm guest executor (worker-gondolin image; kill/journal-resume receipts; supervisor split cc1fb0e)
+- [x] P2.4 — local Docker Desktop runner (7016770+4858518; PRs #92/#94 receipts)
+- [ ] P2 krun executor — parked (aborts x86_64 in gondolin 0.14.0; alpine guest has no bun)
+- [ ] P3 — H100 federation — parked (m04268)
+- [x] P4 — Fleet-controlled jobs: 8-way concurrent receipt (PRs #103–#110), parent/child split receipt (PR #52), run-key revocation receipt (PR #50), stale-lease refusal (d3584bd), docs/RECOVERY.md
+- [x] P5 first slice — matched trials solo/concurrent/split run + docs/TRIALS.md (full BLAM deliberately not ported — owner directive)
+- [ ] ChatGPT review fixes (13 findings, 2026-11-17) — IN PROGRESS: #1 catch-all auth gated (code+tests), #2–#13 queued
+- [ ] GUI — ChatGPT draft awaited against tasks/gui-brief.md (uniform layer-registry face)
+- [ ] zram on VMSS (m02251) · tracked-settings pin (m02917) · azure-buckle-as-Mac-upstream (m00957)
+- [ ] t-shirt store templatization — owner-queued, awaiting brief
+
 Implementation status: the architecture is agreed; dispatch begins with
 the current-chain characterization in
 [`implementation-contract.md`](implementation-contract.md). That contract

@@ -311,4 +311,18 @@ test.describe("b2: injection dialects + /w/ lanes + pass-through", () => {
       .parse(await unknown.json());
     expect(body.detail).toBe("Not Found");
   });
+
+  test("the catch-all refuses anonymous and un-granted callers (regression: engine-key swap)", async () => {
+    // anonymous: NO credential — the engine key must NEVER ride for
+    // an anonymous caller (the pre-fix bug: admitPrincipal(null) →
+    // admitted, passthrough swapped in the engine key)
+    const anon = await fetch(`${B2}/v1/keys`);
+    expect(anon.status).toBe(401);
+    expect(anon.headers.get("content-type")).toContain("application/problem+json");
+    // the anonymous refusal NEVER reached the provider stub
+    const seenAnon = JSON.parse(
+      await (await fetch(`http://127.0.0.1:4742/_seen`)).text(),
+    ) as { seen: { face: string }[] };
+    expect(seenAnon.seen.some((r) => r.face.includes("/v1/keys"))).toBe(false);
+  });
 });
