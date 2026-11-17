@@ -448,6 +448,18 @@ Host-loss reimage recovery remains untested (single VM).
   the VMSS rather than assuming `/dev/kvm` alone proves it. If that
   backend cannot boot there, record the result and select a supported
   QEMU/libkrun mode explicitly. Firecracker is a later Linux/KVM option.
+
+  **RECEIPT — live on the Azure VMSS, 2026-11-17**. Pinned
+  `@earendil-works/gondolin@0.14.0`, backend `--vmm qemu` (krun aborts
+  on x86_64 in 0.14.0 — known issue, fix unreleased). Disposable
+  container `oven/bun:1-slim` + `qemu-system-x86 qemu-utils` on the
+  VMSS, guest `alpine-base:0.5.0` (builtin content-addressed
+  registry): `gondolin exec -- uname -a` → `Linux (none) 6.18.63-0-virt
+  … x86_64`. KVM proven by A/B, not assumed: WITH `--device /dev/kvm`
+  cold 6.7s / warm 2.9s; WITHOUT (TCG) cold 11.3s / warm 7.0s. KVM
+  access works from a plain container as root with `--device /dev/kvm`
+  (buckleadmin itself lacks the kvm group; the device mapping
+  suffices). First slice of P2.2 proven; the executor seam is next.
 - **P2.2** keep the Pi Durable parent and journal in the OCI worker on
   the host. Add a Gondolin executor for bounded tool guests, with
   workspace leases, resource limits, default-denied network, and scoped
