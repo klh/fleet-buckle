@@ -10,10 +10,10 @@ Every new rule needs a check or a tracked migration gap.
 
 ## Owner plan file (tasks/plan.md)
 
-Read `tasks/plan.md` at the start of every session — its "Anchored owner
-directives" section is binding owner ruling. NEVER edit `tasks/plan.md`
-without asking the owner first: propose the exact edit and wait for
-approval. Anchoring a new ruling is the owner's call.
+Read `tasks/plan.md` at the start of every session. Its binding
+vocabulary, Pi Durable source map and P6 architecture govern the work.
+Edit the plan when the owner directs it; otherwise propose changes with
+evidence before changing binding architecture.
 
 ## Standalone repository boundary
 
@@ -34,6 +34,24 @@ the owner pilot. It adds no imports or dependencies to Buckle runtime.
 `docs/target-architecture.md` is superseded and grants no implementation
 scope. Propose a bounded migration for existing code; preserve unrelated
 work and do not relax laws or tests to make a change pass.
+
+## Azure VMSS work placement after `/clear`
+
+Read [`../fleet-worker/docs/vmss-work-intake.md`](../fleet-worker/docs/vmss-work-intake.md)
+before launching Azure work. The observed scale set is `vmss-fleet-buckle`
+in `RG-FLEET-BUCKLE-TEST`; rediscover the instance and image before acting.
+The current Supervisor has authenticated `POST /tasks` for direct ad hoc
+intake without a GitHub issue, then spawns worker-role children locally.
+Its auth is `Authorization: Bearer`, not a Buckle key or the older
+`x-supervisor-token` examples. The recovery rig is a test repository.
+Buckle `:4111` is the model gateway through LiteLLM, never the task or
+runner launcher. SSH is for deployment and inspection, not per-task work.
+The target is a Pi Durable supervisor runner inside a Gondolin guest.
+Its reviewed adapter pulls eligible external work items from Absurd/Postgres;
+Worker hosts pull finite placement, wake and recovery operations. Worker
+exposes Pi command/read primitives;
+the separate GUI API owns browser SSE and presentation. The GUI API
+authenticates people and transports that control path; charters use Git PRs for revision review, not dispatch.
 
 ## What buckle IS (the MITM law)
 
