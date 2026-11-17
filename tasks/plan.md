@@ -562,6 +562,16 @@ Host-loss reimage recovery remains untested (single VM).
   observed: fences currently run TCG (`-accel tcg` in the host ps
   catch, pid-level evidence) because worker-gondolin does not map
   /dev/kvm — ~15s/check vs ~3s with KVM (perf leg, not correctness).
+
+  **KVM receipt (2026-11-17):** compose now maps `/dev/kvm` into
+  supervisor + lane-1 + lane-2 with `group_add: ["993"]` (the host
+  kvm gid; /dev/kvm is root:kvm 0660 and the containers run as uid
+  1000 — numeric supplemental group, no image change). Post-recreate
+  in-container probe: `VM.create` + `exec echo` in **3.0s** (boot+exec)
+  vs ~15s under TCG, and the host ps catch shows `-accel kvm` ×14.
+  Stack healthy after recreate; supervisor listening. /dev/kvm gid on
+  this VMSS is 993 — bake it as a compose variable if the fleet grows
+  beyond this box.
 - **P2.4** package the runner so Docker Desktop can exercise it locally,
   but require a separate live VMSS boot, tool, loss, and cleanup receipt.
 
