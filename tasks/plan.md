@@ -763,6 +763,19 @@ revocation (without revoking the owner's PAT),
 and an operator recovery path. Normal developer chats remain separate
 from autonomous Fleet claims despite sharing Buckle transport.
 
+**CLOSED 2026-11-17** — simultaneous (8-way) and parent/children (PR
+#52) receipts above; guest kill + parent kill + journal resume covered
+by the P2 receipts (kill-guest ECONNRESET requeue; supervisor-loss
+lease clock → PR #94) on the same plane; stale-lease refusal unit-
+proven and deployed; duplicate-effect guards = single-attempt harvest,
+PR duplicate scan, ownership guard; run-key revocation live; operator
+recipes written down in fleet-worker `docs/RECOVERY.md`. Developer
+chats stay separate: autonomous claims only ever touched
+`klh/fleet-recovery-rig` + the calculator fork, never an interactive
+developer repo, while interactive sessions rode the same buckle front
+on their own principals — zero cross-contamination events in every
+receipt above.
+
 ## P5 — BLAM optimization; Decant and Fleet knowledge later
 
 BLAM runs isolated matched trials during spare capacity. Hold task,
