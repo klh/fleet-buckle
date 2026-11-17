@@ -64,3 +64,46 @@ dev (Copilot CLI, own PAT in the URL)
   MVP-acceptable — upgrade to a streaming seam if the CLI UX demands).
 - Mixed gated+BYOC units on one engine (litellm virtual keys).
 - Two-segment `/w/<hub>/<seat>` lanes.
+
+## P0.2c — unmodified Claude Code on the Azure /w/ wire (2026-11-17)
+
+Chain: `claude` CLI (2.1.312) → buckle `:4111/w/b3-gpt-consult/<PAT>/v1/messages`
+→ engine byoc pass-through (`/v1/byoc/mscopilot/v1/messages`, litellm
+1.103.0) → MS Copilot seat → `claude-sonnet-5.5`.
+
+```bash
+PAT=<github copilot PAT>   # the seat token, rides the URL — BYOC law
+export CLAUDE_CONFIG_DIR=$(mktemp -d)          # headless hang fix, see below
+echo '{"hasCompletedOnboarding":true}' > "$CLAUDE_CONFIG_DIR/.claude.json"
+export ANTHROPIC_BASE_URL="http://fleet-buckle-klh.westeurope.cloudapp.azure.com:4111/w/b3-gpt-consult/$PAT"
+export ANTHROPIC_AUTH_TOKEN="$PAT"
+claude -p 'Reply with exactly: wire ok'        # → wire ok, exit 0
+```
+
+Curl proof of the same wire with tools + SSE (streamed `tool_use`
+block; the seat itself rejects forced `tool_choice`, which is a model
+constraint, not a wire defect):
+
+```bash
+curl -N "…/w/b3-gpt-consult/$PAT/v1/messages" \
+  -H "authorization: Bearer $PAT" -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" -d @tools-stream.json
+```
+
+Two lessons the live run taught:
+
+1. **The lane pin overrides the body model.** A lane pinned to a
+   Responses-only model (`gpt-6.1-terra`) answers `/v1/messages` with
+   Copilot's `no model endpoints available given user constraints` —
+   that error names a MODEL-TO-SURFACE mismatch, not auth. Pin
+   messages-capable models for CLI lanes (the live lane was repinned
+   to `claude-sonnet-5.5` via `POST /admin/hubs`).
+2. **Headless CLI runs hang on the default config dir** — its
+   keychain/OAuth touch blocks a no-TTY `-p` run before any HTTP
+   leaves the machine. A fresh `CLAUDE_CONFIG_DIR` with
+   `{"hasCompletedOnboarding":true}` rides clean.
+
+Registry `catalog_headers` (the Copilot integration id) now ride BOTH
+BYOC carriers — direct and engine pass-through (commit 0fa5f67), even
+though the engine's pass-through row also pins them statically:
+belt-and-braces, unit-tested on both branches.

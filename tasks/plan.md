@@ -243,6 +243,22 @@ do not add a Buckle model pin or a hardcoded catalog row.
   injection. The live CLI test verifies our deployed chain, credentials,
   tools, and streaming. Anthropic's vendor support policy is not an
   architecture gate for this rollout.
+  RECEIPT (2026-11-17, azure VMSS, buckle 0fa5f67): unmodified Claude
+  Code 2.1.312 round-tripped the live chain — claude CLI → buckle
+  `:4111/w/b3-gpt-consult/<PAT>` → engine byoc pass-through → MS
+  Copilot seat (`claude-sonnet-5.5`); `-p 'Reply with exactly: wire
+  ok'` → exit 0, output `wire ok`. Curl leg: `/v1/messages` with tools
+  + stream → 200 SSE with a streamed `tool_use` block (forced
+  `tool_choice` is rejected by the seat itself — not a wire defect).
+  `/v1/models` returns the entitled seat catalog. Live lessons: (1) a
+  lane's pinned model overrides the request body model — pin a
+  messages-capable model (a Responses-only pin such as `gpt-6.1-terra`
+  yields Copilot's `no model endpoints available given user
+  constraints` on `/v1/messages`); (2) headless CLI runs need a fresh
+  `CLAUDE_CONFIG_DIR` with `{"hasCompletedOnboarding":true}` — the
+  default config dir's keychain/OAuth touch hangs a no-TTY `-p` run
+  before any HTTP. The Entra/`ANTHROPIC_CUSTOM_HEADERS` leg rides the
+  APIM front door (P0.2, client ID still awaited).
 - **P0.2d pilot shortcut (owner approved)** use a small standalone
   Node/Bun script under `test/manual/entra-login/` while the final auth
   tooling is decided. Give it a registered public-client app ID, tenant,
