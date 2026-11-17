@@ -1011,6 +1011,138 @@ as a generic fix for malformed durable history. Its documented
 Anthropic-only application does not establish behavior for the
 `github_copilot/` provider path.
 
+### Tool execution and response-shape ownership
+
+The [LiteLLM tool integration index](https://docs.litellm.ai/docs/guides/tools_integrations)
+mixes distinct mechanisms. Ordinary function calling returns a tool
+request for Pi to execute and journal. Provider web fetch/computer-use
+formats are passthrough, not proof that LiteLLM executes Fleet's
+browser or shell. By contrast,
+[web-search interception](https://docs.litellm.ai/docs/integrations/websearch_interception)
+executes a search and another model call within one gateway request;
+the [advisor tool](https://docs.litellm.ai/docs/completion/anthropic_advisor_tool)
+can also run hidden subcalls. Maintain a per-tool registry naming the
+executor (Pi, provider or LiteLLM), authority, side-effect class,
+idempotency key, receipt location, call count, billing and replay
+behavior. Keep filesystem, shell, browser and task mutations under Pi
+Durable's fenced graph. Enable gateway search/advice only with scoped
+read-only policy and end-to-end trace/cost receipts. Qualify native
+web fetch, computer use, code interpreter and vector search for the
+actual provider and wire; reject unsupported required tools.
+
+The [streaming guide](https://docs.litellm.ai/docs/completion/stream)
+documents SDK and proxy streaming; Fleet still proves its actual
+APIM→Buckle→LiteLLM→Pi path above. For structured worker decisions,
+check [native `response_format`/`json_schema` support](https://docs.litellm.ai/docs/completion/json_mode)
+on the served deployment and validate the complete response against
+Fleet's versioned schema before committing a command. Preserve and
+test [reasoning content and signed thinking blocks](https://docs.litellm.ai/docs/reasoning_content)
+when a later turn needs them; redact operator views without corrupting
+replay bytes. Cross-provider/key fallback can drop encrypted reasoning.
+Record the served deployment and loss, then require a fresh continuation
+instead of claiming identical reasoning state after failover.
+
+[Batching and fastest-response races](https://docs.litellm.ai/docs/completion/batching)
+may help read-only classification and offline evaluation. Do not race
+tool-using worker generations or treat losing responses as free or
+effectless. Attribute each candidate's call ID, cost and cancellation;
+only one selected generation may enter Pi's durable tool path.
+
+### Router policy and production boundaries
+
+Use LiteLLM's [deployment router](https://docs.litellm.ai/docs/routing)
+for balancing, cooldown, retries and allowed fallback within the
+selected model policy. Auto Router/Kev chooses a tier; Fleet owns job
+admission, worker scheduling and durable wake. Specify one attempt
+budget across Pi, Buckle and LiteLLM so stacked retries cannot multiply
+silently. Record model group, deployment, key/team policy, reason,
+latency, spend, stream state and outcome per attempt. Test real proxy
+errors; LiteLLM strips `mock_testing_*` flags on proxy requests. The
+[fallback guide](https://docs.litellm.ai/docs/proxy/reliability) says
+cross-provider/key fallback can remove encrypted reasoning, including
+on a broken stream. Permit fallback before a streamed answer is exposed;
+on a post-chunk failure, mark the visible generation interrupted and
+create a new journaled attempt. Fault-inject both boundaries on the
+pinned version; never splice two deployments into one Pi turn.
+
+The [timeout guide](https://docs.litellm.ai/docs/proxy/timeout)
+distinguishes whole-call `timeout`, first-chunk `stream_timeout` and
+native Messages/Responses next-chunk `request_timeout`. Pin each
+against APIM/Buckle/Pi total and idle deadlines, including retries and
+long quiet periods. Heartbeats do not reset provider deadlines.
+
+Apply [per-key/team router settings](https://docs.litellm.ai/docs/proxy/keys_teams_router_settings)
+deliberately: key overrides team, which overrides global. Reconcile
+effective policy at request time. A worker key, human BYOC request or
+[client-supplied fallback](https://docs.litellm.ai/docs/proxy/client_side_fallbacks)
+must not select an unapproved model, credential, region or deadline.
+Version and audit [fallback management](https://docs.litellm.ai/docs/proxy/fallback_management)
+changes; its API requires database-backed models and must not create
+drift from generated config. Treat [tags](https://docs.litellm.ai/docs/proxy/tag_routing)
+as trusted policy labels, not caller-provided authority. With
+[wildcard routing](https://docs.litellm.ai/docs/wildcard_routing),
+virtual-key model grants, price metadata and served-model verification
+remain mandatory.
+
+Qualify [provider/model/tag budgets](https://docs.litellm.ai/docs/proxy/provider_budget_routing)
+against actual priced usage and Redis health before hard enforcement;
+unknown or zero-priced Copilot usage does not prove free capacity.
+[Routing groups](https://docs.litellm.ai/docs/proxy/ui/routing_groups)
+need one reviewed policy source despite dashboard editing. Scope
+[health-check routing](https://docs.litellm.ai/docs/proxy/health_check_routing)
+to eligible groups and account for probe traffic, transient 429/408
+policy and cooldown intervals. Cache-aware routing targets Kubernetes
+headless-service pods and does not directly fit today's one-vendor
+Copilot engine; qualify ordinary session affinity separately if multiple
+deployments emerge. Request prioritization is beta/test-only, routing
+plugins are evolving, and [Fusion is unreleased](https://docs.litellm.ai/docs/fusion).
+Record explicit deferred dispositions for these features.
+
+### LiteLLM deployment and configuration control
+
+The [production guide](https://docs.litellm.ai/docs/proxy/prod)
+requires measured sizing, bounded database connections, migration
+control, Redis coordination for multiple instances and deliberate
+background-job ownership. A serving worker is not Fleet's durable
+worker: `LITELLM_JOB_ROLE` controls gateway maintenance jobs, which can
+otherwise register once per Uvicorn process. Prove exactly one intended
+owner for resets/pruning/exports, and budget CPU, memory and Postgres
+connections per actual gateway worker. Keep the production image pinned
+by digest, perform migrations once, back up the DB and encryption salt,
+and verify rollback against stored keys/models. The
+[Docker quickstart](https://docs.litellm.ai/docs/proxy/docker_quick_start)
+is a local setup pattern, not the deployed Azure sizing/HA receipt.
+
+LiteLLM's own production guide says a database connection outage may
+admit requests under a restricted `INTERNAL_USER` identity and
+`/health/readiness` can still return 200. Buckle must deny remote
+worker and coordinator requests whose required virtual-key grants
+cannot be verified; an outside-process probe must exercise a scoped
+positive and negative request, not infer authorization health from
+readiness. Test DB loss, Redis loss and return-to-service at every
+replica, including revocation and budget behavior.
+
+The [configuration guides](https://docs.litellm.ai/docs/proxy/configuration/overview)
+support YAML, UI and Management API. Choose one owner per model and
+setting; export and diff live effective config against the approved
+source. In v1.103.0+, YAML-declared general/router/LiteLLM/env settings
+override UI/API changes, while a database model with the same name as
+a YAML model adds another deployment. Earlier versions have different
+precedence. Pin the version, verify each replica's loaded config and
+test the served deployment after any change. The
+[Management API](https://docs.litellm.ai/docs/proxy/configuration/api)
+should mint/revoke scoped keys and teams through a separate admin
+credential; never give that credential to the worker. Preserve
+`LITELLM_SALT_KEY` for database credential recovery; changing it makes
+stored provider credentials unreadable.
+
+The [published benchmarks](https://docs.litellm.ai/docs/benchmarks)
+use mock models and specific multi-pod configurations. They establish
+neither this Azure deployment's capacity nor Pi's productive throughput.
+Measure Fleet's own end-to-end first token, quiet interval, tool turn,
+fallback, job completion and spend at target concurrency with the
+pinned image, APIM, Buckle, real provider and worker present.
+
 ### LiteLLM capability and telemetry adoption
 
 LiteLLM can select deployments within a model group, retry, cool down
@@ -1442,6 +1574,19 @@ rollback, security review and an end-to-end receipt:
   feature cannot silently disappear. Durable Pi tool history passes
   without global sanitization masking a missing result; any opt-in
   CLI repair has a visible, recorded before/after receipt.
+- Every enabled tool path names its actual executor and has a scoped
+  authority, Pi journal or gateway trace receipt, cost attribution and
+  replay rule. A gateway-executed search/advisor subcall cannot hide an
+  effect from Pi's job state; structured output is schema-validated
+  before a worker command, and signed thinking survives continuation.
+- Router policies are measured on the pinned image: one attempt budget
+  across hops, explicit pre/post-first-chunk fallback behavior, bounded
+  total/first/next-chunk deadlines, effective key/team overrides,
+  trusted tags and model grants, and live deployment/cost receipts.
+- Gateway production proof covers DB/Redis loss, scoped deny behavior,
+  background-job ownership, configuration precedence and duplicate
+  model names, salt/DB backup and rollback, and representative Fleet
+  throughput rather than vendor mock-model benchmark numbers.
 - Database-backed virtual keys, team/model/agent/MCP grants, budgets,
   revocation and audit are active for remote workers. Test denial,
   quota exhaustion and DB failure without widening access.
@@ -1504,6 +1649,20 @@ Auto Router's chat example does not prove every CLI wire. Use Lens's
 [coding-agent trace guide](https://docs.litellm.ai/docs/proxy/lens/coding-agents)
 for supported Claude/Codex sessions and a Pi exporter for Pi; verify a
 resumed session and tool span without exporting secrets.
+
+The [LiteLLM client setup matrix](https://docs.litellm.ai/docs/proxy/client_setup/overview)
+names distinct model and MCP connections. Codex CLI/Desktop use
+`/v1/responses`; Claude Code uses `/v1/messages`; a normal ChatGPT
+desktop chat is outside this gateway. Do not promise governance or
+Lens coverage for a chat that never traverses LiteLLM. Qualify each
+client's exact key/sign-in flow and model catalog against the pinned
+gateway and Buckle front. The guide says IdP SSO is free for up to
+five users and Enterprise beyond, while JWT auth is Enterprise at
+any size; verify the deployed license before selecting SSO as the
+production identity path. `lite configure codex` can write a long-lived
+Bearer token in plaintext config, so prefer a short-lived or scoped
+credential flow where available and test revocation on the actual
+client. Keep the MCP virtual key separate from upstream OAuth tokens.
 
 8. **[ ] Step 8 — build the UI from Pi's typed view structures**
    (GUI owner in its own client surface; after 7 and 7A). Start with an API and
