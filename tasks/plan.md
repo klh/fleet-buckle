@@ -706,6 +706,18 @@ A no-split choice is a valid recorded outcome.
   branch, worktree dir (`.children/agent/51-c1`), and merged commit
   were all observed on disk post-run.
 
+- **2026-11-17 (stale-lease refusal, d3584bd)** — `bankReport` used to
+  settle any report unconditionally: a zombie lane whose lease had
+  lapsed (task requeued and reclaimed) could still flip the task to
+  done with its PR — stealing the settle from the live claimant.
+  Guard added (report from a lane ≠ task owner is banked for the
+  record, state untouched) + two units (zombie refusal; cancelled
+  task refuses a late PR). Deployed to the VMSS supervisor. The
+  revocation run already exercised the precondition live (clone-4's
+  ghost claim was lease-swept and requeued); with the guard, its
+  late report would have been refused instead of banking a second
+  settle.
+
 - **2026-11-17 (simultaneous jobs, 8-way)** — supervisor on the Azure
   VMSS (worker-gondolin:4858518, MAX_LANES=8, executor=gondolin,
   /dev/kvm) imported 8 freshly minted issues
