@@ -1995,3 +1995,68 @@ is the first executable safety fix within that structure. Steps 7 and
 Steps 3–6 provide real data. Do not mark P6 done on a green unit suite
 or a queue-level PR receipt; require Step 9's crash and operator-view
 evidence.
+
+## Addendum — supervisor as a told mind, not a built machine (2026-11-17, owner directive)
+
+Owner review of the post-split supervisor (store → db/tasks/lanes/reports/gh/templates,
+PRs #127/#128, direct lands ee2ec60/5023dee/5bdd486) concluded the direction:
+the supervisor's *loop* should not be mechanics at all. It is an LLM-era service —
+tell it what to do, give it a small fence, and let patterns be prose.
+
+**Owner directives (verbatim anchors, conversation of 2026-11-17):**
+
+- "isn't the task intake actually the templates that then are the directions? and
+  the supervisor then creates its own loop or task setup?"
+- "this is llms and ais and the supervisor runs as an llm - so why create the
+  mechanics? we can just tell the supervisor how to do it? - then the supervisor
+  just has 10 common patterns or so it matches up against or just wings it?"
+- The GitHub charter, dictated: "ingest issues form this uri, and for each new on
+  mint a task. if its a feature request converse untill you understand the ask and
+  finally ask the user if whatever was produced is ready tobe implemented, then
+  estimate complexity and iether do it yourself or shatter into agents and get it
+  done, when done raise a pr figure out if theres a way to preview you work and ask
+  the user in the issue for a review"
+- Drift handling: "if theres a drift in perf or way this is done it can be solved by
+  context in the supervisor beforehand or in the seed"
+- Boot model: templates are what the supervisor LAUNCHES with — "launch, get
+  template, unfold, create taskish, udpate list monitor, starts work or sleep".
+
+**The shape:** templates are the *genome*; the supervisor-mind is an LLM lane (same
+species as the workers) born with the genome as its mission; boot = *unfold*
+(transcribe genome clauses into concrete runtime commitments: task lists, schedules,
+wake-ons) registered as data in its own ledger, monitored after the fact via
+board/watch. New patterns are new charter paragraphs — no code. The mind is
+stateless per wake: wake → read board + conversation → decide → act → sleep.
+
+**The fence (the only code, and why):** dedup/lease/claim/attempt-cap invariants are
+the race surface between N concurrent lanes — this exact surface double-minted one
+issue into 4 task rows and produced duplicate PRs live. Prose cannot enforce a race
+condition. The mind touches the ledger only through tools that enforce invariants.
+
+**Items of interest identified in design review (2026-11-17):**
+
+1. Unfold idempotency — rebirth must not double-register; every registration keys
+   to its genome clause, ledger unique-indexes the key.
+2. Owner-locked spend cap — genome sets wakes/hour + lane-hours/day; runtime edits
+   may only lower, never raise.
+3. Registration TTL — alarms/lists die when their clause completes or expires; the
+   mind prunes its own stale rows on wake.
+4. Wake journal — one append-only row per wake (why woken, read, did, skipped,
+   slept); the drift detector that replaces tests for prose behavior.
+5. Genome is git-mutated only — genome edits are PRs to `seed/templates/`; the mind
+   folds runtime commitments but never rewrites its own genome.
+
+**Deliberately not added:** orchestrator DAG (task_deps already is one), per-pattern
+mechanics (they are prose by design), retry machinery beyond existing attempt caps,
+multi-mind arbitration (kind/repo scoping until a second genome exists), a priority
+engine (genome sets priority at mint; column exists).
+
+**Mapping onto existing machinery:** ingest=importOpenIssues, mint+`(repo,issue)`
+unique index, converse=clarify phase, ready-gate=acceptance keyword, PR=plan→branch
+→PR "Closes #n", preview=Pages note+review ask — all live. New: shatter (mint N
+children + addTaskDep dep-link; schema already exists), the mind lane, alarm rows +
+the one timer that honors them.
+
+**Landing order (pending owner go):** charter.md (seed/templates) → alarms+timer →
+shatter face on POST /tasks → supervisor-mind lane. The ledger stays exactly as
+merged.
