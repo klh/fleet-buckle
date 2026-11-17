@@ -183,21 +183,23 @@ describe("the BYOC leg (/w/<lane>/<token>)", () => {
     }
   });
 
-  test("with the catalog warm, the BYOC gate refuses a tokenless caller 401", async () => {
+  test("with the catalog warm under ANOTHER user's PAT, a tokenless caller still sees nothing", async () => {
     const { world, base, seat, openrouter, engine } = await booted(true);
     try {
       // a dev pulls the seat's catalog first (their token warms it)
       expect((await chat(base, PAT_B)).status).toBe(200);
-      // a tokenless keyed caller now resolves the model — the gate fires
+      // a tokenless keyed caller resolves NOTHING — rows warmed under
+      // someone else's PAT are not their view (P0.2b per-user cache);
+      // the refusal names the /w/ contract instead of the gate firing
       const r = await fetch(`${base}/w/copilot/v1/chat/completions`, {
         method: "POST",
         headers: { "content-type": "application/json", ...AUTH },
         body: JSON.stringify(CHAT("mscopilot/gpt-6-astra")),
       });
-      expect(r.status).toBe(401);
+      expect(r.status).toBe(404);
       const problem = BuckleProblem.parse(await r.json());
-      expect(problem.kind).toBe("unauthenticated");
-      expect(problem.detail ?? "").toContain("BYOC");
+      expect(problem.kind).toBe("not-found");
+      expect(problem.detail ?? "").toContain("/w/<lane>/<token>");
       // the tokenless ask never rode a leg
       expect(chatRides(engine.seen).length).toBe(1);
       expect(chatRides(engine.seen)[0]?.auth).toBe(`Bearer ${PAT_B}`);
