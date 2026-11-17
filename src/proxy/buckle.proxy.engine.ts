@@ -8,7 +8,7 @@ import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
 import { bodyText, httpSend, parseJson } from "../fault.ts";
 import type { TokenReader } from "../federation/buckle.federation.peer.ts";
 import { continueTraceparent } from "../trace/buckle.trace.export.ts";
-import { LegOutcomeSchema, type LegOutcome } from "./buckle.proxy.outcome.ts";
+import { LegOutcomeSchema, liveOutcomeOf, type LegOutcome, type WithUpstream } from "./buckle.proxy.outcome.ts";
 /** the engine outcome, mapped by the caller into client responses.
  *  The union is the shared leg outcome (buckle.proxy.outcome.ts) —
  *  served carries servedBy: provenance is named AT THE SOURCE so the
@@ -54,9 +54,9 @@ export async function engineChat(call: {
   tokenOf: TokenReader;
   enginePath: string;
   fleetTags: string;
-}): Promise<EngineOutcome> {
+}): Promise<WithUpstream<EngineOutcome>> {
   const { settings, raw, traceparent, tokenOf, enginePath, fleetTags } = call;
-  if (settings.engine === undefined) return noEngineOutcome();
+  if (settings.engine === undefined) return { outcome: noEngineOutcome() };
   const engine = `${settings.engine.url.replace(/\/$/, "")}${enginePath}`;
   const engineToken = settings.keys?.engine !== undefined ? tokenOf(settings.keys.engine) : null;
   const sent = await httpSend(
@@ -73,14 +73,20 @@ export async function engineChat(call: {
     },
     settings.timeouts.engine_ms,
   );
-  if (!sent.ok) return { kind: "fault", fault: sent.fault };
+  if (!sent.ok) return { outcome: { kind: "fault", fault: sent.fault } };
+  // SSE asks ride the live body (first-token latency); everything
+  // else buffers whole as before
+  const live = liveOutcomeOf(raw, sent.response, settings.hub.label);
+  if (live !== null) return live;
   const body = await bodyText(sent);
-  if (!body.ok) return { kind: "fault", fault: body.fault };
-  return LegOutcomeSchema.parse({
-    kind: "served",
-    status: sent.response.status,
-    text: body.text,
-    contentType: sent.response.headers.get("content-type") ?? "application/json",
-    servedBy: settings.hub.label,
-  });
+  if (!body.ok) return { outcome: { kind: "fault", fault: body.fault } };
+  return {
+    outcome: LegOutcomeSchema.parse({
+      kind: "served",
+      status: sent.response.status,
+      text: body.text,
+      contentType: sent.response.headers.get("content-type") ?? "application/json",
+      servedBy: settings.hub.label,
+    }),
+  };
 }

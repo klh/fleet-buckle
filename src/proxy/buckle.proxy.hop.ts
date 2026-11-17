@@ -19,7 +19,7 @@ import {
   SERVED_BY_HEADER,
 } from "../federation/buckle.federation.protocol.ts";
 import { continueTraceparent } from "../trace/buckle.trace.export.ts";
-import { FaultOutcomeSchema, ServedOutcomeSchema } from "./buckle.proxy.outcome.ts";
+import { FaultOutcomeSchema, liveOutcomeOf, ServedOutcomeSchema, type WithUpstream } from "./buckle.proxy.outcome.ts";
 
 /** the hop outcome (zod union), mapped by the caller into
  *  client-facing responses — every type zod-derived (the type law);
@@ -91,10 +91,10 @@ const _HopChatCall = z.object({
 });
 type HopChatCall = z.output<typeof _HopChatCall>;
 
-export async function hopChat(call: HopChatCall): Promise<HopOutcome> {
+export async function hopChat(call: HopChatCall): Promise<WithUpstream<HopOutcome>> {
   const { self, peer, ride, timeoutMs, urlPath } = call;
   const budget = ride.deadline === null ? timeoutMs : ride.deadline - Date.now();
-  if (budget <= 0) return { kind: "refused", detail: "hop deadline exhausted" };
+  if (budget <= 0) return { outcome: { kind: "refused", detail: "hop deadline exhausted" } };
   const deadline = ride.deadline ?? Date.now() + timeoutMs;
   const headers: Record<string, string> = {
     "content-type": "application/json",
@@ -116,12 +116,25 @@ export async function hopChat(call: HopChatCall): Promise<HopOutcome> {
   );
   if (!sent.ok) {
     logFault("proxy.hop", peer.url, sent.fault);
-    return { kind: "fault", fault: sent.fault };
+    return { outcome: { kind: "fault", fault: sent.fault } };
   }
+  // SSE asks ride the live body (first-token latency); everything
+  // else buffers whole as before. The served-by chain still prepends
+  // our label — streaming must not lose provenance.
+  const chain = [
+    self,
+    ...(sent.response.headers
+      .get(SERVED_BY_HEADER)
+      ?.split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0) ?? []),
+  ].join(",");
+  const live = liveOutcomeOf(ride.body, sent.response, chain);
+  if (live !== null) return live;
   const body = await readBody(sent);
   if (!body.ok) {
     logFault("proxy.hop", peer.url, body.fault);
-    return { kind: "fault", fault: body.fault };
+    return { outcome: { kind: "fault", fault: body.fault } };
   }
-  return respondOf(self, sent.response, body.text);
+  return { outcome: respondOf(self, sent.response, body.text) };
 }

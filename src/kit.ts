@@ -142,7 +142,17 @@ export function stubByocSeat(rows: { id: string }[]): {
  *  event-stream bytes — the streaming pass-through proofs) and
  *  records the ride */
 export function stubEngine(
-  opts: { id?: string; totalTokens?: number; sleepMs?: number; sse?: string } = {},
+  opts: {
+    id?: string;
+    totalTokens?: number;
+    sleepMs?: number;
+    sse?: string;
+    /** chunked SSE: each chunk written with a gap between — proves a
+     *  proxy streams INCREMENTALLY (a buffering proxy would deliver
+     *  everything only after the last chunk) */
+    sseChunks?: string[];
+    sseGapMs?: number;
+  } = {},
 ): {
   port: number;
   stop: () => void;
@@ -164,6 +174,22 @@ export function stubEngine(
         return new Response(opts.sse, {
           headers: { "content-type": "text/event-stream" },
         });
+      if (opts.sseChunks !== undefined && isChat) {
+        const chunks = opts.sseChunks;
+        const gap = opts.sseGapMs ?? 200;
+        const stream = new ReadableStream<Uint8Array>({
+          async start(controller) {
+            for (const chunk of chunks) {
+              controller.enqueue(new TextEncoder().encode(chunk));
+              await Bun.sleep(gap);
+            }
+            controller.close();
+          },
+        });
+        return new Response(stream, {
+          headers: { "content-type": "text/event-stream" },
+        });
+      }
       return Response.json({
         id: opts.id ?? "engine-echo",
         object: "chat.completion",

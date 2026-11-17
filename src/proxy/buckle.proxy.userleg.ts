@@ -28,7 +28,12 @@ import { bodyText, httpSend } from "../fault.ts";
 import { continueTraceparent } from "../trace/buckle.trace.export.ts";
 import { KNOWN_PROVIDERS, type KnownProviderLabel } from "../schemas/buckle.provider.registry.zod.ts";
 import { ENGINE_PATH, type ChatRoute } from "../context/buckle.context.inject.ts";
-import { LegOutcomeSchema, type LegOutcome } from "./buckle.proxy.outcome.ts";
+import {
+  LegOutcomeSchema,
+  liveOutcomeOf,
+  type LegOutcome,
+  type WithUpstream,
+} from "./buckle.proxy.outcome.ts";
 
 /** the BYOC leg outcome — the shared leg union (the pipeline's
  *  settle surface consumes every leg identically) */
@@ -48,7 +53,7 @@ export async function userChat(call: {
   traceparent: string;
   route: ChatRoute;
   token: string;
-}): Promise<UserLegOutcome> {
+}): Promise<WithUpstream<UserLegOutcome>> {
   const engine = call.settings.engine?.url.replace(/\/$/, "");
   // the registry headers ride BOTH carriers — the engine pass-through
   // relays incoming headers verbatim, so the copilot seat's integration
@@ -68,16 +73,22 @@ export async function userChat(call: {
           `${call.url.replace(/\/$/, "")}${ENGINE_PATH[call.route]}`,
           extra,
         );
-  if (!sent.ok) return { kind: "fault", fault: sent.fault };
+  if (!sent.ok) return { outcome: { kind: "fault", fault: sent.fault } };
+  // SSE asks ride the live body (first-token latency); everything
+  // else buffers whole as before
+  const live = liveOutcomeOf(call.raw, sent.response, call.settings.hub.label);
+  if (live !== null) return live;
   const body = await bodyText(sent);
-  if (!body.ok) return { kind: "fault", fault: body.fault };
-  return LegOutcomeSchema.parse({
-    kind: "served",
-    status: sent.response.status,
-    text: body.text,
-    contentType: sent.response.headers.get("content-type") ?? "application/json",
-    servedBy: call.settings.hub.label,
-  });
+  if (!body.ok) return { outcome: { kind: "fault", fault: body.fault } };
+  return {
+    outcome: LegOutcomeSchema.parse({
+      kind: "served",
+      status: sent.response.status,
+      text: body.text,
+      contentType: sent.response.headers.get("content-type") ?? "application/json",
+      servedBy: call.settings.hub.label,
+    }),
+  };
 }
 
 /** the ONE relay carrier both BYOC modes ride: verbatim body,

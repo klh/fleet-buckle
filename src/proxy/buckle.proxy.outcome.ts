@@ -5,6 +5,7 @@
 // impossible. Zero-import leaf beyond zod + the fault taxonomy.
 import { z } from "zod";
 import { Fault } from "../schemas/buckle.fault.zod.ts";
+import { parseJson } from "../fault.ts";
 
 /** the SERVED outcome both legs share: raw bytes back out, content
  *  type preserved, the serving chain named. zod-derived (the type
@@ -32,3 +33,42 @@ export const LegOutcomeSchema = z.discriminatedUnion("kind", [
   FaultOutcomeSchema,
 ]);
 export type LegOutcome = z.output<typeof LegOutcomeSchema>;
+
+/** a leg's whole answer: the journaled outcome PLUS (stream rides
+ *  only) the LIVE upstream response — a side channel zod cannot
+ *  carry (a ReadableStream is not serializable), consumed by the
+ *  settle seam the moment the client Response is built. Buffered
+ *  rides omit it and the outcome's text is the whole body. */
+export type WithUpstream<O> = { outcome: O; upstream?: Response };
+
+const StreamAsk = z.object({ stream: z.boolean() }).loose();
+
+/** the stream decision for a chat ride: the caller ASKED for SSE
+ *  (stream:true in the request body) AND the upstream answered
+ *  event-stream with a live body — then and only then the leg hands
+ *  the live response back instead of buffering it whole (the
+ *  first-token latency of a streaming chat must not ride a full
+ *  upstream drain). Non-stream asks, JSON error bodies, and engine
+ *  refusals all take the buffered path unchanged. */
+export function liveOutcomeOf(
+  raw: string,
+  response: Response,
+  servedBy: string,
+): { outcome: z.output<typeof ServedOutcomeSchema>; upstream: Response } | null {
+  const ask = parseJson(raw);
+  if (!ask.ok) return null;
+  const stream = StreamAsk.safeParse(ask.data);
+  if (!stream.success || !stream.data.stream) return null;
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("text/event-stream") || response.body === null) return null;
+  return {
+    outcome: ServedOutcomeSchema.parse({
+      kind: "served",
+      status: response.status,
+      text: "", // streamed rides never buffer: usage tallies 0 at settle
+      contentType,
+      servedBy,
+    }),
+    upstream: response,
+  };
+}

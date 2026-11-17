@@ -39,6 +39,9 @@ export function settleServed(
     injectedRule?: string | undefined;
     laneSlug?: string | undefined;
     outcome: ServedOutcome;
+    /** streamed rides hand the LIVE upstream body here (the
+     *  outcome's text is empty — usage tallies 0 by design) */
+    upstream?: Response | undefined;
   },
 ): Response {
   const at = Date.now();
@@ -54,7 +57,7 @@ export function settleServed(
       latencyMs: at - input.openedAt,
     }),
   );
-  return servedResponse(input.outcome, input.injectedRule, input.laneSlug);
+  return servedResponse(input.outcome, input.injectedRule, input.laneSlug, input.upstream);
 }
 
 /** settle a FAILED outcome (the shared half): the failed event rides
@@ -92,8 +95,12 @@ function servedResponse(
   outcome: ServedOutcome,
   injectedRule?: string | undefined,
   laneSlug = "",
+  upstream?: Response | undefined,
 ): Response {
-  return new Response(outcome.text, {
+  // the streamed ride answers with the LIVE upstream body — the
+  // first token reaches the client as the upstream sends it
+  const body = upstream?.body ?? outcome.text;
+  return new Response(body, {
     status: outcome.status,
     headers: {
       "content-type": outcome.contentType,

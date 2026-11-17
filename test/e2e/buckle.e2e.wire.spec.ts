@@ -320,9 +320,8 @@ test.describe("b2: injection dialects + /w/ lanes + pass-through", () => {
     expect(anon.status).toBe(401);
     expect(anon.headers.get("content-type")).toContain("application/problem+json");
     // the anonymous refusal NEVER reached the provider stub
-    const seenAnon = JSON.parse(
-      await (await fetch(`http://127.0.0.1:4742/_seen`)).text(),
-    ) as { seen: { face: string }[] };
+    const seenBody = JSON.parse(await (await fetch(`http://127.0.0.1:4742/_seen`)).text());
+    const seenAnon = z.object({ seen: z.array(z.object({ face: z.string() })) }).parse(seenBody);
     expect(seenAnon.seen.some((r) => r.face.includes("/v1/keys"))).toBe(false);
   });
 });

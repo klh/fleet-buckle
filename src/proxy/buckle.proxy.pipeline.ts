@@ -218,13 +218,14 @@ async function serveHop(
 
   const openedAt = Date.now();
   emitOpened(ctx, model, openedAt);
-  const outcome = await hopChat({
+  const sent = await hopChat({
     self: settings.hub.label,
     peer: hopPeer.data,
     ride,
     timeoutMs: settings.timeouts.hop_ms,
     urlPath: ENGINE_PATH[stamp.route],
   });
+  const { outcome, upstream } = sent;
   if (outcome.kind === "served")
     return settleServed(ctx, {
       model,
@@ -234,6 +235,7 @@ async function serveHop(
       injectedRule: stamp.injectedRule,
       laneSlug: stamp.laneSlug,
       outcome,
+      upstream,
     });
   settleFailed(ctx, {
     model,
@@ -260,7 +262,7 @@ async function serveUser(
     return problemResponse("unauthenticated", "the BYOC leg requires the user token");
   const openedAt = Date.now();
   emitOpened(ctx, model, openedAt);
-  const outcome = await userChat({
+  const sent = await userChat({
     settings: ctx.settings,
     label,
     url,
@@ -269,6 +271,7 @@ async function serveUser(
     route: stamp.route,
     token: ctx.userToken,
   });
+  const { outcome, upstream } = sent;
   if (outcome.kind === "served")
     return settleServed(ctx, {
       model,
@@ -278,6 +281,7 @@ async function serveUser(
       injectedRule: stamp.injectedRule,
       laneSlug: stamp.laneSlug,
       outcome,
+      upstream,
     });
   settleFailed(ctx, {
     model,
@@ -308,7 +312,7 @@ async function serveEngine(
     ...(stamp.laneSlug !== "" ? [`lane:${stamp.laneSlug}`] : []),
     `principal:${ctx.principal}`,
   ].join(",");
-  const outcome = await engineChat({
+  const sent = await engineChat({
     settings: ctx.settings,
     raw: ride.body,
     traceparent: ride.traceparent,
@@ -316,6 +320,7 @@ async function serveEngine(
     enginePath: ENGINE_PATH[stamp.route],
     fleetTags,
   });
+  const { outcome, upstream } = sent;
   if (outcome.kind === "served")
     return settleServed(ctx, {
       model,
@@ -324,6 +329,7 @@ async function serveEngine(
       injectedRule: stamp.injectedRule,
       laneSlug: stamp.laneSlug,
       outcome,
+      upstream,
     });
   settleFailed(ctx, {
     model,

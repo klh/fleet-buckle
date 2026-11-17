@@ -37,10 +37,10 @@ const ChatEcho = z.object({ id: z.string() });
 /** one world: the copilot BYOC seat + (optionally) an engine stub
  *  + the openrouter catalog (the non-BYOC provider for refusal
  *  proofs). withEngine=false = an engineless unit (direct relay). */
-async function booted(withEngine = true) {
+async function booted(withEngine = true, engineOpts: Parameters<typeof stubEngine>[0] = {}) {
   const seat = stubByocSeat([{ id: "mscopilot/gpt-6-astra" }]);
   const openrouter = stubProvider([{ id: "openrouter/qwen3-coder" }]);
-  const engine = stubEngine();
+  const engine = stubEngine(engineOpts);
   const world = await bootBuckle({
     label: "b1",
     dir: DIR,
@@ -90,6 +90,48 @@ describe("the BYOC leg (/w/<lane>/<token>)", () => {
       // relays them; Copilot 400s /v1/messages without the integration id)
       expect(rides[0]?.copilotId).toBe("vscode-chat");
       expect(chatRides(seat.seen).length).toBe(0); // the seat leg is the engine's, not buckle's
+    } finally {
+      world.stop();
+      seat.stop();
+      openrouter.stop();
+      engine.stop();
+    }
+  });
+
+  test("stream:true rides SSE through INCREMENTALLY (no full-buffer)", async () => {
+    const { world, base, seat, openrouter, engine } = await booted(true, {
+      sseChunks: ["data: one\n\n", "data: two\n\n"],
+      sseGapMs: 300,
+    });
+    try {
+      const res = await fetch(`${base}/w/copilot/${PAT_A}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...CHAT("mscopilot/gpt-6-astra"), stream: true }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/event-stream");
+      // the settled answer still names the chain (streaming must not
+      // lose provenance headers)
+      expect(res.headers.get("x-fleet-buckle-served-by")).toBe("b1");
+      const stream = res.body;
+      if (stream === null) throw new Error("no body on a streamed ride");
+      const reader = stream.getReader();
+      const dec = new TextDecoder();
+      // chunk ONE arrives before the stub can have written chunk two
+      // (300ms gap): a full-buffering proxy would still be holding
+      // the whole body at this point
+      const first = dec.decode((await reader.read()).value);
+      expect(first).toContain("one");
+      expect(first).not.toContain("two");
+      // and the ride finishes with the tail intact
+      let all = first;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        all += dec.decode(value);
+      }
+      expect(all).toContain("two");
     } finally {
       world.stop();
       seat.stop();
