@@ -1890,20 +1890,20 @@ of this broader work blocks the Claude/Copilot smoke or Step 7A.
 
 ### [ ] Step 7B — dispatch governed capabilities durably
 
-   (`fleet-worker`; after 3, 5 and 7A).
-   Implement the versioned capability registry and one parent decision
-   boundary for self-execution, specialist Pi child, LiteLLM MCP tool
-   and remote A2A task. Keep local Pi children on the native durable
-   task graph; separately placed children and remote A2A tasks need
-   stable external IDs, bounded admission, cancellation and result
-   reconciliation. MCP tools execute under scoped LiteLLM/Buckle grants
-   and return typed results to a Pi effect task. Give each path an
-   attempt budget, audit receipt and explicit failure state. Do not
-   build a second MCP gateway or agent scheduler in Worker. **Exit:**
-   one supervised job exercises all four paths in an isolated rig;
-   crash and replay at each dispatch/result boundary produces one
-   accepted child or external task, no duplicate side effect, faithful
-   usage/trace, and an operator-visible parent/child task tree.
+(`fleet-worker`; after 3, 5 and 7A).
+Implement the versioned capability registry and one parent decision
+boundary for self-execution, specialist Pi child, LiteLLM MCP tool
+and remote A2A task. Keep local Pi children on the native durable
+task graph; separately placed children and remote A2A tasks need
+stable external IDs, bounded admission, cancellation and result
+reconciliation. MCP tools execute under scoped LiteLLM/Buckle grants
+and return typed results to a Pi effect task. Give each path an
+attempt budget, audit receipt and explicit failure state. Do not
+build a second MCP gateway or agent scheduler in Worker. **Exit:**
+one supervised job exercises all four paths in an isolated rig;
+crash and replay at each dispatch/result boundary produces one
+accepted child or external task, no duplicate side effect, faithful
+usage/trace, and an operator-visible parent/child task tree.
 
 ### [ ] Step 7C — qualify Pi Durable code mode for bounded tool composition
 
@@ -2000,7 +2000,7 @@ evidence.
 
 Owner review of the post-split supervisor (store → db/tasks/lanes/reports/gh/templates,
 PRs #127/#128, direct lands ee2ec60/5023dee/5bdd486) concluded the direction:
-the supervisor's *loop* should not be mechanics at all. It is an LLM-era service —
+the supervisor's _loop_ should not be mechanics at all. It is an LLM-era service —
 tell it what to do, give it a small fence, and let patterns be prose.
 
 **Owner directives (verbatim anchors, conversation of 2026-11-17):**
@@ -2021,17 +2021,36 @@ tell it what to do, give it a small fence, and let patterns be prose.
 - Boot model: templates are what the supervisor LAUNCHES with — "launch, get
   template, unfold, create taskish, udpate list monitor, starts work or sleep".
 
-**The shape:** templates are the *genome*; the supervisor-mind is an LLM lane (same
-species as the workers) born with the genome as its mission; boot = *unfold*
+**The shape:** templates are the _genome_; the supervisor-mind is an LLM lane (same
+species as the workers) born with the genome as its mission; boot = _unfold_
 (transcribe genome clauses into concrete runtime commitments: task lists, schedules,
 wake-ons) registered as data in its own ledger, monitored after the fact via
 board/watch. New patterns are new charter paragraphs — no code. The mind is
 stateless per wake: wake → read board + conversation → decide → act → sleep.
 
+> **Codex review — clarify the two Pi roles before implementation.** This
+> genome-driven mind is the control supervisor that interprets intake and
+> requests governed admission; the P6 Pi job parent inside a Gondolin guest
+> executes one admitted job. They may share a harness pattern, but cannot
+> share one mutable journal or both become placement authorities. “Stateless
+> per wake” must mean disposable process memory: reopen the _same durable
+> conversation and journal_ and reconcile its committed intents on wake.
+> Recreating a fresh LLM session each wake would discard the continuity P6
+> explicitly requires.
+
 **The fence (the only code, and why):** dedup/lease/claim/attempt-cap invariants are
 the race surface between N concurrent lanes — this exact surface double-minted one
 issue into 4 task rows and produced duplicate PRs live. Prose cannot enforce a race
 condition. The mind touches the ledger only through tools that enforce invariants.
+
+> **Codex review — make the boundary executable.** The fence also has to
+> enforce alarm admission, wake rate, spend, expiry, cancellation, and
+> effect idempotency before the LLM acts. The charter supplies judgment and
+> priority, while typed tools and storage enforce these limits. “Only code”
+> is too narrow: event ingress, timer dispatch, durable journal reopening,
+> and audit projection are small mechanical adapters with tests. A new
+> charter paragraph needs code only when it asks for a new capability or
+> permission, not for a new policy within an existing capability.
 
 **Items of interest identified in design review (2026-11-17):**
 
@@ -2046,6 +2065,17 @@ condition. The mind touches the ledger only through tools that enforce invariant
 5. Genome is git-mutated only — genome edits are PRs to `seed/templates/`; the mind
    folds runtime commitments but never rewrites its own genome.
 
+> **Codex review — pin registration and retirement semantics.** An unfolded
+> registration needs a stable supervisor namespace, clause identity, kind,
+> scope, and charter revision, with a unique ledger key. Revisions reconcile
+> or retire previous registrations atomically; changed prose must not leave
+> duplicate live alarms. Spend limits must come from owner-controlled,
+> versioned configuration and be checked at admission, every wake, and every
+> child launch against measured usage, not only planned lane-hours. TTL and
+> cancellation are enforced by the ledger/timer even if the mind never wakes.
+> Keep crash/invariant tests and charter behavior evaluations; the wake journal
+> is evidence for those tests and drift analysis, not their replacement.
+
 **Deliberately not added:** orchestrator DAG (task_deps already is one), per-pattern
 mechanics (they are prose by design), retry machinery beyond existing attempt caps,
 multi-mind arbitration (kind/repo scoping until a second genome exists), a priority
@@ -2057,6 +2087,24 @@ unique index, converse=clarify phase, ready-gate=acceptance keyword, PR=plan→b
 children + addTaskDep dep-link; schema already exists), the mind lane, alarm rows +
 the one timer that honors them.
 
+> **Codex review — specify ingress and authority migration.** A sleeping
+> mind needs a bounded GitHub poller or webhook ingress that durably records
+> source event IDs and requests a wake; the timer alone cannot detect new
+> issues. Replays and missed deliveries must reconcile against source state.
+> `importOpenIssues` is currently a Worker-side adapter, while P6 assigns
+> global admission to Suspenders. Name the migration step and remove the
+> prior admission authority before the mind launches, so there is one task
+> mint path. Scope every registration by supervisor identity from day one,
+> even while only one mind runs.
+
 **Landing order (pending owner go):** charter.md (seed/templates) → alarms+timer →
 shatter face on POST /tasks → supervisor-mind lane. The ledger stays exactly as
 merged.
+
+> **Codex review — make the landing gate explicit.** Alarm, journal, budget,
+> and registration tables require additive migrations preserving existing
+> task/report rows; “exactly as merged” cannot mean no schema change. Gate
+> launch on tested duplicate delivery, crash between intent and effect,
+> restart/reopen, expiry without wake, budget exhaustion, and cancellation
+> of owned children. Record the charter revision and tool/effect receipts in
+> the wake journal so drift can be attributed.
