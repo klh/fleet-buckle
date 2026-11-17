@@ -14,9 +14,9 @@
 - [ ] P3 — H100 federation — parked (m04268)
 - [x] P4 pilot receipts — 8-way concurrent (PRs #103–#110), parent/child split (PR #52), run-key revocation (PR #50), stale-lease refusal (d3584bd), docs/RECOVERY.md; P6 tracks stronger durability claims
 - [x] P5 first slice — matched trials solo/concurrent/split run + docs/TRIALS.md (full BLAM deliberately not ported — owner directive)
-- [ ] ChatGPT review fixes (13 findings, 2026-11-17) — IN PROGRESS: #1 catch-all auth and #2 Buckle SSE landed in code; live-path verification and #3–#13 outstanding. #13 (litellm digest pinning) landed by a fleet lane as klh/fleet-buckle PR #2, MERGED squash 1393027 (new image-digest law `buckle.laws.images.ts`; index digest sha256:bd089afd… verified multi-arch via buildx imagetools); issue #1 auto-closed. Remaining findings #3–#12 need itemized briefs before they can be minted as fleet work.
-- [ ] P6 first slices — MINTED to the fleet (2026-11-17, klh/fleet-worker issues #22/#23/#24): ALL LANDED 2026-11-17 — PR #25 (GET /watch typed SSE) / #26 (exactly-once effects) / #27 (durable journal resume) squash-merged + route wire-up 3e7da45; VMSS rolled to worker-gondolin:3e7da45; /watch LIVE (snapshot seq 1 verified in-container). Next slices unowned: task_graph/conversation event kinds, Last-Event-ID resume, watch auth, GUI client.
-- [ ] GUI — ChatGPT draft awaited against tasks/gui-brief.md (uniform layer-registry face)
+- [ ] ChatGPT review fixes (13 findings, 2026-11-17) — MINTED & MOSTLY LANDED: #1 catch-all auth and #2 Buckle SSE landed in code + live-path verified (anon→401 both engine and lane paths; SSE through lane 200 text/event-stream with real seat deltas). #13 litellm digest pinning landed as fleet-buckle PR #2 (1393027, law buckle.laws.images.ts; index digest sha256:bd089afd…). Worker-plane findings minted as klh/fleet-worker #28–#35: LANDED via squash merges #29→PR#37, #30→PR#36, #32→PR#42(+ported supervisor pagination hunk), #33→PR#39, #34→PR#38; fleet-worker main ebb6109 (165 tests) rolled to VMSS. OPEN: #28 auth needs wiring (PR#40 bounced — module good, never wired), #31 red gate settles-done, #35 Last-Event-ID resume (two task attempts burned att3 `session:open` = seat stream cuts, not credential/pi-ai faults). Buckle-side #3 GUI parked design-first (see GUI row); #12 sidecar dispositioned docs/target-architecture.md §5 row 11.
+- [x] P6 first slices — MINTED (klh/fleet-worker #22/#23/#24): ALL LANDED — PR #25 (GET /watch typed SSE) / #26 (exactly-once effects) / #27 (durable journal resume) + wire-up 3e7da45. Follow-up slices: task_graph+conversation event kinds LANDED (PR #38); Last-Event-ID resume = open issue #35; watch auth folded into #28; GUI client parked design-first. Owner target directive + journal-proof gate recorded at the P6 section head; new mints #43 (probe must exercise BYOC lane leg), #44 (journal persistence + replay proof gate), #45 (job-parent-in-guest contract) — PRs #46/#47/#48 raised by lanes, pending review.
+- [ ] GUI — PARKED design-first (owner 2026-11-17): one-page design LANDED tasks/fleet-console-design.md (4c2affd) — read-only v1, no new server, one /api/fleet/board proxy onto supervisor GET /board; implementation slices mint ONLY after owner sign-off; premature task 84 cancelled; issue #3 carries the pointer.
 - [ ] zram on VMSS (m02251) · tracked-settings pin (m02917) · azure-buckle-as-Mac-upstream (m00957)
 - [ ] t-shirt store templatization — owner-queued, awaiting brief
 - [ ] P6 — one Pi Durable job lifecycle, wake and task-graph projections, and a thin operator UI; ordered plan at the end of this file
@@ -944,15 +944,25 @@ unexpectedly"), not credential or pi-ai faults. Fix owed as issue #43.
 
 ### Separation of concerns and authoritative state
 
-**STATUS 2026-11-17 (fleet crunch, supervisor da9e5b4, 8 lanes)**: the
-worker plane ate its own backlog — klh/fleet-worker PRs #16 (issue #9
-guards/hardening), #17 (issue #11 durable child-scope rows), #20 (issue
-#18 no-op terminal settle + mint refuses closed issues), #21 (issue #19
-worker.lane.ts split into lane.fence.ts + lane.gh.ts) all merged
+**STATUS 2026-11-17 evening (supervisor ebb6109, SUPERVISOR_MAX_LANES=3
+to protect the single Copilot seat)**: two crunch waves landed. Wave 1
+(8-lane crunch, supervisor da9e5b4): klh/fleet-worker PRs #16 (issue
+#9 guards/hardening), #17 (issue #11 durable child-scope rows), #20
+(issue #18 no-op terminal settle + mint refuses closed issues), #21
+(issue #19 worker.lane.ts split into lane.fence.ts + lane.gh.ts) merged
 clean (squash c24126e / 5fd6793 / 19432b7 + merge da9e5b4), gates green
 at every step (tsc, 152/152 unit, full Playwright rig 6/6 incl. the
-picker seam: claude-haiku-5.5 via `.prefer`, direct engine path). New
-worker-gondolin:da9e5b4 deployed on the VMSS. Repo-scoped tasks proven:
+picker seam: claude-haiku-5.5 via `.prefer`, direct engine path).
+Wave 2 (findings wave, supervisor ebb6109): PRs #36 (lease-expiry
+attempts test), #37 (bankReport terminal guard), #38 (/watch
+task_graph+conversation), #39 (useTemplate null), #42 (openPulls
+pagination) + the ported supervisor import-pagination hunk — 165 unit
+tests, image rolled to worker-gondolin:97d0e1e/pi-1.5.2 lineage.
+Worker-service boot fixed on VMSS (host ./worker/.prefer shadowed the
+seed; provider must be `engine`, the live origin.label — proven
+/v1/models 2026-11-16, all 42 rows engine-labeled). Seat-stream cuts
+(`session:open` att3 burns) remain the open reliability item.
+Repo-scoped tasks proven:
 supervisor tasks carry their own `repo` (POST /tasks minted
 klh/fleet-buckle #1 → PR #2 by clone-3, 10 turns, 3.5k out-tokens,
 fence 8 files). A second fleet repo (klh/fleet-belt, ChatGPT scaffold)
