@@ -1224,8 +1224,8 @@ Adopt features in dependency order, with one policy owner per decision:
    Configure LiteLLM's [Auto Router](https://docs.litellm.ai/docs/auto_router/)
    as a virtual model whose tiers refer to deployed engine rows. It selects
    a model group per request; deployment balancing is a separate router
-   decision. Several Copilot models suffice even with one vendor. Register
-   The VMSS Kev classifier is supplied by standalone fleet-belt, which
+   decision. Several Copilot models suffice even with one vendor. The
+   VMSS Kev classifier is supplied by standalone fleet-belt, which
    selects a pinned checkpoint after resource, p95 latency and held-out
    tier-quality tests. Kev-0.6B is a candidate for the observed small VMSS;
    compare it with current Kev-0.8B and resize/dedicate capacity if needed.
