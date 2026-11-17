@@ -708,6 +708,27 @@ A no-split choice is a valid recorded outcome.
   fork. The rig-era 8-worker recovery (23 tasks on
   klh/fleet-recovery-rig) predates this on the same plane.
 
+- **2026-11-17 (run-key revocation + recovery, live)** — with the
+  worker principal key pulled on the Azure buckle
+  (`mv /state/keys/principal.worker@azure.key …key.revoked` — the
+  registry reads key files per request, so the rename bites on the
+  next ask), a claiming lane died loudly at its prefer probe
+  (`no model passed the probe`, exit 1) and the task requeued. The
+  owner PAT was proven untouched (GitHub API 200 with the PAT — it
+  never rides buckle). Recovery: `POST /admin/keys {"principal":
+  "worker@azure"}` minted a NEW key (old value dead), written to
+  /opt/buckle/secrets/buckle_key (0600), supervisor recreated. A
+  ghost claim from the crash-loop window waited out the 15-min
+  lease clock (sweepExpired requeue — supervisor-loss semantics),
+  then a fresh clone ran a real session through the seat and settled
+  **PR #50 on klh/fleet-recovery-rig** (task 34, issue #49,
+  caesar.py + pytest, turns=17, fence:4). Bonus evidence: a
+  mismatched issue body (calculator files named onto the python
+  rig) was REFUSED twice by the seat — no fabricated work
+  ("Blocked: … no calculator files … no existing MS/MR/MC
+  implementation") — before the corrected issue went green in one
+  attempt.
+
 **AC**: run two simultaneous jobs and one parent/children job on the real
 hosts. Independently kill a guest and a parent; prove journal resume,
 stale-lease refusal, no duplicate unsafe GitHub effects, Fleet run-key
