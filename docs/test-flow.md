@@ -1,84 +1,47 @@
-# Test flow — the plan tests follow, in order
+# Test operations
 
-Step by step, test by test: every step writes its FAILING tests first,
-then the smallest implementation that passes them. No file outside the
-established capability folders; no organization drift.
+`playwright.config.ts` and `package.json` define executable projects and commands. The delivery plan
+owns planned topology changes under B14; this page describes the current setup.
 
-## Fixtures are REAL captures — never hand-typed
+## Current projects
 
-The stub catalogs (`test/deploy/fixtures/*.models.json`) are slices of the
-providers' REAL `/v1/models` responses, captured by
-`bun tools/src/buckle.capture-fixtures.ts` (keys are machine-local
-paths, never committed). Refresh whenever the demo should ride new
-reality. From those fixtures, `bun tools/src/buckle.gen-engine-config.ts`
-generates the litellm engine configs (`test/deploy/engine/*.litellm.yaml`,
-gitignored): every catalog row becomes a deployment under its REAL id —
-engine and catalog can never drift, and the generator runs in the
-the Playwright `stack-setup` project, so the stack always boots consistent.
+The shared Docker graph is `stack-setup` → `smoke` → `e2e`, `federation`, `load`, or `rolling`.
+`stack-teardown` is the setup project's teardown. The `azure` and `stage0` projects own separate
+stacks and do not depend on shared setup. `unit` selects `src/**/*.spec.ts`; existing colocated
+`*.test.ts` run with `bun test`. Do not assume a file is selected merely because it has a test name.
 
-## Commit 3 — "the wire" (server: healthz → catalog → forward)
+```text
+bun install --frozen-lockfile
+bun run typecheck
+bun run check
+bun test
+bun --bun playwright test --project=e2e
+bun --bun playwright test --project=federation
+bun --bun playwright test --project=azure
+bun --bun playwright test --project=rolling
+```
 
-1. **healthz face** (unit `src/server/buckle.server.main.test.ts`):
-   boot with merged settings → `GET /healthz` parses as BuckleHealthz
-   `{ok:true, status:"up", label, trace_id}`.
-2. **catalog** (unit `src/server/buckle.server.models.test.ts`): a
-   stub provider serves fixture rows → `GET /v1/models` returns rows
-   mapped through BuckleModelWire — bare ids pass, FULL provider
-   metadata rides verbatim (never fabricated), origin says which
-   provider. Peers (buckle-origin rows) are NOT here — they are
-   commit 4's tests (federation), added when peers serve catalogs.
-3. **MITM forward** (unit `src/server/buckle.server.forward.test.ts`):
-   `POST /v1/chat/completions` forwards to the engine; the W3C
-   traceparent CONTINUES onto the engine request (asserted by an
-   echo stub); unknown model → problem+json; `/metrics` counters bump
-   per request (Prometheus text).
-4. **docker e2e** (`test/e2e/buckle.e2e.wire.spec.ts`): the REAL stack
-   — each buckle: healthz 200, its provider's catalog rows, one chat
-   round trip through litellm→stub (generated engine config), /metrics
-   reflects the traffic.
-5. **smoke flip** (`test/smoke`): c) goes from ALL UNHEALTHY to
-   all `up` — the LAST change, only after the wire truly serves.
+Choose only projects relevant to the change. Setup/teardown owns lifecycle. Do not run overlapping
+stacks with shared project names, ports, keys or volumes. An interrupted run needs inspection of its
+exact Compose project before cleanup; never delete a live deployment's state.
 
-## Commit 4 — access + federation (same rhythm)
+## Fixtures and engine configuration
 
-principals/keys → grants matrix (alice/bob/carol) → stats → tree
-(peers pull downstream catalogs) → e2e matrix spec activates (it rides
-behind the server today, skipped).
+Catalog fixtures live in `test/deploy/fixtures/`. The capture tool is
+`tools/src/buckle.capture-fixtures.ts`; it reads machine-level credential paths. The engine
+generator is `tools/src/buckle.gen-engine-config.ts`. The shared setup project generates engine
+files from fixtures before boot; never hand-edit generated model rows or fabricate a live provider
+receipt. Use independent stub observed-request/state oracles for assertions.
 
-## Commit 5 — the full demo matrix green in Docker
+Stage 0 proves relay health and honest model failure without an engine. It is not model readiness.
+The Azure-named project is a Docker test topology, not evidence of a deployed Azure service. Live
+VMSS acceptance needs separate image/config and real model receipts from the plan.
 
-the demo matrix curls as spec: grants per principal per buckle, denial
-paths 403 problem+json, federation tree depth-2 summaries, load waves.
+## Rolling verification
 
-## Stage 0 — the standing first-stage demo (`test/deploy/compose.stage0.yaml`)
-
-The stack's first smoke moment, kept forever: stubs + the three buckles
-
-- sidecars, NO engines. The minimal buckle ANSWERS (`/healthz` — label
-  per hub), so the sidecars swear all three `up` (the smoke that should
-  NOT fail works); a chat round trip is honestly red — 503
-  `application/problem+json` (the smoke that should fail, fails).
-  Host ports 49xx; runs beside the full 47xx stack in one pass.
-
-## Rolling deploy (`test/deploy/compose.rolling.yaml` + `deploy/front/`)
-
-The architecture that makes a new buckle version swappable with zero
-downtime: a per-unit FRONT (tiny reverse proxy) — the active upstream
-is a STATE FILE, read per request. The switch is a same-inode write
-into the mounted `test/deploy/roll/` directory (a host-side rename replaces
-the inode and VirtioFS never shows it; the front's last-known-good
-makes a torn read harmless — it serves the previous version until a
-clean read lands).
-
-The rolling spec proves the sequence:
-
-1. v1 serves through the front (`x-buckle-upstream` observable)
-2. the unit-surface sidecar (polling the FRONT) is up — the contract
-3. the NEW version gates healthy BEFORE traffic flips: its own
-   sidecar swears it up, and its `hub.version` stamp ("v2-rolling")
-   answers on healthz while v1 still serves
-4. THE SWITCH under load: a v1 stream (all 200/upstream=v1) → one
-   state write → the stream continues all-200/upstream=v2, the version
-   stamp visible THROUGH the front, and the unit sidecar never went
-   down — no dropped request
-5. drain: v1 stops; chats keep riding v2; the front never blinked
+`test/rolling/buckle.rolling.spec.ts` uses `test/deploy/compose.rolling.yaml` and `deploy/front/`.
+The front reads its active target from a state file. Use a same-inode write on the mounted switch
+file: replacing its inode can be hidden by VirtioFS. Qualify the candidate's independent probe and
+version before switching, verify requests through the front during the switch, then drain the old
+version. A passing rolling fixture does not prove long-lived streams or production rollback until
+those acceptance cases are exercised separately.

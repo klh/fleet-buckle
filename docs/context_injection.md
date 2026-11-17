@@ -1,167 +1,35 @@
-# Context injection — decision seam (direction A, first cut LANDED)
+# Context injection
 
-Status: FIRST CUT LANDED — the decision seam ships
-(`src/context/buckle.context.judge.ts` + the pipeline's step 2.5 +
-the settings `context_policy` block + docker e2e oracle). What
-landed vs what stays parked is recorded under "Landed shape" below;
-the parked sections remain the port target for the fuller cuts.
+This page describes the current source seam. It does not add a delivery backlog; gateway changes
+follow [the plan](../tasks/plan.md) and repository laws.
 
-## Landed shape (the first cut — amendment)
+The pipeline invokes the synchronous judge for originating requests. Incoming federated hops are not
+judged again. `src/context/buckle.context.judge.ts` defines the named Zod `ContextFacts` schema and
+`judgeFromSettings`; `src/context/buckle.context.inject.ts` owns body rewriting.
 
-- **The seam is a callback**: `ContextJudge = (facts: ContextFacts)
-=> true | { system: stanza }`. TRUE is the default (inert — the
-  body rides byte-identical). `bootServer` builds the judge ONCE
-  from settings (stanzas resolved at boot, fail loud); a custom
-  judge can ride the same seam.
-- **Facts** (zod-strict, one shape): `route`, `principal`,
-  `principalKind?`, `model`, `bodyStart` (first 512 bytes — the
-  judging window, never the whole body), `repo?` (`x-fleet-repo`).
-  Absent header ⇒ absent fact ⇒ repo rules cannot fire.
-- **Policy** (settings block, config-over-code): `context_policy:
-{ inject: [{ text XOR file, principal?, models?, bodyContains? }]
-}`. Dimensions match with AND semantics; `models` is exact-or-
-  prefix; first match wins; no dimensions = catch-all.
-- **Mechanics**: ORIGINATING requests only (an empty hop path proves
-  origin); the stanza is prepended as the FIRST system message
-  through `InjectableChatBody` (zod, passthrough — everything else
-  rides verbatim; a non-chat body is never touched). Hop arrivals
-  are never re-judged.
-- **Tests**: unit matrix (inert default, AND dimensions, prefix
-  models, boot-custody file reads, facts drift) + the docker oracle
-  (the stub answers "injected"/"plain" from the body it SAW — b2
-  carries a policy, b1/b3 prove byte-identical rides).
+## Current settings contract
 
-Parked for the fuller cuts: `lane`/`work`/`hub` facts, `repo_file`
+`BuckleContextPolicy` in `src/schemas/buckle.settings.zod.ts` accepts a nonempty `rules` array. Each
+rule has an ID, optional match fields and exactly one of `text` or `file`. File content is read at
+boot; unreadable files fail boot. First matching rule wins. Every declared match dimension must
+agree; no policy or no matching rule returns the inert verdict.
 
-- ssh-key custody, per-rule ids + OTel span attrs + the
-  `buckle_context_injections_total` counter, dialect-aware merging
-  (the first cut targets the openai chat shape the fleet rides).
+Match fields include principal, group, route, models, bodyContains, repo, lane and work. Current
+model matching uses `startsWith` on configured prefixes. Facts come from authenticated identity,
+route/body metadata and optional request headers. A repo/lane/work header is metadata, not proof of
+permission; ingress must establish its provenance before using it for a privileged policy. Do not
+assume the former `inject` array or proposed `repo_file`/SSH-fetch configuration exists.
 
-## The law this serves
+## Current rewrite boundary
 
-Buckle is a MITM interface over the engine: everything forwards
-byte-identical EXCEPT what a declared context policy matches. An
-absent or non-matching policy is INERT — zero bytes touched, zero
-cost, zero observability noise. Injection is never silent: the lane
-can always see THAT something was injected (never the content).
+A verdict is `true` for no injection, or `{system, rule}` for a stanza and its rule ID. The body
+helper has chat, Messages and Responses branches. It preserves unrecognized/malformed shapes; the
+owning route still validates the request. Chat merges a leading system message; Messages uses
+top-level system; Responses uses instructions. Check the actual helper and wire tests before
+claiming parity for a provider-specific body shape. The lane model-pin rewrite is a separate
+operation.
 
-## Decision inputs — RequestFacts
-
-Per request, buckle composes a typed `RequestFacts` (zod-derived,
-one shape, no hand-written types):
-
-| fact        | source                | notes                                                                                                          |
-| ----------- | --------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `request`   | the route itself      | `chat`, `embed`, … — server-side truth                                                                         |
-| `principal` | the bearer key        | id + kind + groups from the registry                                                                           |
-| `repo`      | `x-fleet-repo` header | stamped by the fleet CLI hook (we control the CLI wiring; trust = we minted both ends + key identifies caller) |
-| `lane`      | `x-fleet-lane` header | lane label, same provenance                                                                                    |
-| `work`      | `x-fleet-work` header | work item id, optional                                                                                         |
-| `model`     | request body          | the requested model id                                                                                         |
-| `hub`       | routing               | unit label + resolved provider                                                                                 |
-
-No request signing: the fleet controls the CLI hook layer that adds
-the headers, and the principal key already authenticates the caller.
-A header set absent (non-fleet client) simply yields absent facts —
-rules that match on them cannot fire.
-
-## Policy — config over code (JSON5, settings block)
-
-```
-context_policy: {
-  // PATHS, never values; read ONCE at boot (fail loud on unreadable)
-  ssh_key: "/etc/buckle/keys/deploy.key",
-  rules: [
-    {
-      id: "fleet-law-to-agents",
-      match: { repo: "klh/fleet", principal: "alice@fleet", request: "chat" },
-      inject: { repo_file: "AGENTS.md" },
-    },
-    {
-      id: "glm-gets-the-standard",
-      match: { model: "glm-*" },
-      inject: { file: "/etc/buckle/context/standard.md" },
-    },
-  ],
-}
-```
-
-- **First match wins**; each `match` field is optional (subset match);
-  a rule with no `match` at all is the catch-all — deliberate, loud.
-- `inject` is ONE OF: `text` (inline in settings), `file` (PATH, read
-  at boot), `repo_file` (fetched from the target repo over
-  `git@github.com:` with the deploy key — see custody).
-- Filters on model may use exact ids or trailing `*` group prefixes.
-- A declared file that cannot be read is STARTUP-FATAL (a hub must
-  never silently drop its own policy). `repo_file` fetch failures at
-  boot: fail loud too; the rule turns the hub unhealthy rather than
-  serving without its declared context.
-
-## Injection mechanics (proven in W3081 — port, don't reinvent)
-
-Dialect-aware system prepend, PURE (shallow-clone, never mutate):
-
-- **anthropic dialect**: top-level `system` — string gets prepended
-  (`stanza\n\nexisting`), block array gets a leading text block,
-  absent system becomes the stanza.
-- **openai dialect**: leading `system` message merged when present,
-  else inserted at position 0.
-- The stanza = the matched rule's block text. One rule, one block —
-  compositing multiple blocks died with W3081 review (surprise
-  concatenation); a hub that wants multiple stanzas declares multiple
-  rules with distinct matches... first-match-wins forbids that, so:
-  a rule's `inject` may also be `blocks: [ ... ]` for explicit order
-  when one match must carry several files. (Decide at port time; the
-  simple form ships first.)
-
-## SSH/TLS key custody — "control of the private ssh key where you repack"
-
-Once buckle modifies the body, the upstream leg is OURS. Any leg that
-authenticates by SSH or TLS client key needs that private key under
-buckle's control:
-
-- Keys are PATHS in settings (0600, mounted, minted — never typed,
-  never inline, never logged, never in any wire shape or error).
-- `context_policy.ssh_key` is the deploy key for `repo_file` fetches
-  over `git@github.com:` (read-only scope, per-org minting).
-- TLS client-cert upstreams (if a provider demands mutual TLS) take
-  their key the same way — the repack never downgrades the leg's
-  authentication, it inherits ours.
-- Fetches happen at BOOT (context is stable; per-request git traffic
-  is a latency and key-exposure bug). A long-lived hub refreshes
-  repo-file blocks only on reload.
-
-## Observability
-
-- OTel span attribute `context.rule=<id>` on every injected request;
-  absent when inert. Content is NEVER in spans/logs/metrics.
-- `/metrics` counter per rule id: `buckle_context_injections_total
-{rule="<id>"}` — the lane can reconcile what it rode.
-
-## Test shape (write failing first, per the plan discipline)
-
-1. **Unit matrix** — each dimension alone (`request`, `principal`,
-   groups, `repo`, `lane`, `model` prefix, `hub`), subset semantics,
-   first-match order, absent-policy inertness, unreadable-file
-   startup fatality.
-2. **Wire e2e (docker)** — the stub echoes the messages it received:
-   assert the stanza lands upstream ONLY for matching principal/repo/
-   model combos; non-matching requests arrive byte-identical (hash
-   the body through the stub).
-3. **Key custody** — repo_file fetch against a local git ssh fixture
-   (the stub rig grows a git daemon); assert the deploy key PATH is
-   honored and never appears in any log/span/error output.
-4. **Honest red** — absent repo header ⇒ repo-matching rule cannot
-   fire even for the same principal (the trust boundary is the
-   header's provenance, not the key).
-
-## Approaches considered
-
-- **A (chosen): local first-match policy, client-stamped facts** —
-  config-over-code, no extra hop, inert by default, key custody
-  explicit.
-- **B: external injector service** — rejected: policy leaves config,
-  adds a hop and a failure mode between the lane and its model.
-- **C: client-side-only injection in the CLI hook** — rejected: no
-  central policy, no hub/model dimension the client can't see, no
-  buckle-held key custody for repo fetches or client-cert legs.
+Pure helper tests, judge/settings tests and the Docker observed-body oracle verify behavior. The
+schema and source are authoritative for field names; this document supplies the boundary and read
+path rather than a second copy of the schema. New injection features need their own task, test,
+credential policy and observable rule receipt; old design proposals are not authorization.

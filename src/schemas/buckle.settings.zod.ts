@@ -192,9 +192,8 @@ export const BuckleSettings = z
     context_policy: BuckleContextPolicy.optional(),
     /** the /w/<slug> launch table: slug pins the model (the pin wins
      *  over the body; the hub falls out of the federated catalog).
-     *  FROZEN SCOPE: admission/authz stay here ONLY until the
-     *  litellm-auth collapse lands (docs/target-architecture.md) —
-     *  new principal/budget/surface kinds stop at this line. */
+     *  Scoped engine identity and grants follow tasks/plan.md B04;
+     *  this launch table does not own runner scheduling or journals. */
     lanes: BuckleLaneTable.optional(),
     /** b — general security: key PATHS, never values. */
     keys: z

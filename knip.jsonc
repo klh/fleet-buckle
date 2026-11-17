@@ -2,12 +2,12 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   // The entry/project contract (the qlty.toml knip block points here).
   // The durable worker LIVES IN klh/fleet-worker now (see
-  // docs/worker-moved.md); this repo is the gateway only. Verify with:
+  // tasks/plan.md); this repo is the gateway only. Verify with:
   // npx knip@5.88.1
   "workspaces": {
     ".": {
-      // src/agents is the staged agent-job wave (wiring lands with the
-      // server lift) — its files are entries until their consumer exists
+      // src/agents is extraction debt scheduled for deletion in B13.
+      // Keep analysis entries until that removal; do not grow the runtime.
       "entry": ["tools/src/*.ts", "test/**/*.ts", "src/agents/*.ts"],
       // the azure rig execFileSync-spawns two tools by CWD-relative
       // path ("tools/src/…") — knip reads those strings as module

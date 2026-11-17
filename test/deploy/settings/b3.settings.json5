@@ -38,8 +38,8 @@
     // endpoint); the stub compose injects its stub url as the over layer
     zai: { key: "/etc/buckle/keys/zai.key" },
   },
-  // FROZEN SCOPE: lane admission/authz lives here only until the
-  // litellm-auth collapse (docs/target-architecture.md). The pin row:
+  // Historical model-pin fixture; target scoped identity is defined in
+  // fleet-buckle/tasks/plan.md B04. The pin row:
   // a /w/b3-repoagent-v1-calculon launch URL pins glm-4.5-air for the
   // durable worker (slug = <hub>-<role>-v<generation>-<repo>, names the seat).
   lanes: [{ id: "b3-repoagent-v1-calculon", model: "glm-4.5-air" }],

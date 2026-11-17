@@ -1,13 +1,11 @@
-# 0005 — OTel + Jaeger through everything; Prometheus /metrics
+# 0005 — OpenTelemetry propagation and Prometheus metrics
 
-Full OpenTelemetry is the law for BOTH repos: W3C traceparent ids flow
-through every request — buckle faces, the MITM forward loop, AND every
-downstream federation hop (identity travels downstream; so do traces).
-Spans export OTLP to Jaeger (compose unit ships jaeger/all-in-one; the
-stack sets OTEL_EXPORTER_OTLP_ENDPOINT). fleet-health stays simple: it
-sends a fresh traceparent with every probe and stamps the trace id in
-each verdict sample — no SDK; buckle continues those traces.
+W3C traceparent flows through Buckle ingress, the model forward loop and downstream federation.
+Configured OTLP export is independent of wire propagation. Existing local Compose may use Jaeger;
+the production Lens/ClickHouse target and agent trace correlation belong to B06/B07 in
+[the plan](../../tasks/plan.md). Jaeger is not a prerequisite for the Lens deployment.
 
-buckle additionally exposes a Prometheus `/metrics` face (text format):
-requests, inflight, tok/s — per model, per provider, per buckle, plus
-federated peer rollups. Scraped, not pushed.
+Buckle exposes a Prometheus metrics face for traffic and overview. Pi owns its execution receipts;
+LiteLLM supplies deployment attempts and spend evidence. Missing token/cost observations stay
+unknown. Outside-process health probes carry trace IDs but never infer useful agent work from a
+heartbeat or successful scrape.

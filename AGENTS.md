@@ -17,7 +17,7 @@ evidence before changing binding architecture.
 
 ## Standalone repository boundary
 
-Read `tasks/implementation-contract.md` before rollout edits. Each lane
+Read the ownership and execution rules in `tasks/plan.md` before rollout edits. Each lane
 owns one repository and an explicit file allowlist. This repository's
 config, schema, dependency, test and code-shape laws govern Buckle; do
 not import the fleet monorepo's package layout or governance runtime.
@@ -31,9 +31,8 @@ Owner-approved pilot exception: a Node/Bun login script may live in
 Entra browser login, obtains an API access token and launches the CLI
 using private temporary settings; rerun on expiry is sufficient for
 the owner pilot. It adds no imports or dependencies to Buckle runtime.
-`docs/target-architecture.md` is superseded and grants no implementation
-scope. Propose a bounded migration for existing code; preserve unrelated
-work and do not relax laws or tests to make a change pass.
+The plan is the single delivery contract. Preserve unrelated work and
+do not relax laws or tests to make a change pass.
 
 ## Azure VMSS work placement after `/clear`
 
