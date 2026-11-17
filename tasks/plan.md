@@ -3,19 +3,22 @@
 ## TODO index (2026-11-17)
 
 - [x] P0 — PAT cycle LIVE on VMSS (issue→seat→PR, PRs #79–#112); BYOC URL-token lanes; Responses dialect f6ff9da live (gpt-6.1-terra 200); copilot-integration-id on both branches
-- [ ] P0 CLI verification — Copilot CLI + `claude` against the lane URL (claude CLI hang traps logged in fleet-worker docs/did-not-work.md)
-- [ ] P0.2d Entra GUI device-flow — BLOCKED on owner pasting Entra client ID (P0.2 APIM same blocker)
+- [x] P0 CLI verification — unmodified `claude` against the live lane URL (2.1.312, `wire ok`; receipt in P0.2c)
+- [ ] P0 CLI verification — Copilot CLI against the lane URL; Entra/APIM leg remains part of P0.2
+- [x] P0.2d owner-pilot login script — isolated package and 8 unit tests complete; receipt in P0.2d
+- [ ] P0.2d live Entra GUI device-flow — BLOCKED on owner pasting Entra client ID (P0.2 APIM same blocker)
 - [x] P1 — fleet-worker extraction (f8073fb; version matrix docs/worker-moved.md; rollback worker:e72086d)
-- [x] P2.1–P2.3 — qemu-TCG/kvm guest executor (worker-gondolin image; kill/journal-resume receipts; supervisor split cc1fb0e)
+- [x] P2.1–P2.3 executor axis — qemu-TCG/kvm guest (worker-gondolin image; guest kill/requeue/fresh-fence receipts; supervisor split cc1fb0e); same-conversation recovery remains P6
 - [x] P2.4 — local Docker Desktop runner (7016770+4858518; PRs #92/#94 receipts)
 - [ ] P2 krun executor — parked (aborts x86_64 in gondolin 0.14.0; alpine guest has no bun)
 - [ ] P3 — H100 federation — parked (m04268)
-- [x] P4 — Fleet-controlled jobs: 8-way concurrent receipt (PRs #103–#110), parent/child split receipt (PR #52), run-key revocation receipt (PR #50), stale-lease refusal (d3584bd), docs/RECOVERY.md
+- [x] P4 pilot receipts — 8-way concurrent (PRs #103–#110), parent/child split (PR #52), run-key revocation (PR #50), stale-lease refusal (d3584bd), docs/RECOVERY.md; P6 tracks stronger durability claims
 - [x] P5 first slice — matched trials solo/concurrent/split run + docs/TRIALS.md (full BLAM deliberately not ported — owner directive)
 - [ ] ChatGPT review fixes (13 findings, 2026-11-17) — IN PROGRESS: #1 catch-all auth gated (code+tests), #2–#13 queued
 - [ ] GUI — ChatGPT draft awaited against tasks/gui-brief.md (uniform layer-registry face)
 - [ ] zram on VMSS (m02251) · tracked-settings pin (m02917) · azure-buckle-as-Mac-upstream (m00957)
 - [ ] t-shirt store templatization — owner-queued, awaiting brief
+- [ ] P6 — one Pi Durable job lifecycle, wake and task-graph projections, and a thin operator UI; ordered plan at the end of this file
 
 Implementation status: the architecture is agreed; dispatch begins with
 the current-chain characterization in
@@ -58,6 +61,7 @@ This roadmap does not authorize one lane to build all of P0–P5.
    then deploy that exact image digest and retain the previous digest.
    Never deploy a moving `latest` tag or auto-upgrade outside this check.
    LiteLLM owns provider parameter translation; record concrete failures.
+   comment from pi: the rule needs teeth — compose.azure.yaml still pins `litellm:latest` (review #13). Propose: add a check-laws rule refusing floating tags (`:latest`, bare names) in deploy/ compose files, and pin the proven digest (1.103.0, live on the VMSS) in the same landing. Retained previous digest = the docker-save fallback path already proven twice.
 5. **Later, not now**: launching workers from GUI / CLI / MCP-skill, and a
    job-placement ledger in Suspenders remembering what runs where.
    Hardcoded startup file until then; Buckle's request/usage ledger is
@@ -82,6 +86,7 @@ This roadmap does not authorize one lane to build all of P0–P5.
    on fleet itself** (fleet-buckle + fleet-worker once extracted): needs
    one new example.md variant for working on the fleet repos — the
    repoagent example pattern pointed at our own repos.
+   comment from pi: LIVE as of 2026-11-17 09:26 — VMSS supervisor repointed to klh/fleet-worker, MAX_LANES=8, clones wiped, clean boot. Issue #1 (docs/ownership-map.md inventory = P6 step 1a) already minted; first wave is deliberately docs + bounded fixes, PRs merge owner-side only. Next waves carry the step-1 decomposition per the map the lanes produce. The example.md variant (children on fleet repos) stays queued until the loop is proven on flat tasks — one pivot at a time.
 
 Architecture (owner ruling, 2026-11-16; Azure VMSS is the live target):
 
@@ -243,6 +248,7 @@ do not add a Buckle model pin or a hardcoded catalog row.
   the engine leg. Remaining live axis (two REAL seats' entitlements
   differing) is owner-pilot observation, blocked on the Entra client
   ID with the rest of P0.2.
+
 - **P0.2c** prove unmodified Claude Code can use Buckle as its gateway:
   put its gateway variables in the user's Claude settings JSON. For
   Bearer-PAT mode, `ANTHROPIC_BASE_URL` points at the APIM Buckle
@@ -275,25 +281,25 @@ do not add a Buckle model pin or a hardcoded catalog row.
   Code 2.1.312 round-tripped the live chain — claude CLI → buckle
   `:4111/w/b3-gpt-consult/<PAT>` → engine byoc pass-through → MS
   Copilot seat (`claude-sonnet-5.5`); `-p 'Reply with exactly: wire
-  ok'` → exit 0, output `wire ok`. Curl leg: `/v1/messages` with tools
-  + stream → 200 SSE with a streamed `tool_use` block (forced
-  `tool_choice` is rejected by the seat itself — not a wire defect).
-  `/v1/models` returns the entitled seat catalog. Live lessons: (1) a
-  lane's pinned model overrides the request body model — pin a
-  messages-capable model (a Responses-only pin such as `gpt-6.1-terra`
-  yields Copilot's `no model endpoints available given user
-  constraints` on `/v1/messages`); (2) headless CLI runs need a fresh
-  `CLAUDE_CONFIG_DIR` with `{"hasCompletedOnboarding":true}` — the
-  default config dir's keychain/OAuth touch hangs a no-TTY `-p` run
-  before any HTTP. The Entra/`ANTHROPIC_CUSTOM_HEADERS` leg rides the
-  APIM front door (P0.2, client ID still awaited).
+ok'` → exit 0, output `wire ok`. Curl leg: `/v1/messages` with tools
+  - stream → 200 SSE with a streamed `tool_use` block (forced
+    `tool_choice` is rejected by the seat itself — not a wire defect).
+    `/v1/models` returns the entitled seat catalog. Live lessons: (1) a
+    lane's pinned model overrides the request body model — pin a
+    messages-capable model (a Responses-only pin such as `gpt-6.1-terra`
+    yields Copilot's `no model endpoints available given user
+constraints` on `/v1/messages`); (2) headless CLI runs need a fresh
+    `CLAUDE_CONFIG_DIR` with `{"hasCompletedOnboarding":true}` — the
+    default config dir's keychain/OAuth touch hangs a no-TTY `-p` run
+    before any HTTP. The Entra/`ANTHROPIC_CUSTOM_HEADERS` leg rides the
+    APIM front door (P0.2, client ID still awaited).
 - **P0.2d pilot shortcut (owner approved)** use a small standalone
   Node/Bun script under `test/manual/entra-login/` while the final auth
   tooling is decided. **STATUS: package written (`@fleet/buckle-entra-login`
   0.1.0, 8 unit tests green, own tsconfig/deps, excluded from the root
   project; live owner pilot pending the Entra client ID).** Usage:
   `bun test/manual/entra-login/src/entra-login.main.ts <config.json> [claude
-  args…]` — config is a 0600 machine file shaped like the committed
+args…]` — config is a 0600 machine file shaped like the committed
   `entra-login.example.json` (placeholders only); the PAT lives in its own
   0600 file. Give it a registered public-client app ID, tenant,
   API scope, gateway URL and a local PAT file path through runtime config.
@@ -451,8 +457,9 @@ fresh clone, which reclaimed it at `attempts: 2` (~01:40:25Z) and
 settled it ~90s later as PR #32 — merged. No writer epochs exist;
 recovery is task-level at-least-once: per-lane journals
 (`/state/<lane>.sqlite`) and workspaces (`/workspace/<lane>`) ride
-persistent volumes, and PR-match reconciliation (open-PR scan for
-"Closes #N" before any rework) prevents duplicate GitHub effects.
+persistent volumes. PR-match reconciliation scanned open PRs for
+"Closes #N" and avoided a duplicate PR in this run; it does not cover
+closed/merged PRs or prove idempotency of other GitHub effects.
 All 17 PRs merged, branches deleted, 16/16 tasks done. Old/new image
 digests were identical (`2697dd5`) — the kill leg proves lease/requeue
 redelivery, not cross-image journal compatibility; that stays
@@ -472,11 +479,12 @@ Host-loss reimage recovery remains untested (single VM).
   container `oven/bun:1-slim` + `qemu-system-x86 qemu-utils` on the
   VMSS, guest `alpine-base:0.5.0` (builtin content-addressed
   registry): `gondolin exec -- uname -a` → `Linux (none) 6.18.63-0-virt
-  … x86_64`. KVM proven by A/B, not assumed: WITH `--device /dev/kvm`
+… x86_64`. KVM proven by A/B, not assumed: WITH `--device /dev/kvm`
   cold 6.7s / warm 2.9s; WITHOUT (TCG) cold 11.3s / warm 7.0s. KVM
   access works from a plain container as root with `--device /dev/kvm`
   (buckleadmin itself lacks the kvm group; the device mapping
   suffices). First slice of P2.2 proven; the executor seam is next.
+
 - **P2.2** keep the Pi Durable parent and journal in the OCI worker on
   the host. Add a Gondolin executor for bounded tool guests, with
   workspace leases, resource limits, default-denied network, and scoped
@@ -504,6 +512,7 @@ Host-loss reimage recovery remains untested (single VM).
   real tool step executes inside the VM during the full cycle, the
   kill-the-guest fence/replace proof, and scoped-credential injection
   (secrets API is wired but unused by syntax-only checks).
+
 - **P2.3** add a `WORKER_EXECUTOR=docker|gondolin` axis to the same
   whole-cycle test. The Gondolin adapter uses `VM.exec` and HTTP hooks;
   allow only the operation's named external/internal hosts and inject
@@ -544,7 +553,7 @@ Host-loss reimage recovery remains untested (single VM).
   never silent), and the report note banks the evidence. First live fire
   (recovery-rig issue #35 → task 18 → lane-1, worker-gondolin:298d2aa):
   report #24 `settled=done pr=37 turns=14 note="session:settled;
-  fence:1[roman.py:py_compile]"` — the agent's roman.py was compiled by
+fence:1[roman.py:py_compile]"` — the agent's roman.py was compiled by
   python3 inside the qemu toolchain guest BEFORE the PR banked green, PR
   #37 merged clean (+58/-0 single file). The fence also caught two real
   deployment gaps on the way (clones lacked XDG_CACHE_HOME → EACCES
@@ -559,20 +568,20 @@ Host-loss reimage recovery remains untested (single VM).
   cold-boot price), scoped-credential injection via createHttpHooks
   secrets.
 
-  **Kill-the-guest receipt (2026-11-17, fleet-worker 298d2aa):** the
-  P2 AC "kill the guest, prove the same session fails loud, replaces,
-  and resumes safely" is PROVEN LIVE. Rig issue #44 (b64.py) → task 22
+  **Kill-the-guest receipt (2026-11-17, fleet-worker 298d2aa):**
+  guest death, loud failure, requeue and fresh-guest fence are proven
+  live; same-conversation resume is not. Rig issue #44 (b64.py) → task 22
   → clone-5, with a host-side sniper loop (`pkill -f
-  "[q]emu-system-x86_64"` every 1.5s — the bracket class dodges the
+"[q]emu-system-x86_64"` every 1.5s — the bracket class dodges the
   pkill self-match trap) killing the toolchain guest mid-fence.
   Reports #28/#29: `settled=error pr=null turns=0 note="Error: error
-  protocol_error: virtio bridge error: read ECONNRESET (qemu:
-  qemu-system-x86_64: terminating on signal 15)"` — the guest death is
+protocol_error: virtio bridge error: read ECONNRESET (qemu:
+qemu-system-x86_64: terminating on signal 15)"` — the guest death is
   loud, names SIGTERM, banks no PR, and requeues. Attempt 1 had
-  already completed the session and raised PR #45 (turns=0 on retries
-  = the durable journal replaying, not redoing). Sniper stopped →
+  already raised PR #45. `turns=0` in the error reports is the lane's
+  error-report default, not evidence of journal replay. Sniper stopped →
   attempt 3: report #30 `settled=done pr=45 turns=14 note=…fence:1
-  [b64.py:py_compile]` — fresh VM fenced the same diff green, PR #45
+[b64.py:py_compile]` — fresh VM fenced the same diff green, PR #45
   merged. Two sniper bugs were caught by the rig itself on the way:
   racing the lane log misses a warm ~3s fence window, and a naive
   `pkill -f qemu…` loop kills its own shell on iteration 1. Also
@@ -596,8 +605,8 @@ Host-loss reimage recovery remains untested (single VM).
   order; `checkFile` is single-file sugar over it. Live fire: rig
   issue #46 (JS port + node test suite) → task 23 → clone-1 →
   report #31 `settled=done pr=47 turns=9 note="session:settled;
-  fence:4[docs/TEST-SWEEP.md:unchecked;lib/b64.js:node-syntax;
-  package.json:node-parse;test/b64.test.js:node-syntax]"` — four
+fence:4[docs/TEST-SWEEP.md:unchecked;lib/b64.js:node-syntax;
+package.json:node-parse;test/b64.test.js:node-syntax]"` — four
   files, three code checks, ONE boot under KVM (~3s, not 3×15s).
   PR #47 merged; the suite itself is 9 vector classes ×
   {encode,decode,round-trip} + a statelessness test — genuine tests,
@@ -607,22 +616,24 @@ Host-loss reimage recovery remains untested (single VM).
   leg is now proven on a test-carrying repo. The task-23 conversation
   journal (clone-1.sqlite, durable entries) banks
   `{"kind":"app.tests","cmd":"npm test","kind":"npm","passed":true,
-  "output":"> test\n> node --test\n\n✔ encodeB64: empty string …"}`
+"output":"> test\n> node --test\n\n✔ encodeB64: empty string …"}`
   — detect (package.json scripts.test) → in-container run (tool-seed
   carries node 26) → journaled GateOutcome, while earlier test-less
   sessions bank `kind:"none" … no tests detected — gate pass-through`
   rows in the same table: the contrast proves the detection, not a
-  hardwired pass. A failing suite would surface via harvest (`tests
-  failed after N gate attempt(s)`) and requeue — never silent.
+  hardwired pass. This receipt tests only a passing suite. A failed
+  gate is noted by harvest, but the current lane can still report
+  `done` when a PR exists; P6 Step 4 closes that settlement gap.
   Scoped-credential injection via createHttpHooks secrets is
   DISPOSITIONED DEFERRED: fence guests are default-deny with no
   network need, and the plaintext childEnv() seam's consumer (guest
   egress) does not exist yet — revisit when a task legitimately needs
   guest network.
 
-  P2.3 legs status: queue-path fence ✓, kill/replace/resume ✓, KVM ✓,
+  P2.3 legs status: queue-path fence ✓, kill/requeue/replace ✓, KVM ✓,
   VM-per-task lease ✓, gate journal ✓, scoped credentials → deferred.
-  **P2.3 closed.**
+  **P2.3 executor axis closed.** Same-conversation recovery is P6.
+
 - **P2.4** package the runner so Docker Desktop can exercise it locally,
   but require a separate live VMSS boot, tool, loss, and cleanup receipt.
 
@@ -634,7 +645,7 @@ Host-loss reimage recovery remains untested (single VM).
     → imported → clone lane → session via the Azure seat (claude-sonnet-5.5
     BYOC lane) → branch agent/91 → **PR #92 merged-ready, 307 node --test
     pass**, docker fence `fence:4[README.md:unchecked;docs/KEYBOARD.md:
-    unchecked;script.js:node-syntax;test/keyboard.test.js:node-syntax]`,
+unchecked;script.js:node-syntax;test/keyboard.test.js:node-syntax]`,
     task settled=done (turns=9, 964 out-tok, 45.6 s).
   - **LOSS (banked 2026-11-17 06:12)**: `docker compose kill supervisor`
     mid-task (issue #93, branch agent/93 cut, session mid-flight) →
@@ -656,10 +667,11 @@ Host-loss reimage recovery remains untested (single VM).
   failed tasks (poison re-mint); handleReport double-read the body
   ("Body is disturbed or locked").
 
-**AC**: a real VMSS microVM executes a tool step during the full worker
-cycle. Kill the guest and prove the same Pi session reports the failure,
-fences the old guest, replaces it, and resumes safely. Docker Desktop
-passes the same contract where supported; label its backend separately.
+**AC (executor portion met):** a real VMSS microVM executes a tool step
+during the full worker cycle. Guest kill reports failure, requeues, and
+fences the diff in a replacement guest. Same Pi conversation resume is
+still open under P6. Docker Desktop passes the executor contract where
+supported; label its backend separately.
 
 ## P3 — federate the Azure endpoint with on premises H100 service
 
@@ -711,7 +723,7 @@ A no-split choice is a valid recorded outcome.
 - **2026-11-17 (parent/children split, live)** — worktree-per-child
   landed (fleet-worker `570a1f0`: `worker.session.scopes.ts` registry,
   `sessionTaskHost.spawn` cuts `git worktree add -b <parent>-cN
-  .children/<branch>`, depth cap 1, bash/gh/gate resolve cwd per
+.children/<branch>`, depth cap 1, bash/gh/gate resolve cwd per
   caller) and PROVED live on the VMSS rig: issue #51
   (`klh/fleet-recovery-rig`, "two INDEPENDENT additions") was claimed
   by the parent session, which did reverse.py solo, spawned a child
@@ -744,7 +756,7 @@ A no-split choice is a valid recorded outcome.
   ~4 minutes of wall time (sessions 99–167s, 14–23 turns,
   2.7K–8.9K out-tokens each): PRs #103–#110. Fences ran on every
   settle (up to fence:9 on #110 incl. `tests/backspace.test.js:
-  node-syntax`); one transient `remote rejected … commit_refs_rules`
+node-syntax`); one transient `remote rejected … commit_refs_rules`
   push was retried and landed by the lane itself (#106). Sessions ride
   the Copilot seat lane via the principal-Bearer shape (WORKER_BYOC=
   false). Evidence: supervisor board (tasks 24–31 done),
@@ -760,7 +772,7 @@ A no-split choice is a valid recorded outcome.
   (`no model passed the probe`, exit 1) and the task requeued. The
   owner PAT was proven untouched (GitHub API 200 with the PAT — it
   never rides buckle). Recovery: `POST /admin/keys {"principal":
-  "worker@azure"}` minted a NEW key (old value dead), written to
+"worker@azure"}` minted a NEW key (old value dead), written to
   /opt/buckle/secrets/buckle_key (0600), supervisor recreated. A
   ghost claim from the crash-loop window waited out the 15-min
   lease clock (sweepExpired requeue — supervisor-loss semantics),
@@ -780,12 +792,13 @@ revocation (without revoking the owner's PAT),
 and an operator recovery path. Normal developer chats remain separate
 from autonomous Fleet claims despite sharing Buckle transport.
 
-**CLOSED 2026-11-17** — simultaneous (8-way) and parent/children (PR
-#52) receipts above; guest kill + parent kill + journal resume covered
-by the P2 receipts (kill-guest ECONNRESET requeue; supervisor-loss
-lease clock → PR #94) on the same plane; stale-lease refusal unit-
-proven and deployed; duplicate-effect guards = single-attempt harvest,
-PR duplicate scan, ownership guard; run-key revocation live; operator
+**PILOT CLOSED 2026-11-17** — simultaneous (8-way) and parent/children
+(PR #52) receipts above; guest kill and supervisor-loss lease requeue
+recovered at the task level. The receipts do not prove the same Pi
+conversation resumed or that every unsafe GitHub effect is idempotent.
+Stale-lease refusal was unit-proven and deployed; PR duplicate scan and
+ownership guard are pilot defenses, not exactly-once proof. Run-key
+revocation was live; operator
 recipes written down in fleet-worker `docs/RECOVERY.md`. Developer
 chats stay separate: autonomous claims only ever touched
 `klh/fleet-recovery-rig` + the calculator fork, never an interactive
@@ -824,15 +837,220 @@ rather than create a second unreconciled Fleet work ledger.
 
 ---
 
-Dependency order: **P0 owner-pilot exit → P1 → P2 → P3 → P4 → P5**.
+Original rollout dependency order: **P0 owner-pilot exit → P1 → P2 → P3 → P4 → P5**.
 The separate org-readiness exit gates broad access, not extraction or
 the owner-worker demo. Inventory and
 federation preparation may run alongside extraction, but every Azure or
-on premises claim needs its own live exit receipt. The immediate work is
-P0 on the running Azure VMSS.
+on premises claim needs its own live exit receipt. P0's Entra/APIM pilot
+remains open; P6's worker reliability work can proceed against the
+existing pilot without treating that open identity gate as passed.
 
 Every receipt pins source commit, Buckle/worker/engine image digests,
 seed digest, model route, runner backend, host, and timestamp. Keep the
 last known-good deployment for rollback. Use the existing Fleet work
 graph and live coordination to assign implementation ownership; a DONE
 item or this plan alone does not prove a service is deployed.
+
+## P6 — one durable job lifecycle and an operator UI (planned 2026-11-17)
+
+P1–P5 record real pilot receipts. They do **not** prove that a retried
+supervisor assignment resumes the same Pi Durable conversation, that an
+unsafe external effect is reconciled exactly once, or that the current
+"background" child survives its parent's tool call and process death.
+P6 closes those gaps before treating the pilot as a reliable autonomous
+worker service. Design references are the installed
+`@earendil-works/pi-durable@1.5.0` API, upstream examples
+[`22-subagent-background`](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/22-subagent-background.ts),
+[`32-tests-after-edits`](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/32-tests-after-edits.ts),
+[`34-submit-in-commit`](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/34-submit-in-commit.ts),
+[`40-tool-waits-for-webhook`](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/40-tool-waits-for-webhook.ts),
+and the [Cloudflare wake/activity example](https://github.com/earendil-works/pi-durable-cloudflare).
+Verify APIs against the pinned package before adopting a newer upstream
+example; copying the example's React or Cloudflare host is not planned.
+
+### Separation of concerns and authoritative state
+
+| Owner                             | Authority and output                                                                                                                                                                                                 | Boundary                                                                                                                                                                                    |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fleet Suspenders                  | Global job admission, capacity, placement, writer epoch, operator cancel intent and audit.                                                                                                                           | The current `fleet-worker` supervisor is a pilot adapter. Migrate it deliberately; never run two independent authoritative schedulers for the same jobs.                                    |
+| `fleet-worker` Pi host            | One process owns each journal. The durable job document and task graph own conversation/submission identity, local phase, child ownership, gate outcome and effect receipts. Expose versioned read and command APIs. | Do not mint global Fleet work or open one journal in two processes. An external control DB and a Pi journal cannot share a transaction; reconcile with stable keys and idempotent commands. |
+| `fleet-worker` execution adapters | Assignment-scoped workspace, GitHub effects, Gondolin/Docker tool guests. Model connection and journal stay outside the guest.                                                                                       | A guest neither decides job state nor owns the sole journal. Never clean a workspace still used by a live conversation.                                                                     |
+| `fleet-buckle` and LiteLLM        | Buckle owns identity, context, traffic and usage observation; LiteLLM owns model routing.                                                                                                                            | Neither schedules workers or owns Pi task state.                                                                                                                                            |
+| `fleet-health`                    | Outside-process service and host health verdicts.                                                                                                                                                                    | A responsive service or heartbeat does not certify productive Pi work.                                                                                                                      |
+| Operator GUI                      | Separate thin client over authenticated, versioned HTTP snapshot/stream/command APIs.                                                                                                                                | No SQLite, Docker, journal or orchestration imports; no second mutable job ledger.                                                                                                          |
+
+The admission owner mints one **global job ID**. Each placement has a
+monotonically increasing **writer epoch**. The Pi journal stores that ID
+and epoch with the conversation, submission request ID, workspace and
+phase; the control plane stores the journal locator and last accepted
+receipt. Old-epoch reports and commands cannot change current state.
+The Pi task graph is live execution truth, the control assignment is
+placement truth, and a terminal receipt is historical outcome.
+Disagreement is an explicit `reconciling` state, never a guessed `done`.
+
+### Ordered implementation slices
+
+Each numbered step is a dependency boundary. Dispatch it as bounded,
+one-repository, one-behavior work items with file allowlists and tests
+per `implementation-contract.md`; do not give one agent all of P6.
+
+1. **[ ] Step 1 — remove competing paths and establish the layout**
+   (`fleet-worker`; prerequisite for later steps). Inventory
+   `worker.main.ts`'s `flow|durable`, the separately launched
+   `worker.lane.ts`, and `supervisor.main.ts`. The canonical target is
+   one per-assignment Pi `JobTask` using the existing session extension:
+   the lane entry point becomes a thin admission/host adapter, while
+   comment from pi: the inventory half is already in the lanes' queue — fleet-worker issue #1 mints exactly this map (docs/ownership-map.md, five files, target-module table, moves-with-risk list). Sequencing note: worker.durable-main.ts already trips the 400-line warn (402) — it is the first decomposition candidate the map should name; every moved file must stay law-clean (typecheck+test+check-laws) per move, thin compat entry points included.
+   the `flow` sweep and forever GitHub-scanning durable mode are
+   migration sources, not competing supervised runtimes. Inventory
+   their behavior and tests before retiring either; no silent deletion
+   or wholesale rewrite. Decompose the mixed files by responsibility
+   into small `job/` (identity,
+   durable task, receipts), `agent/` (harness, conversation, child,
+   gate), `execution/` (workspace, GitHub effects, guest tools), and
+   `adapters/supervisor/` (temporary pilot wire) modules. Keep thin
+   compatibility entry points, `worker.env.ts` as the worker env
+   boundary, and existing laws. Move no scheduler or Pi code into
+   Buckle. **Exit:** one documented start path for supervised jobs,
+   one ownership map, no duplicated scan/settle logic, unchanged pilot
+   cycle against the existing image contract, and typecheck, unit,
+   law and e2e gates green. Each physical move gets its own bounded
+   file allowlist.
+2. **[ ] Step 2 — make local recovery state safe** (`fleet-worker`;
+   after 1). Quarantine the old durable-scanner mode until its
+   `worker.durable-main.ts` error path cannot return `rows: {}` and
+   overwrite `AgentDoc`; migrate committed rows without losing their
+   conversation IDs. Close the committed-conversation/before-submit
+   gap using one journal commit for the job record and initial
+   comment from pi: same class, same step — the useTemplate leak (review #10) is module-global templateText in worker.model.ts surviving across tasks (null keeps the prior mission template; `if (!name) return` at worker.session.ts:360). Schema law cannot catch this: internal call, legal `string | null | undefined` signature, no wire boundary — P6 steps 2/5 kill the class by moving per-task state into journaled context; interim fix = null CLEARS templateText + a unit test proving task B's ask prompt does not contain task A's template. Same for the scopes Map (#7).
+   submission, or a replayable `unsubmitted` phase that stores the
+   original issue payload. Persist child/workspace scope instead of
+   relying on `worker.session.scopes.ts`'s process-local map. Reopen
+   after `harness.closed` reports failure; restore workspace, provider
+   and child scopes before `resume()`. Do not `git clean` a workspace
+   containing unfinished journal work. **Exit:** crash injection at
+   each boundary resumes the same conversation and checkout; a GitHub
+   or storage error cannot erase the issue index.
+3. **[ ] Step 3 — bind placement to one Pi job** (`fleet-worker` wire
+   first, then a separate Suspenders integration item; after 2).
+   Define a versioned assign/snapshot/cancel/receipt contract with
+   `jobId`, `epoch`, `journalId`, `conversationId`, `submissionId` and
+   idempotency keys. Admit the first request once in that conversation;
+   re-delivery finds its submission instead of making a fresh
+   comment from pi: the d3584bd stale-lease guard (bankReport refuses non-owner lane) already blocks zombie settles at the store level — KEEP it until the epoch CAS lands (defense in depth), then retire it in the same commit that ships epochs, with the refusal unit test ported to the epoch form. Do not run naked even for a day.
+   ownerless conversation. Persist assignment intent and Pi admission
+   through a recoverable outbox/reconciliation step because the two
+   stores cannot commit atomically. Compare-and-swap reports and
+   cancellation by epoch. Cancel reaches Pi `abort()` and owned
+   children and records whether cleanup completed. Migrate the pilot
+   supervisor behind this contract, then switch placement authority
+   to Suspenders without dual dispatch. **Exit:** lost claim response,
+   expired lease, stale writer, repeated cancel and lost report yield
+   one active conversation, one accepted terminal receipt and no
+   zombie settle. The existing P4 lease receipt is baseline, not this
+   proof.
+4. **[ ] Step 4 — checkpoint the job and external effects**
+   (`fleet-worker`; after 3). Define Pi task phases for workspace
+   ready, admitted, working, validating, delivering and reporting.
+   Pi commits own phase transitions; a fixed ten-minute stale mutex
+   cannot steal an active scan. Give each GitHub branch, comment, push
+   and PR action a stable job/effect key and an observed-before-retry
+   comment from pi: the FAILED-GATE-SETTLES-DONE bug (review #4) already has its fix sites located — worker.session.gate.ts:89, worker.session.guards.ts:231, worker.lane.ts:279 (PR-existence check gates the settle). This step's phase model is the durable fix: make the gate outcome a PHASE INPUT to 'reporting', not a post-hoc check; journal app.tests result (kind:passed/failed/none — detection proven in the task-23 receipt) and refuse done-settle on failed. Land the small guard first (bounded, testable now), the phase model second.
+   reconciliation query covering open, closed and merged PRs. Bank the
+   remote result before advancing. `afterRun` remains the test hook;
+   an `onYield` review task may hold the final answer until its verdict.
+   A failed gate cannot report `done` merely because a PR exists.
+   Paginate journal
+   usage and gate reads beyond the current first 200 entries. **Exit:**
+   kill after each remote effect but before its receipt; recovery
+   neither duplicates nor loses it, and failed validation cannot make
+   the job green.
+5. **[ ] Step 5 — implement foreground and background children**
+   (`fleet-worker`; after 2–4). A foreground child is owned by its
+   replay-safe tool task: find an existing child by owner task before
+   creation, use a stable request ID, wait for its outcome, and merge
+   only reviewed commits. A genuinely deferred child uses a durable
+   background anchor and reporter task, as in upstream example 22;
+   messages and report-back have stable IDs. Persist child branch and
+   worktree scope and restore it after restart. Honor `awaitResult`:
+   return `completed` only after completion; otherwise return a durable
+   handle with check/steer/cancel. **Exit:** crash during child creation,
+   execution or report-back produces one child, correct scope, correct
+   parent wait/idle behavior and one integrated result; parent abort
+   follows the chosen ownership boundary.
+6. **[ ] Step 6 — use wake as scheduling data** (`fleet-worker` host,
+   then Suspenders adapter; after 3). Use durable sleeps/signals for Pi
+   work and deduplicate webhook/assignment kicks by event ID in a
+   journal document; keep a bounded reconciliation timer for missed
+   external events. On a persistent Bun host, use Pi's timers. If the
+   host is evictable, use `onWake`/`wake()` to arm one serialized alarm
+   at the earliest sleep or active-work recovery heartbeat; arm before
+   admission/resume, reopen on storage failure, and tolerate early or
+   duplicate alarms. Outside-process host/lane health stays separate.
+   **Exit:** idle work sleeps without periodic lane probes, an admitted
+   assignment wakes promptly, and eviction, storage failure and early
+   alarms neither strand nor duplicate it. `onWake` cannot see a job
+   not yet admitted to Pi; its external assignment event must reach
+   the host first.
+7. **[ ] Step 7 — publish a faithful read model** (`fleet-worker`
+   read API and Suspenders aggregation as separate items; after 3–6).
+   Project `watchTaskGraph()`, `inspect()` blocked reasons, full
+   `onReport` metadata and conversation views into versioned job
+   snapshots and a bounded event stream. Join by stable job and
+   conversation IDs, not lane name or PR-title substring. Show
+   owner/child edges, `pending|running|sleeping|waiting|completing`,
+   wake deadline, background/abort flags and last progress. Live graph
+   nodes disappear at termination, so bank terminal receipts and
+   journal entry cursors separately. On reconnect send a snapshot then
+   ordered changes; page older transcript entries and repair gaps
+   instead of scanning a fixed first page. **Exit:** an operator can
+   distinguish claimed, process-live, transcript-active, waiting,
+   blocked and productively finished work; reconnect and worker loss
+   neither fabricate zero usage nor erase the terminal outcome.
+8. **[ ] Step 8 — build the UI from Pi's typed view structures**
+   (GUI owner in its own client surface; after 7). Amend
+   `tasks/gui-brief.md` before implementation: retain its uniform
+   layer registry, vanilla DOM, tokenized CSS, glyph+word states,
+   server-side credentials and read-mostly API boundary. Add optional
+   snapshot+subscribe semantics to a layer so live Pi changes do not
+   require high-frequency polling; retain a polling fallback for health
+   and non-streaming services. Render four reusable view templates from
+   versioned data, never bespoke wiring: **job list** (placement,
+   owner, epoch and last progress), **job detail** (Pi task/child tree,
+   waits and wake time), **conversation** (windowed transcript with
+   load-earlier/gap recovery), and **outcome** (test, PR, usage, effect
+   receipts and provenance). Pi `ConversationView`, `TaskGraph`, typed
+   documents and `ConversationTranscript` are the data structures to
+   adapt; they are not a ready-made UI framework. The
+   [Cloudflare Activity panel](https://github.com/earendil-works/pi-durable-cloudflare/blob/main/src/client/ActivityPanel.tsx)
+   is a behavior reference, not a React dependency. Every operator
+   action is a declared API command with auth, epoch, idempotency key,
+   acknowledgement and visible result; a successful click does not
+   optimistically mean `done`. **Exit:** one dead layer degrades only
+   itself; restart/reconnect preserves selection and transcript
+   continuity; the UI shows a parent, background child, blocked task,
+   sleeping retry and terminal job correctly, with keyboard and
+   screen-reader coverage.
+9. **[ ] Step 9 — integrated failure proof and rollout** (each owner
+   verifies its contract; after 1–8). Run hermetic crash tests at
+   creation, submission, child spawn, GitHub effect, gate, report and
+   cancel; include lost/duplicate wakes, closed harness and stale
+   epochs. Repeat the eight-lane VMSS recovery on a pinned _new_ image
+   against the original persistent journals and workspaces, with an
+   actual in-flight interruption, identical conversation IDs, one PR
+   comment from pi: agreed, and the existing 8-lane receipt (16 tasks, task-16 attempt-2) does NOT satisfy this step — old/new digests were identical, so cross-image journal compat is untested, and one supervisor container owning N clone lanes is a documented deviation, not the goal state. The step-9 run needs: pinned new image, original journals/workspaces (not a wiped store), a real mid-flight docker stop, and the claims split (container-replacement vs VMSS reimage vs multi-host) kept separate.
+   per issue and board/task-graph receipts. Keep container replacement,
+   VMSS reimage/host loss and multi-host failover as separate claims.
+   Record source SHA, Pi package/image digests, journal schema and
+   migration, runner backend, timestamps and rollback. Deploy one
+   placement authority at a time; retain the old image/journal reader
+   until migration and rollback are proven. **Exit:** API and UI show
+   the same terminal outcomes after crash and restart, with no
+   duplicate unsafe effect or lost child.
+
+Step 1 lands before the new behavior slices. Step 2's data-loss repair
+is the first executable safety fix within that structure. Steps 7 and
+8 consume versioned contracts and can be developed separately after
+Steps 3–6 provide real data. Do not mark P6 done on a green unit suite
+or a queue-level PR receipt; require Step 9's crash and operator-view
+evidence.
