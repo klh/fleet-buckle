@@ -14,6 +14,7 @@ import {
   createLawsCtx,
   type LawsCtx,
 } from "./buckle.laws.shapes.ts";
+import { checkBoundaryEscape, checkLegacyRatchet } from "./buckle.laws.boundary.ts";
 
 // 2f. no-try-catch: the ONLY sanctioned catch boundary in src/ is
 //     fault.ts (classify, never swallow) and settings.ts (readToken/
@@ -90,6 +91,8 @@ const checks = [
   checkTimeoutKnobs,
   checkYaml,
   checkLineCaps,
+  checkBoundaryEscape,
+  checkLegacyRatchet,
 ];
 
 const ctx = createLawsCtx();
