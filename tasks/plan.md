@@ -261,7 +261,13 @@ do not add a Buckle model pin or a hardcoded catalog row.
   APIM front door (P0.2, client ID still awaited).
 - **P0.2d pilot shortcut (owner approved)** use a small standalone
   Node/Bun script under `test/manual/entra-login/` while the final auth
-  tooling is decided. Give it a registered public-client app ID, tenant,
+  tooling is decided. **STATUS: package written (`@fleet/buckle-entra-login`
+  0.1.0, 8 unit tests green, own tsconfig/deps, excluded from the root
+  project; live owner pilot pending the Entra client ID).** Usage:
+  `bun test/manual/entra-login/src/entra-login.main.ts <config.json> [claude
+  args…]` — config is a 0600 machine file shaped like the committed
+  `entra-login.example.json` (placeholders only); the PAT lives in its own
+  0600 file. Give it a registered public-client app ID, tenant,
   API scope, gateway URL and a local PAT file path through runtime config.
   Use MSAL's browser authorization-code flow to obtain an API access
   token after tenant-required MFA; do not use a Graph token or ID token.

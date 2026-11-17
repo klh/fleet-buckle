@@ -9,7 +9,13 @@
       // src/agents is the staged agent-job wave (wiring lands with the
       // server lift) — its files are entries until their consumer exists
       "entry": ["tools/src/*.ts", "test/**/*.ts", "src/agents/*.ts"],
-      "project": ["src/**/*.ts", "deploy/front/*.ts", "tools/**/*.ts", "test/**/*.ts"],
+      "project": ["src/**/*.ts", "deploy/front/*.ts", "tools/**/*.ts"],
+    },
+    // P0.2d owner-pilot login helper — own package, own install, manual
+    // only (never in the Buckle image); not part of the gateway project.
+    "test/manual/entra-login": {
+      "entry": ["src/*.ts"],
+      "project": ["src/**/*.ts"],
     },
   },
   "ignoreBinaries": ["qlty"],

@@ -24,7 +24,7 @@
   ],
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p deploy/gui",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p deploy/gui && tsc --noEmit -p test/manual/entra-login",
     "test:smoke": "bun --bun playwright test --project=smoke",
     "test:e2e": "bun --bun playwright test --project=e2e",
     "test:federation": "bun --bun playwright test --project=federation",

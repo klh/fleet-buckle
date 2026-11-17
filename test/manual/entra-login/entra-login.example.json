@@ -1,0 +1,10 @@
+{
+  "clientId": "00000000-0000-4000-8000-000000000000",
+  "tenantId": "00000000-0000-4000-8000-000000000000",
+  "scope": "api://your-apim-api/access_as_user",
+  "gatewayUrl": "https://your-apim-gateway.example.com",
+  "lane": "b3-pilot",
+  "mode": "url-pat",
+  "patFile": "/absolute/path/to/copilot.pat",
+  "claudeBin": "claude"
+}

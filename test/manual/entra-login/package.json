@@ -1,0 +1,14 @@
+{
+  "name": "@fleet/buckle-entra-login",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "P0.2d owner-pilot login helper: MSAL browser sign-in, APIM preflight, launch Claude Code on the Buckle wire. Manual tool — never shipped in the Buckle image.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test ./src/"
+  },
+  "dependencies": {
+    "@azure/msal-node": "^2.2.0"
+  }
+}
