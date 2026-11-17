@@ -539,8 +539,29 @@ Host-loss reimage recovery remains untested (single VM).
   the host docker socket). Remaining P2.3 legs: journal outcomes (the
   gate journal records only the repo test command — kind "none"
   pass-through on the test-less rig), VM-per-task lease (15s/check
-  cold-boot price), kill-the-guest fence/replace proof, scoped-credential
-  injection via createHttpHooks secrets.
+  cold-boot price), scoped-credential injection via createHttpHooks
+  secrets.
+
+  **Kill-the-guest receipt (2026-11-17, fleet-worker 298d2aa):** the
+  P2 AC "kill the guest, prove the same session fails loud, replaces,
+  and resumes safely" is PROVEN LIVE. Rig issue #44 (b64.py) → task 22
+  → clone-5, with a host-side sniper loop (`pkill -f
+  "[q]emu-system-x86_64"` every 1.5s — the bracket class dodges the
+  pkill self-match trap) killing the toolchain guest mid-fence.
+  Reports #28/#29: `settled=error pr=null turns=0 note="Error: error
+  protocol_error: virtio bridge error: read ECONNRESET (qemu:
+  qemu-system-x86_64: terminating on signal 15)"` — the guest death is
+  loud, names SIGTERM, banks no PR, and requeues. Attempt 1 had
+  already completed the session and raised PR #45 (turns=0 on retries
+  = the durable journal replaying, not redoing). Sniper stopped →
+  attempt 3: report #30 `settled=done pr=45 turns=14 note=…fence:1
+  [b64.py:py_compile]` — fresh VM fenced the same diff green, PR #45
+  merged. Two sniper bugs were caught by the rig itself on the way:
+  racing the lane log misses a warm ~3s fence window, and a naive
+  `pkill -f qemu…` loop kills its own shell on iteration 1. Also
+  observed: fences currently run TCG (`-accel tcg` in the host ps
+  catch, pid-level evidence) because worker-gondolin does not map
+  /dev/kvm — ~15s/check vs ~3s with KVM (perf leg, not correctness).
 - **P2.4** package the runner so Docker Desktop can exercise it locally,
   but require a separate live VMSS boot, tool, loss, and cleanup receipt.
 
