@@ -17,7 +17,7 @@
 - [ ] ChatGPT review fixes (13 findings, 2026-11-17) — MINTED & MOSTLY LANDED: #1 catch-all auth and #2 Buckle SSE landed in code + live-path verified (anon→401 both engine and lane paths; SSE through lane 200 text/event-stream with real seat deltas). #13 litellm digest pinning landed as fleet-buckle PR #2 (1393027, law buckle.laws.images.ts; index digest sha256:bd089afd…). Worker-plane findings minted as klh/fleet-worker #28–#35: LANDED via squash merges #29→PR#37, #30→PR#36, #32→PR#42(+ported supervisor pagination hunk), #33→PR#39, #34→PR#38; fleet-worker main ebb6109 (165 tests) rolled to VMSS. OPEN: #28 auth needs wiring (PR#40 bounced — module good, never wired; RE-MINTED as ready task 2026-11-17 triage), #31 red gate settles-done (CLOSED done 2026-11-17: landed twice, tasks 75/92 done), #35 Last-Event-ID resume (RE-MINTED task 93; root cause = seat stream cuts — new issue #136 for the bounded-reconnect fix). Triage 2026-11-17 evening: closed as DONE with store evidence — #5 (Responses dialect live in buckle f6ff9da), #68, #75 (POST /close), #76 (POST /retry-failed), #78 (terminal 409 guard in 5bdd486), #91, #97, #103; re-minted failed-but-real #95/#96 as ready tasks. Buckle-side #3 GUI parked design-first (see GUI row); #12 sidecar dispositioned docs/target-architecture.md §5 row 11.
 - [x] P6 first slices — MINTED (klh/fleet-worker #22/#23/#24): ALL LANDED — PR #25 (GET /watch typed SSE) / #26 (exactly-once effects) / #27 (durable journal resume) + wire-up 3e7da45. Follow-up slices: task_graph+conversation event kinds LANDED (PR #38); Last-Event-ID resume = open issue #35; watch auth folded into #28; GUI client parked design-first. Owner target directive + journal-proof gate recorded at the P6 section head; new mints #43 (probe must exercise BYOC lane leg), #44 (journal persistence + replay proof gate), #45 (job-parent-in-guest contract) — PRs #46/#47/#48 RAISED BY LANES AND MERGED (all closed 2026-11-17; 0 open PRs at triage). P6 gate evidence round re-minted as klh/fleet-worker #134 (kill/recreate receipts).
 - [x] Backlog saturation mint 2026-11-17 evening — queue had drained (149 tasks: 117 done/30 failed/2 cancelled; lanes exited "queue drained"). Minted: historical supervisor-mind wave #129–#132 (now superseded by P6 correction: Pi root agent owns workflow; do not implement the former alarm/shatter/mind design), P6 gate receipts #134, Copilot CLI smoke #135, seat-stream reconnect #136; re-minted #95/#96/#28/#35 as ready tasks. Parked rows (Entra client ID, krun, P3, GUI, zram/settings-pin/Mac-upstream, t-shirt) intentionally NOT minted.
-- [ ] GUI — PARKED design-first (owner 2026-11-17): one-page design LANDED tasks/fleet-console-design.md (4c2affd) — read-only v1, no new server, one /api/fleet/board proxy onto supervisor GET /board; implementation slices mint ONLY after owner sign-off; premature task 84 cancelled; issue #3 carries the pointer.
+- [ ] GUI — Pi runner workbench redesign is active in fleet-buckle-gui; its plan.md refactor section supersedes the former read-only one-page brief and issue #3 design gate. Implement through the separate GUI repo after typed Pi read/command contracts are available.
 - [ ] zram on VMSS (m02251) · tracked-settings pin (m02917) · azure-buckle-as-Mac-upstream (m00957)
 - [ ] t-shirt store templatization — owner-queued, awaiting brief
 - [ ] P6 — one Pi Durable runner lifecycle, native wake/task graph, and a thin operator UI; ordered plan at the end of this file
@@ -1567,7 +1567,16 @@ recovery path, not just a reachable `/metrics` endpoint.
   explicit retry/supersede command instead of deleting rows or making
   every failed/done issue remint on each sweep.
 
-### Ordered implementation slices
+### Historical P6 migration slices — rebase before execution
+
+The numbered Steps 1–7 below were drafted for a one-job-per-runner
+model. They remain as issue-specific migration evidence and failure
+cases, **not executable target architecture**. The binding sequence is
+the Pi root-runner correction and refactor inventory at the end of P6.
+Any reference below to a global work ledger, fixed job phases, an
+external workflow scheduler or a fresh parent per assignment must be
+recast as a Pi task inside an enduring root runner before a work item
+is dispatched. Step 8's GUI workbench contract is current.
 
 Before opening an implementation PR, write a short slice design in its
 work item: current and target modules, one state owner for each field,
@@ -1932,27 +1941,22 @@ Long waits on external agents stay in explicit Pi tasks and handles.
 Measure token use, p95 latency and journal growth against direct typed
 tool calls on matched workloads. **Exit:** a reproducible positive
 receipt with a narrow allowed use, or a recorded negative result that
-keeps direct tools. Do not make all job work depend on code mode.
+keeps direct tools. Do not make the runner workflow depend on code mode.
 
-8. **[ ] Step 8 — build the UI from Pi's typed view structures**
-   (GUI owner in its own client surface; after 7, 7A and 7B). Start with an API and
-   GUI design review: task flows, data ownership, versioned schemas,
-   sample payloads, SSE reconnect/error states, permission matrix,
-   responsive layouts and accessibility. Approve those artifacts
-   before component or route implementation. Amend
-   `tasks/gui-brief.md` before implementation: retain its uniform
-   layer registry, vanilla DOM, tokenized CSS, glyph+word states,
-   server-side credentials and read-mostly API boundary. Add optional
-   snapshot+subscribe semantics to a layer so live Pi changes do not
-   require high-frequency polling; retain a polling fallback for health
-   and non-streaming services. Render four reusable view templates from
-   versioned data, never bespoke wiring: **job list** (placement,
-   owner, epoch and last progress), **job detail** (Pi task/child tree,
-   waits and wake time), **conversation** (windowed transcript with
-   load-earlier/gap recovery), and **outcome** (test, PR, usage, effect
-   receipts and provenance). Pi `ConversationView`, `TaskGraph`, typed
-   documents and `ConversationTranscript` are the data structures to
-   adapt; they are not a ready-made UI framework. The
+8. **[ ] Step 8 — build the Pi runner workbench in fleet-buckle-gui**
+   (GUI owner in its separate repo; after 7, 7A and 7B). The GUI plan's
+   "Refactor — Pi Durable runner workbench and design" section is the
+   screen and interaction contract. Use its Lit components, central
+   mediator, Zod projections, Sass tokens and native HTML design source.
+   Keep one scoped snapshot+SSE stream with bounded replay, gap repair
+   and a health fallback. The root runner is the durable UI object;
+   show its charter/image provenance, journal and writer epoch,
+   conversations, native task graph, waits/wakes, child ownership,
+   effects, usage and Lens links. The cross-runner Tasks & waits page is
+   a read projection of Pi, never an external job queue. Use shared
+   tables, feeds, status and error components instead of bespoke rows.
+   Pi `ConversationView`, `TaskGraph`, typed documents and
+   `ConversationTranscript` supply the data to adapt, not a UI kit. The
    [Cloudflare Activity panel](https://github.com/earendil-works/pi-durable-cloudflare/blob/main/src/client/ActivityPanel.tsx)
    is a behavior reference, not a React dependency. Every operator
    action is a declared API command with auth, epoch, idempotency key,
@@ -1960,7 +1964,7 @@ keeps direct tools. Do not make all job work depend on code mode.
    optimistically mean `done`. **Exit:** one dead layer degrades only
    itself; restart/reconnect preserves selection and transcript
    continuity; the UI shows a parent, background child, blocked task,
-   sleeping retry and terminal job correctly, with keyboard and
+   sleeping retry and terminal Pi task correctly, with keyboard and
    screen-reader coverage.
 9. **[ ] Step 9 — integrated failure proof and rollout** (each owner
    verifies its contract; after 1–8 and Steps 7B–7C). Run hermetic crash tests at
@@ -2077,3 +2081,28 @@ tests and rollout gates.
   digest before deleting or reusing either. The final runner image owns
   Pi Durable, extensions and the journal mount; seed digest/policy is
   an admission check, not another agent supervisor.
+
+### Binding P6 refactor order and GUI contract
+
+1. Audit current Buckle, Worker, seeds, image digests and live API
+   consumers. Record keep/move/retire decisions and a compatibility map.
+2. Define runner inception: reviewed image + charter revision + resolved
+   variables + instance settings → stable UUID, Pi root and journal.
+   Treat GitHub issue handling as one optional charter/capability.
+3. Move workflow decisions, recurring waits, child graph and state into
+   Pi root conversations, tasks, extensions and documents. Keep only
+   authorized placement/fencing and source-event ingress outside Pi.
+4. Migrate current supervisor tasks, polling and lane spawning without
+   dual authority. Preserve external effect idempotency and rollback.
+5. Prove persistence, one writer, wake and crash recovery across guest
+   replacement; then qualify Pi release upgrades for signal/park APIs.
+6. Publish typed Pi snapshots, transcript and task-graph watches,
+   usage/effect receipts and acknowledged commands to the separate
+   GUI API. The GUI's `plan.md` refactor section governs its design:
+   root-first Runners, full-page workbench, Tasks & waits projection,
+   Charters editor, Home alerts and Gateway/Lens links. The GUI owns
+   its own filtering, SSE fan-out and page state, never Pi workflow.
+7. Run hermetic end-to-end and failure-injection gates before rollout:
+   repeated source events, concurrent children, replay after effects,
+   background subtree stop, spend cap, writer loss, snapshot gaps and
+   100-runner UI load. Record image/package digests and rollback.
