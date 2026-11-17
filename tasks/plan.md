@@ -14,7 +14,7 @@
 - [ ] P3 — H100 federation — parked (m04268)
 - [x] P4 pilot receipts — 8-way concurrent (PRs #103–#110), parent/child split (PR #52), run-key revocation (PR #50), stale-lease refusal (d3584bd), docs/RECOVERY.md; P6 tracks stronger durability claims
 - [x] P5 first slice — matched trials solo/concurrent/split run + docs/TRIALS.md (full BLAM deliberately not ported — owner directive)
-- [ ] ChatGPT review fixes (13 findings, 2026-11-17) — IN PROGRESS: #1 catch-all auth gated (code+tests), #2–#13 queued
+- [ ] ChatGPT review fixes (13 findings, 2026-11-17) — IN PROGRESS: #1 catch-all auth and #2 Buckle SSE landed in code; verify live paths and #3–#13 separately
 - [ ] GUI — ChatGPT draft awaited against tasks/gui-brief.md (uniform layer-registry face)
 - [ ] zram on VMSS (m02251) · tracked-settings pin (m02917) · azure-buckle-as-Mac-upstream (m00957)
 - [ ] t-shirt store templatization — owner-queued, awaiting brief
@@ -61,7 +61,12 @@ This roadmap does not authorize one lane to build all of P0–P5.
    then deploy that exact image digest and retain the previous digest.
    Never deploy a moving `latest` tag or auto-upgrade outside this check.
    LiteLLM owns provider parameter translation; record concrete failures.
-   comment from pi: the rule needs teeth — compose.azure.yaml still pins `litellm:latest` (review #13). Propose: add a check-laws rule refusing floating tags (`:latest`, bare names) in deploy/ compose files, and pin the proven digest (1.103.0, live on the VMSS) in the same landing. Retained previous digest = the docker-save fallback path already proven twice.
+   Enforcement gap: `deploy/compose.azure.yaml` still uses
+   `ghcr.io/berriai/litellm:latest` (review #13). Add a check-laws rule
+   rejecting floating image references in deploy Compose files and pin
+   the qualified image by immutable `@sha256:` digest in the same change.
+   The reported live version `1.103.0` is not itself a digest; resolve
+   and record the running image's actual digest before pinning it.
 5. **Later, not now**: launching workers from GUI / CLI / MCP-skill, and a
    job-placement ledger in Suspenders remembering what runs where.
    Hardcoded startup file until then; Buckle's request/usage ledger is
@@ -86,7 +91,12 @@ This roadmap does not authorize one lane to build all of P0–P5.
    on fleet itself** (fleet-buckle + fleet-worker once extracted): needs
    one new example.md variant for working on the fleet repos — the
    repoagent example pattern pointed at our own repos.
-   comment from pi: LIVE as of 2026-11-17 09:26 — VMSS supervisor repointed to klh/fleet-worker, MAX_LANES=8, clones wiped, clean boot. Issue #1 (docs/ownership-map.md inventory = P6 step 1a) already minted; first wave is deliberately docs + bounded fixes, PRs merge owner-side only. Next waves carry the step-1 decomposition per the map the lanes produce. The example.md variant (children on fleet repos) stays queued until the loop is proven on flat tasks — one pivot at a time.
+   Pi's 2026-11-17 session reports a VMSS supervisor repointed to
+   `klh/fleet-worker` with `MAX_LANES=8` after wiping clones. This is a
+   reported pilot state, not a verified recovery receipt: a clean boot
+   cannot prove continuity of the original journals or workspaces.
+   Fleet-worker issue #1 starts the ownership inventory; the example.md
+   variant with children remains queued until flat-task operation works.
 
 Architecture (owner ruling, 2026-11-16; Azure VMSS is the live target):
 
@@ -888,7 +898,191 @@ The Pi task graph is live execution truth, the control assignment is
 placement truth, and a terminal receipt is historical outcome.
 Disagreement is an explicit `reconciling` state, never a guessed `done`.
 
+### Streaming contracts and evidence
+
+There are two different streams. Model requests use the provider's
+Anthropic/OpenAI SSE dialect through APIM, Buckle and LiteLLM to Pi AI;
+preserve event order, tool deltas, terminal markers and in-band errors.
+Pi AI emits typed `start`, delta, `done` and `error` events from the
+provider stream; its `partial` object is mutable live state, not an
+event-time snapshot. Consume deltas immediately and never retain
+`partial` by reference as a historical event. A transport EOF without
+the dialect's successful terminal is an interrupted generation.
+The operator feed is a worker-owned, authenticated SSE projection of Pi
+Durable conversation `watch()` and `watchTaskGraph()` plus persisted job
+receipts. Pi watches are local state subscriptions, **not** an HTTP SSE
+server or a replay log. The upstream Cloudflare example uses WebSockets;
+Fleet's read-only browser feed may use SSE without copying that host.
+
+For the operator feed, expose a versioned snapshot and a same-origin SSE
+endpoint with typed `snapshot`, `job`, `task_graph`, `conversation`,
+`receipt`, `gap` and `stream_end` events. Each event carries schema
+version, job ID, writer epoch and a monotonically ordered cursor scoped
+to the journal/read-model generation. Authenticate before subscribing;
+authorize every job on fan-out. Use same-origin session credentials with
+`EventSource`, or an authorized `fetch` stream if bearer headers are
+required; never place credentials in the SSE URL. Attach the Pi watch
+before taking the snapshot, then publish buffered changes after its
+cursor to avoid a
+snapshot/subscribe race. A bounded per-client queue must coalesce
+replaceable views; on overflow or journal generation change emit `gap`
+and force a fresh snapshot. `Last-Event-ID` may resume only within a
+retained, matching-generation ring; otherwise return a snapshot and
+page missing transcript entries with Pi's `ConversationTranscript` /
+`watch(..., transcript.resume)` semantics. Pi watch callbacks can fold
+commits and replace a large pending diff with a full view, so do not
+promise one UI event per internal commit. Stop watches on disconnect,
+abort and harness close; reconnect to the reopened harness. Keep HTTP
+commands and health as ordinary request/response APIs. SSE comment
+heartbeats maintain transport only; they never count as model progress,
+productive worker activity or a lease renewal.
+
+Fleet's Buckle code already adds final-egress SSE heartbeats and checks
+protocol terminals, but prior long-quiet/APIM acceptance was unproved.
+Verify every deployed hop with a representative quiet stream, tool-use
+stream, in-band failure, client disconnect and total-deadline case.
+Record first byte, quiet interval, last model event, terminal receipt
+and cancellation at APIM, Azure Buckle, LiteLLM and Pi AI. A heartbeat
+on the last hop cannot repair an earlier upstream idle timeout; configure
+and test each hop's buffering and limits separately. The operator feed
+gets its own reconnect/overflow/crash tests and must show a truthful
+`reconciling` or `interrupted` state until the snapshot catches up.
+
+### LiteLLM capability and telemetry adoption
+
+LiteLLM can select deployments within a model group, retry, cool down
+failed deployments and fall back to another allowed group. It also
+offers virtual keys, user/team roles, model access, budgets and rate
+limits, spend logs, Prometheus metrics, tracing, caching and guardrails.
+Qualify these against the pinned deployed version and both BYOC and
+engine-held paths; an available feature is not necessarily enabled.
+References: [router](https://docs.litellm.ai/docs/router/learn/strategies),
+[reliability](https://docs.litellm.ai/docs/router/learn/reliability),
+[access](https://docs.litellm.ai/docs/proxy/access_management/overview),
+[budgets](https://docs.litellm.ai/docs/proxy/users),
+[metrics](https://docs.litellm.ai/docs/proxy/prometheus), and
+[spend logs](https://docs.litellm.ai/docs/proxy/cost_tracking).
+
+The checked-in Azure Compose file starts one LiteLLM engine container.
+Its config has one deployment row per Copilot model name, with no
+second backend in any model group; it declares no `router_settings`, Prometheus callback,
+database, cache or guardrails. Compose declares no `DATABASE_URL` or
+dedicated metrics port. Buckle's engine collector can pull `/metrics`
+and aggregate spend only when those engine faces are configured and
+reachable; it keeps at most 500 raw series, so it is an overview rather
+than a per-job evidence store. The shared Buckle default points
+`engine.url` at container-local `127.0.0.1:4000`; the Azure override
+does not change it to `engine:4000`. Verify the resolved live over-layer
+before asserting that this engine leg and telemetry work. The default
+`keys.engine` also points at `/etc/buckle/keys/engine.key`, but Azure
+Compose does not mount that path and the Azure mint step only creates
+principal/session keys in `/state/keys`. Reconcile the engine master-key
+contract without copying the Copilot PAT into Buckle, and prove an
+authenticated engine call through the resolved URL.
+
+Buckle's streamed outcome banks zero tokens in its live tracker because
+it does not buffer SSE. That zero means **unmeasured at this surface**,
+not a zero-token call. The older Fleet Buckle package has a separate
+per-request usage ledger; this extracted Azure Buckle does not expose
+the same ledger by implication.
+
+Adopt features in dependency order, with one policy owner per decision:
+
+1. **Evidence and attribution.** Prove the live image digest, resolved
+   engine URL, LiteLLM version, metrics and spend endpoints, and whether
+   a database and callback are enabled. Add a tested correlation seam
+   from Pi job ID, epoch, conversation, submission and model request to
+   W3C `traceparent` and Buckle/LiteLLM request IDs. Store the mapping
+   in a durable receipt or versioned read model, never as high-cardinality
+   Prometheus labels. Keep Pi outcome, Buckle traffic decision and
+   LiteLLM deployment attempts as distinct evidence with source and
+   missing-data markers. A retry or federated hop is not a new user
+   request. Verify a call and its retry join one Pi submission.
+2. **Metrics.** Enable and privately scrape LiteLLM's Prometheus
+   callback only after checking the pinned image's metric set. Use
+   request/provider latency, streaming time to first token,
+   in-flight/queue time, deployment failures, cooldowns, fallbacks and
+   token counts to diagnose stalls. Scrape from a trusted collector;
+   Buckle's 500-series overview is not the full histogram feed. Bound
+   labels and retain no prompt/response content in metrics. For per-job
+   spend, qualify paginated spend logs and the price map with a
+   database; `$0` without a known price is unknown spend. Throughput
+   does not prove productive Pi work.
+3. **Model routing.** The worker's `.prefer`/`must` probe chooses an
+   entitled model group for a job. LiteLLM may pick among equivalent
+   deployments in that group. Test least-busy, usage-aware and
+   latency-aware choices against matched traffic. Put retries and
+   cooldowns in one layer, with each attempt visible. Cross-group
+   fallback must respect `must`/`prefer`, grants, context size,
+   tool/SSE support, quality, price and BYOC credential boundaries.
+   After content reaches the client, continuation needs a separate
+   semantic test and a visible served-model receipt. LiteLLM never
+   reassigns a Pi job or owns its journal. Explicitly set and test the
+   retry policy: LiteLLM's documented default is two same-group retries,
+   while the worker currently configures Pi with `maxRetries: 3`.
+   Without a budget across layers, one failed generation can multiply
+   upstream attempts. The BYOC pass-through route is a direct endpoint;
+   do not assume router selection or cross-group fallback applies there.
+4. **Access consolidation.** Compare Buckle principal scopes and
+   APIM/Entra identity with LiteLLM virtual keys, teams, roles, access
+   groups, JWT mapping and audit logs. Choose one authoritative model
+   access policy and test owner-engine and human BYOC paths, including
+   revocation and denial. A second independent grant must not widen
+   access silently. Virtual-key spend and database-backed budgets need
+   Postgres and an identity mapping. Decide which layer owns each rate
+   limit and budget, including fail behavior, before replacing Buckle
+   admission controls.
+5. **Optional features.** Exact-response and provider prompt caching
+   are different; semantic response caching needs a dedicated quality
+   study before agent use. LiteLLM guardrails do not replace Pi tool
+   permission, GitHub effect or test gates. OTel can expose model
+   timing and fallback spans; qualify content capture and identity
+   redaction before export. Each feature gets a bounded issue,
+   matched on/off test, rollback and source-of-truth decision.
+
+### 2026-11-17 work audit and merge gates
+
+- Fleet-worker issue #1 is labeled docs only. Open PR #2 now contains
+  only `docs/ownership-map.md`. Its proposed target table moves global
+  mint, claim, lease and requeue policy into worker `job/`, conflicting
+  with Suspenders target ownership above. Label those as current pilot
+  policy and map their eventual Suspenders move before accepting PR #2.
+- Open PR #6 addresses issue #3 (`useTemplate`) and currently contains
+  the session fix, regression test and test notes. PRs #2 and #6 remain
+  open; neither is a completed P6 step. Their earlier shared preference
+  test edit was removed from both PRs before this audit.
+- PR #6's `Closes #2` is wrong: #2 is a PR, not the template issue.
+  Issue #3 should close #3, issue #4 should close #4, and issue #5
+  should close #5. Correct issue bodies and PR closure references before
+  relying on automatic closure or reporting those fixes done.
+- The Pi session exported with one tool call still in flight. Its
+  `$0.000` cost field lacks usable pricing evidence despite substantial
+  token usage; do not use it as a verified spend figure. The reported
+  VMSS repoint and clean boot are not Step 9 recovery evidence.
+
 ### Ordered implementation slices
+
+Before opening an implementation PR, write a short slice design in its
+work item: current and target modules, one state owner for each field,
+public input/output schemas, journal and external-effect boundaries,
+failure/restart behavior, migration and rollback, exact file allowlist,
+and the test that will fail before the change. Update the ownership map
+when the design changes. A slice may move one responsibility across a
+boundary, then leave a thin compatibility entry point; it must not add
+a parallel scheduler, job ledger, event bus or mutable module-global
+session state. Keep transport adapters (`api/` or `adapters/`), durable
+job logic (`job/`), Pi conversation logic (`agent/`), and side effects
+(`execution/`) in their declared homes. Schemas and event names belong
+to the API contract, not scattered route-local hand casts.
+
+Review each PR against that design before merge: every changed file has
+an allowed reason, the original behavior has a removal or migration
+path, no second owner has appeared, crash and replay tests exercise the
+state boundary, and existing typecheck, tests and law checks pass.
+Unrelated failures get their own scoped item. Do not interpret a passing
+unit suite, a PR number, or a clean container boot as proof of durable
+recovery. Freeze API and journal versions for a slice and record the
+compatibility decision before starting the next dependent slice.
 
 Each numbered step is a dependency boundary. Dispatch it as bounded,
 one-repository, one-behavior work items with file allowlists and tests
@@ -900,7 +1094,6 @@ per `implementation-contract.md`; do not give one agent all of P6.
    `worker.lane.ts`, and `supervisor.main.ts`. The canonical target is
    one per-assignment Pi `JobTask` using the existing session extension:
    the lane entry point becomes a thin admission/host adapter, while
-   comment from pi: the inventory half is already in the lanes' queue — fleet-worker issue #1 mints exactly this map (docs/ownership-map.md, five files, target-module table, moves-with-risk list). Sequencing note: worker.durable-main.ts already trips the 400-line warn (402) — it is the first decomposition candidate the map should name; every moved file must stay law-clean (typecheck+test+check-laws) per move, thin compat entry points included.
    the `flow` sweep and forever GitHub-scanning durable mode are
    migration sources, not competing supervised runtimes. Inventory
    their behavior and tests before retiring either; no silent deletion
@@ -915,14 +1108,18 @@ per `implementation-contract.md`; do not give one agent all of P6.
    one ownership map, no duplicated scan/settle logic, unchanged pilot
    cycle against the existing image contract, and typecheck, unit,
    law and e2e gates green. Each physical move gets its own bounded
-   file allowlist.
+   file allowlist. Fleet-worker issue #1 requests the ownership map;
+   review its target-module table against this separation before accepting
+   PR #2. The current pilot may contain minting and leases in worker
+   `supervisor/`, but those remain Suspenders target responsibilities.
+   `worker.durable-main.ts` is already above the 400-line warning and is
+   the first decomposition candidate. Keep each move law-clean.
 2. **[ ] Step 2 — make local recovery state safe** (`fleet-worker`;
    after 1). Quarantine the old durable-scanner mode until its
    `worker.durable-main.ts` error path cannot return `rows: {}` and
    overwrite `AgentDoc`; migrate committed rows without losing their
    conversation IDs. Close the committed-conversation/before-submit
    gap using one journal commit for the job record and initial
-   comment from pi: same class, same step — the useTemplate leak (review #10) is module-global templateText in worker.model.ts surviving across tasks (null keeps the prior mission template; `if (!name) return` at worker.session.ts:360). Schema law cannot catch this: internal call, legal `string | null | undefined` signature, no wire boundary — P6 steps 2/5 kill the class by moving per-task state into journaled context; interim fix = null CLEARS templateText + a unit test proving task B's ask prompt does not contain task A's template. Same for the scopes Map (#7).
    submission, or a replayable `unsubmitted` phase that stores the
    original issue payload. Persist child/workspace scope instead of
    relying on `worker.session.scopes.ts`'s process-local map. Reopen
@@ -930,14 +1127,17 @@ per `implementation-contract.md`; do not give one agent all of P6.
    and child scopes before `resume()`. Do not `git clean` a workspace
    containing unfinished journal work. **Exit:** crash injection at
    each boundary resumes the same conversation and checkout; a GitHub
-   or storage error cannot erase the issue index.
+   or storage error cannot erase the issue index. The module-global
+   template in `worker.model.ts` leaks across tasks when `useTemplate`
+   receives null; PR #6 proposes the bounded reset and regression test
+   but remains unmerged. Land that fix, then move task-local template and
+   child-scope state into the durable job context in this step.
 3. **[ ] Step 3 — bind placement to one Pi job** (`fleet-worker` wire
    first, then a separate Suspenders integration item; after 2).
    Define a versioned assign/snapshot/cancel/receipt contract with
    `jobId`, `epoch`, `journalId`, `conversationId`, `submissionId` and
    idempotency keys. Admit the first request once in that conversation;
    re-delivery finds its submission instead of making a fresh
-   comment from pi: the d3584bd stale-lease guard (bankReport refuses non-owner lane) already blocks zombie settles at the store level — KEEP it until the epoch CAS lands (defense in depth), then retire it in the same commit that ships epochs, with the refusal unit test ported to the epoch form. Do not run naked even for a day.
    ownerless conversation. Persist assignment intent and Pi admission
    through a recoverable outbox/reconciliation step because the two
    stores cannot commit atomically. Compare-and-swap reports and
@@ -948,14 +1148,16 @@ per `implementation-contract.md`; do not give one agent all of P6.
    expired lease, stale writer, repeated cancel and lost report yield
    one active conversation, one accepted terminal receipt and no
    zombie settle. The existing P4 lease receipt is baseline, not this
-   proof.
+   proof. Keep the existing lane-owner check in `bankReport` while adding
+   epoch compare-and-swap. Retain both checks afterward: the epoch
+   fences the placement generation and the lane check fences the holder.
+   Port the stale-report refusal test and add an old-epoch case.
 4. **[ ] Step 4 — checkpoint the job and external effects**
    (`fleet-worker`; after 3). Define Pi task phases for workspace
    ready, admitted, working, validating, delivering and reporting.
    Pi commits own phase transitions; a fixed ten-minute stale mutex
    cannot steal an active scan. Give each GitHub branch, comment, push
    and PR action a stable job/effect key and an observed-before-retry
-   comment from pi: the FAILED-GATE-SETTLES-DONE bug (review #4) already has its fix sites located — worker.session.gate.ts:89, worker.session.guards.ts:231, worker.lane.ts:279 (PR-existence check gates the settle). This step's phase model is the durable fix: make the gate outcome a PHASE INPUT to 'reporting', not a post-hoc check; journal app.tests result (kind:passed/failed/none — detection proven in the task-23 receipt) and refuse done-settle on failed. Land the small guard first (bounded, testable now), the phase model second.
    reconciliation query covering open, closed and merged PRs. Bank the
    remote result before advancing. `afterRun` remains the test hook;
    an `onYield` review task may hold the final answer until its verdict.
@@ -964,7 +1166,12 @@ per `implementation-contract.md`; do not give one agent all of P6.
    usage and gate reads beyond the current first 200 entries. **Exit:**
    kill after each remote effect but before its receipt; recovery
    neither duplicates nor loses it, and failed validation cannot make
-   the job green.
+   the job green. First land a bounded guard at
+   `worker.session.gate.ts`, `worker.session.guards.ts` and
+   `worker.lane.ts`: the journaled test result must be `passed` (or an
+   explicit allowed `none`) before a PR can settle a job as done.
+   A failing test plus an existing PR must stay failed or blocked.
+   Then make that result a durable phase input to reporting.
 5. **[ ] Step 5 — implement foreground and background children**
    (`fleet-worker`; after 2–4). A foreground child is owned by its
    replay-safe tool task: find an existing child by owner task before
@@ -996,17 +1203,23 @@ per `implementation-contract.md`; do not give one agent all of P6.
    read API and Suspenders aggregation as separate items; after 3–6).
    Project `watchTaskGraph()`, `inspect()` blocked reasons, full
    `onReport` metadata and conversation views into versioned job
-   snapshots and a bounded event stream. Join by stable job and
-   conversation IDs, not lane name or PR-title substring. Show
+   snapshots and the authenticated SSE contract above. Join by stable
+   job and conversation IDs, not lane name or PR-title substring. Show
    owner/child edges, `pending|running|sleeping|waiting|completing`,
    wake deadline, background/abort flags and last progress. Live graph
    nodes disappear at termination, so bank terminal receipts and
-   journal entry cursors separately. On reconnect send a snapshot then
+   journal entry cursors separately. On reconnect validate the cursor's
+   journal generation, send a snapshot when replay is unavailable, then
    ordered changes; page older transcript entries and repair gaps
-   instead of scanning a fixed first page. **Exit:** an operator can
+   instead of scanning a fixed first page. Join model-plane evidence
+   by recorded request IDs.
+   Show requested versus served model, attempts/fallbacks, TTFT,
+   latency, tokens/cache/cost and their source or `unknown`; never
+   convert a missing engine sample into zero or add hop totals.
+   **Exit:** an operator can
    distinguish claimed, process-live, transcript-active, waiting,
-   blocked and productively finished work; reconnect and worker loss
-   neither fabricate zero usage nor erase the terminal outcome.
+   blocked and productively finished work; slow clients, reconnect and
+   worker loss neither fabricate zero usage nor erase the terminal outcome.
 8. **[ ] Step 8 — build the UI from Pi's typed view structures**
    (GUI owner in its own client surface; after 7). Amend
    `tasks/gui-brief.md` before implementation: retain its uniform
@@ -1038,7 +1251,6 @@ per `implementation-contract.md`; do not give one agent all of P6.
    epochs. Repeat the eight-lane VMSS recovery on a pinned _new_ image
    against the original persistent journals and workspaces, with an
    actual in-flight interruption, identical conversation IDs, one PR
-   comment from pi: agreed, and the existing 8-lane receipt (16 tasks, task-16 attempt-2) does NOT satisfy this step — old/new digests were identical, so cross-image journal compat is untested, and one supervisor container owning N clone lanes is a documented deviation, not the goal state. The step-9 run needs: pinned new image, original journals/workspaces (not a wiped store), a real mid-flight docker stop, and the claims split (container-replacement vs VMSS reimage vs multi-host) kept separate.
    per issue and board/task-graph receipts. Keep container replacement,
    VMSS reimage/host loss and multi-host failover as separate claims.
    Record source SHA, Pi package/image digests, journal schema and
@@ -1046,7 +1258,16 @@ per `implementation-contract.md`; do not give one agent all of P6.
    placement authority at a time; retain the old image/journal reader
    until migration and rollback are proven. **Exit:** API and UI show
    the same terminal outcomes after crash and restart, with no
-   duplicate unsafe effect or lost child.
+   duplicate unsafe effect or lost child. Include the two streaming
+   contract test sets above in the rollout receipt: model SSE across all
+   deployed hops, and operator SSE through reconnect, queue overflow,
+   journal reopen and transcript gap repair.
+
+   The existing 16-task, eight-lane receipt reused the same image digest
+   and one supervisor container. It proves neither cross-image journal
+   compatibility nor independent worker-container recovery. Step 9 must
+   use a pinned new image, retained journals and workspaces, and a real
+   mid-flight container stop before claiming either property.
 
 Step 1 lands before the new behavior slices. Step 2's data-loss repair
 is the first executable safety fix within that structure. Steps 7 and
