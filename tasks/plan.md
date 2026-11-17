@@ -1225,12 +1225,22 @@ Adopt features in dependency order, with one policy owner per decision:
    as a virtual model whose tiers refer to deployed engine rows. It selects
    a model group per request; deployment balancing is a separate router
    decision. Several Copilot models suffice even with one vendor. Register
-   Kev as a private OpenAI-compatible model for `classifier_type: llm` if
-   its structured output, latency and quality qualify; the
-   [classifier guide](https://docs.litellm.ai/docs/auto_router/optimize_classifier)
-   documents this seam. A System One classifier or Python plugin needs a
-   different interface. Pin the image, tier map, default model, classifier
-   timeout, circuit breaker and fallback policy in generated config.
+   The VMSS Kev classifier is supplied by standalone fleet-belt, which
+   selects a pinned checkpoint after resource, p95 latency and held-out
+   tier-quality tests. Kev-0.6B is a candidate for the observed small VMSS;
+   compare it with current Kev-0.8B and resize/dedicate capacity if needed.
+   Belt runs the selected model on a private origin and independently probes real
+   `/v1/systemone` inference. Register **Kev** as a self-hosted
+   decision deployment, then point Auto Router at that deployment.
+   Current LiteLLM docs use `classifier_type: oss_classifier` with
+   `opensource_classifier_config.deployment_name`; prove the pinned
+   build accepts Kev's exact System One wire or add a narrow adapter.
+   Do not wrap Kev as a chat `classifier_type: llm` model or label it
+   as another provider. Pin and verify a LiteLLM build that
+   supports the needed native decision routes; observed VMSS v1.103.0
+   predates the documented v1.104.2+ route availability. Pin image, tier
+   map, default model, timeout, circuit breaker and fallback in generated
+   config. Reference fleet-belt root `plan.md` B7–B11 for deployment gates.
 
    Preserve the anchored `.prefer` contract above: `must=a,b` tries only
    those models in order, and `prefer=a,b` tries them before defaults.
@@ -1348,7 +1358,13 @@ recovery path, not just a reachable `/metrics` endpoint.
   privately on the existing engine port first. Add explicit retry
   settings and a cross-layer attempt ceiling after failure tests.
   Generate the Auto Router row with deployed tiers and a qualified
-  Kev classifier leg; validate the router alias through Pi, `must` and
+  self-hosted Kev System One classifier deployment whose private origin and
+  readiness come from fleet-belt's pinned VMSS release. The generator
+  must resolve the Belt service address and scoped credential without
+  hardcoding either in Git; setup fails closed if the external inference
+  probe is not ready. Verify the pinned LiteLLM version accepts the
+  generated config and calls real Kev before enabling the alias.
+  Validate the router alias through Pi, `must` and
   `.prefer` policy, classifier outage fallback and held-out task quality
   before canary traffic. Record the selected model and router decision.
   Route fallback only among separately qualified Copilot models; with
@@ -1579,6 +1595,13 @@ rollback, security review and an end-to-end receipt:
   classifier, measured tier policy, safe failure fallback, hard-pin
   preservation and recorded requested/served models. Prove normal,
   classifier-down, model-down, tool/SSE and retry-budget cases.
+- Belt's VMSS Kev release is pinned and independently inference-probed.
+  Buckle advertises its live `decision` capability through the
+  authenticated catalog and exposes an authorized System One/Decisions
+  path if supported by the pinned LiteLLM build. Test entitled and
+  denied callers, stale health, error mapping and trace linkage; never
+  advertise Kev as a chat model. The implementation and Playwright
+  tests belong in this repo, with Belt owning only the serving side.
 - LiteLLM Prometheus metrics, spend/usage records, fallback logs and
   Buckle correlation reach the production collector/read model.
   Unknown usage remains unknown; alerts and retention have owners.
