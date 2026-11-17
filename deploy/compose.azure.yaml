@@ -30,7 +30,8 @@ services:
   # PAT never crosses into buckle or the worker; they auth as
   # principals and the engine spends the PAT for them)
   engine:
-    image: ghcr.io/berriai/litellm:latest
+    # litellm v1.103.0
+    image: ghcr.io/berriai/litellm@sha256:bd089afdcd35b894b14a93f9743cdc8b591f82da1a38dd43a010a7b0c9de5fd7
     command: ["--config", "/etc/engine/mscopilot.litellm.yaml", "--port", "4000"]
     env_file:
       - path: .env
