@@ -1070,7 +1070,7 @@ for an external agent-to-agent entry point: agent cards, `message/send`,
 `message/stream`, task lookup/cancel/resubscribe, key/team grants and
 trace attribution are already defined. LiteLLM routes to an upstream
 A2A agent; it does not turn today's Pi worker or coordinator into one.
-Implement a thin A2A endpoint only where a real remote caller needs it,
+Implement a thin A2A endpoint for remote-worker invocation,
 mapping task IDs to Fleet job IDs/epochs and commands to the one
 authoritative admission/cancel API. Register that endpoint in LiteLLM
 and let Buckle carry identity, scopes, correlation and streaming through
@@ -1079,7 +1079,7 @@ reconnect, cancellation, auth and duplicate delivery. The LiteLLM
 kill-switch webhook is an admin action, not a replacement for Fleet's
 durable cancellation and epoch fencing.
 
-The [MCP gateway](https://docs.litellm.ai/docs/mcp) can expose selected
+The [MCP gateway](https://docs.litellm.ai/docs/mcp) will expose selected
 coordinator/worker tools through native key/team access and Streamable
 HTTP, SSE or stdio. Use Buckle as the authenticated ingress and pass
 LiteLLM's protocol through without inventing another tool registry.
@@ -1144,8 +1144,8 @@ recovery path, not just a reachable `/metrics` endpoint.
   one backend per group, least-busy/latency routing has no useful
   deployment choice yet. Keep mid-stream continuation disabled until
   it passes tool, JSON and crash tests.
-- If per-user access, enforced budgets and durable spend logs are
-  required, deploy backed-up PostgreSQL before enabling LiteLLM virtual
+- Deploy backed-up PostgreSQL for per-worker access, enforced budgets
+  and durable spend logs before enabling LiteLLM virtual
   keys and team policy. Test migration, DB outage, key revocation,
   spend lag and rollback. Add Redis when multiple LiteLLM processes or
   replicas need shared cooldown/rate/affinity state; one process does
@@ -1343,8 +1343,86 @@ per `implementation-contract.md`; do not give one agent all of P6.
    distinguish claimed, process-live, transcript-active, waiting,
    blocked and productively finished work; slow clients, reconnect and
    worker loss neither fabricate zero usage nor erase the terminal outcome.
+
+### [ ] Step 7A — deliver LiteLLM and Buckle production integration
+
+(Buckle/engine, worker and coordinator items with separate owners;
+after 3 and 7, before 8–9). Apply the production change order above
+as executable work items, each with config source, version gate,
+rollback, security review and an end-to-end receipt:
+
+- Auto Router is live for eligible worker turns with a qualified Kev
+  classifier, measured tier policy, safe failure fallback, hard-pin
+  preservation and recorded requested/served models. Prove normal,
+  classifier-down, model-down, tool/SSE and retry-budget cases.
+- LiteLLM Prometheus metrics, spend/usage records, fallback logs and
+  Buckle correlation reach the production collector/read model.
+  Unknown usage remains unknown; alerts and retention have owners.
+- Database-backed virtual keys, team/model/agent/MCP grants, budgets,
+  revocation and audit are active for remote workers. Test denial,
+  quota exhaustion and DB failure without widening access.
+- The A2A worker endpoint is registered in LiteLLM and reachable
+  through Buckle; one remote caller proves discovery, send, stream,
+  task lookup, resubscribe, cancel and duplicate delivery against the
+  same fenced Pi job. The scoped MCP coordinator/worker tools are
+  registered in LiteLLM and exercised through Buckle, including
+  rejected unauthorized calls and one idempotent side effect.
+- Lens and ClickHouse run in production; Pi worker/coordinator
+  traces, model calls, tool spans and spend join under stable IDs.
+  Prove trace access, redaction, retention, backup and one useful
+  investigation. A working sidebar without agent traces fails exit.
+- Cache modes, guardrails, extra router strategies and advanced
+  identity features receive explicit measured dispositions: enable
+  each useful feature with policy, owner and rollback, or record why
+  it would degrade correctness, privacy or latency. No silent skip.
+
+**Exit:** every required feature and actor path in this step has a live
+receipt on the pinned image and a rollback path; no feature is closed
+by a config row, successful boot or dashboard screenshot alone.
+
+#### Runtime wiring by actor
+
+| Actor                    | Intended path                                                                                                                                                                                                            | Authority and proof                                                                                                                                                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remote Pi worker         | Pi OpenAI chat adapter → Buckle `/w/<lane>` → LiteLLM Auto Router alias → selected Copilot model; tool calls stay in the Pi durable task.                                                                                | Worker carries job/epoch/submission IDs. `must` concrete pins bypass Auto Router; eligible defaults ride it. Journal the selected model, classifier/fallback and usage; Lens receives Pi model/tool spans.                   |
+| Supervisor / coordinator | Suspenders admits, places, fences and cancels jobs; its own inference rides Buckle → LiteLLM. A2A is an external invocation face for remote workers, while MCP presents scoped coordinator commands.                     | Work ledger and Pi journal remain authoritative. A2A task ID maps to one Fleet job/epoch; MCP mutations call the existing command API with idempotency and audit. Neither gateway schedules work.                            |
+| Buckle                   | Authenticate principal and lane, enforce its ingress policy, preserve trace headers and stream bodies, then route model, A2A and MCP requests to the one LiteLLM gateway.                                                | Expose only approved paths/scopes. Map each caller to a scoped LiteLLM identity/key and prove revocation and grants at both layers; never use the engine master key as a shared runtime credential.                          |
+| LiteLLM                  | Auto Router chooses model tier; deployment router handles retries/fallbacks; virtual keys/teams gate models, agents and tools; Prometheus/spend/OTel supply model evidence; A2A and MCP gateway expose native protocols. | One pinned deployment/config source, one explicit owner per policy, observed served model and attempt ledger, failure tests and rollback. Lens is a separate trace service.                                                  |
+| Local CLI session        | Interactive Pi, Claude or Codex uses its existing Buckle model route and may opt into an eligible Auto Router alias; a separately scoped MCP gateway connection gives authorized Fleet tools.                            | Human identity, model choice and session ID remain distinct from worker identity. Export supported session traces to Lens only with explicit content/retention policy; test each CLI wire and MCP client before enabling it. |
+
+**First adapter work, before gateway activation.** Extracted Azure
+`fleet-buckle/src/main.ts` sends unknown paths through
+`engine.passthrough`, and `proxy/buckle.proxy.passthrough.ts` replaces
+every caller credential with the configured engine token. This can
+stream native `/a2a/*` and `/mcp/*` bytes, but LiteLLM would see one
+identity. Split model, A2A, MCP and admin permissions; define an
+audited principal/lane → scoped LiteLLM virtual-key mapping with mint,
+rotation and revocation. Preserve trace context and the required
+LiteLLM auth headers without forwarding caller secrets to unrelated
+backends. Fail closed on an unmapped caller or unqualified path. Prove
+that neither an ordinary model key nor a BYOC PAT reaches admin faces.
+The Fleet monorepo's `packages/buckle/src/wire-routes.ts` returns 404
+for unknown routes; `gov/mcp-scopes.ts` has method-level scope grammar
+without live enforcement. Adapt that front separately from Azure.
+Reuse `packages/suspenders/hooks/bin/fleet-mcp.ts` for its existing
+read surfaces; it currently serves six read tools with Buckle key
+checks. Add a narrow remote command adapter only after the Step 3
+command contract exists, then register both behind LiteLLM MCP grants.
+
+**Local session profiles.** Managed Claude workers currently receive
+an empty strict MCP config in
+`packages/suspenders/hooks/lib/executors/claude.ts`. Add only approved
+LiteLLM MCP servers and tool grants when a worker needs them; never
+inherit a human's whole MCP inventory. Interactive Claude/Codex/Pi
+sessions use user-scoped keys, explicit server config and revocation.
+Test Claude Messages, Codex Responses and Pi chat routes separately;
+Auto Router's chat example does not prove every CLI wire. Use Lens's
+[coding-agent trace guide](https://docs.litellm.ai/docs/proxy/lens/coding-agents)
+for supported Claude/Codex sessions and a Pi exporter for Pi; verify a
+resumed session and tool span without exporting secrets.
+
 8. **[ ] Step 8 — build the UI from Pi's typed view structures**
-   (GUI owner in its own client surface; after 7). Start with an API and
+   (GUI owner in its own client surface; after 7 and 7A). Start with an API and
    GUI design review: task flows, data ownership, versioned schemas,
    sample payloads, SSE reconnect/error states, permission matrix,
    responsive layouts and accessibility. Approve those artifacts
@@ -1372,7 +1450,7 @@ per `implementation-contract.md`; do not give one agent all of P6.
    sleeping retry and terminal job correctly, with keyboard and
    screen-reader coverage.
 9. **[ ] Step 9 — integrated failure proof and rollout** (each owner
-   verifies its contract; after 1–8). Run hermetic crash tests at
+   verifies its contract; after 1–8 and Step 7A). Run hermetic crash tests at
    creation, submission, child spawn, GitHub effect, gate, report and
    cancel; include lost/duplicate wakes, closed harness and stale
    epochs. Repeat the eight-lane VMSS recovery on a pinned _new_ image
@@ -1385,7 +1463,10 @@ per `implementation-contract.md`; do not give one agent all of P6.
    placement authority at a time; retain the old image/journal reader
    until migration and rollback are proven. **Exit:** API and UI show
    the same terminal outcomes after crash and restart, with no
-   duplicate unsafe effect or lost child. Include the two streaming
+   duplicate unsafe effect or lost child. Attach Step 7A's live
+   Auto Router, Lens, A2A, MCP, identity, local CLI and telemetry
+   receipts; an absent or unqualified integration blocks P6 closure.
+   Include the two streaming
    contract test sets above in the rollout receipt: model SSE across all
    deployed hops, and operator SSE through reconnect, queue overflow,
    journal reopen and transcript gap repair.
