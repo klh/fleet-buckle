@@ -1,4 +1,4 @@
-// smoke — PROJECT 1, runs first, no deps:
+// smoke — shared-stack project, runs after stack-setup:
 //   a) the docker engine is running
 //   b) the correct versions of the 3 buckles are running (all 16 services
 //      of the demo topology, built from THIS source)
@@ -6,9 +6,8 @@
 //      processes themselves. The server landed (commit 3): the honest
 //      verdict is now `up` for all three — the flip from the pre-server
 //      truth (down) is itself the proof the sidecars tell the truth.
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../fixtures/buckle.health.fixture.ts";
 import { execSync } from "node:child_process";
-import { HealthFace } from "@fleet/health";
 import { PORTS, SERVICES } from "../kit/buckle.kit.stack.ts";
 import { psMap } from "../kit/buckle.kit.compose.ts";
 
@@ -54,21 +53,11 @@ test("b) the correct versions of the 3 buckles are running (full stack, this bui
 });
 
 test.setTimeout(120_000);
-test("c) verdict: ALL THREE buckles are up — the server serves", async () => {
+test("c) verdict: ALL THREE buckles are up — the server serves", async ({ healthState }) => {
   // the fleet-health sidecars poll the real targets; expect.poll does not
   // catch throws — the poll fn must be total
-  const verdictState = async (port: number): Promise<string> => {
-    try {
-      // /healthz is the COMPACT face — parse it with HealthFace
-      // (the full /status body is the HealthVerdict shape)
-      const r = await fetch(`http://127.0.0.1:${port}/healthz`);
-      return HealthFace.parse(await r.json()).state;
-    } catch {
-      return "connecting";
-    }
-  };
   for (const port of [PORTS.b1Health, PORTS.b2Health, PORTS.b3Health]) {
-    await expect.poll(() => verdictState(port), { timeout: 60_000 }).toBe("up");
+    await expect.poll(() => healthState(port), { timeout: 60_000 }).toBe("up");
   }
 });
 

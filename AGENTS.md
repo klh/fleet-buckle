@@ -1,6 +1,12 @@
 # @fleet/buckle — the laws
 
-One page. Every rule has a check (`tools/src/buckle.check-laws.ts`) or it is a wish.
+The house TypeScript PaaS engineering standard applies here as one standalone
+deployable repository. Carry its native-first, schema-first, small-module,
+stateless-leaf, semantic-error, HTTP, exact-dependency, off-repo-config,
+Playwright-project, and enforced-law principles into this repo. Its workspace
+tree, shared package version, internal `@paas/*` packages, and monorepo
+cross-import rules are examples, not instructions to recreate a monorepo.
+Every new rule needs a check or a tracked migration gap.
 
 ## Owner plan file (tasks/plan.md)
 
@@ -253,7 +259,7 @@ provider`), so a chain (b1→b2→b3) plus a direct edge (b1→b3) still
   (`federation/`, `catalog/`, `proxy/`, `access/`, `metrics/`,
   `events/`, `context/`, `trace/`…) with
   single-job files `buckle.<thing>.<role>.ts`, colocated
-  `<file>.test.ts` (bun test), `fixtures/`, and a thin `index.ts`
+  Playwright specs, `fixtures/`, and a thin `index.ts`
   barrel. Nothing imports past another folder's barrel. The DAG:
   `schemas ← fault ← {problem, settings, pick} ← {access, admission,
 federation, events, context, trace} ← {catalog, metrics} ← proxy ←
@@ -267,11 +273,24 @@ main`. The events bus is the pipeline's ONE write seam (emitters
   it. Variants are files (`.fetch.anthropic.ts`), not `if` branches.
 - **Line caps**: warn at 400 (you are composing wrong), stop at 1200,
   hard fail at 1500.
-- **npm installs, Bun runs.** Exact versions, plain semver, committed
-  lockfile. Dependency budget: `zod` at runtime — everything else is
+- **Bun installs and runs in this repo.** Use `bun install --frozen-lockfile`;
+  keep exact versions and the committed `bun.lock`. This is an explicit
+  standalone-repo deviation from the house standard's npm workspace
+  installer. Dependency budget: `zod` at runtime — everything else is
   the platform.
 
 ## Quality
+
+- Preserve HTTP status, `Retry-After`, request/call IDs, and semantic
+  problem kinds across every hop. A 429 budget denial is not a generic
+  retry signal; 503 and upstream timeouts stay distinct. Stream bytes and
+  terminal/error outcomes through the gateway without invented success or
+  zero usage. Bound deadlines and backpressure at the real boundary.
+- Keep policy and external effects in their declared capability owner;
+  leaf mappers stay pure. Parse untrusted wire/config data with named Zod
+  schemas and validate public output. Real hosts, keys and limits stay in
+  machine config. A published Buckle image must work without a sibling
+  checkout. Check the changed dependency and import graph before landing.
 
 Before calling a change done, run `qlty smells --all` and `qlty check --all
 --filter eslint`. Run `qlty check --all --filter knip` when exports, files,
@@ -284,11 +303,34 @@ new code should not add to it.
 
 ## Tests
 
-- Colocated unit/composition tests: `*.test.ts` next to the file, **bun
-  test**.
-- Everything else: **@playwright/test only**, in `/test`, driven by the
-  root `playwright.config.ts` projects (`setup`, `smoke`, `e2e`,
-  `federation`, `load`). The 3-buckle Docker Desktop matrix in
-  `test/federation/` is the demonstrable proof of the federation laws.
+- New tests use **@playwright/test**, including pure unit tests. The existing
+  colocated `*.test.ts` Bun suites are migration debt: keep them green and
+  migrate by capability; do not add another Bun test. Pure tests belong beside
+  their source in `src/<capability>/`; Docker/API tests belong in `test/`.
+- `playwright.config.ts` is the project map: `unit` runs colocated pure
+  `src/**/*.spec.ts` tests without Docker; `stack-setup`/`stack-teardown`
+  own the shared Docker topology; `smoke` gates `e2e`, `federation`, `load`,
+  and `rolling`; `stage0` and `azure` own isolated topologies. A spec must
+  match exactly one primary project. Do not add global setup or make an
+  isolated project boot the shared stack. Run a project's `--list` before
+  changing its matching rules.
+- Shared topology and lifecycle belong in `test/kit/` and `test/setup/`.
+  Test-specific clients, auth, parsed stub evidence, and cleanup belong in
+  typed `test.extend` fixtures under `test/fixtures/`; specs request fixtures
+  and assert behavior. Put reusable multi-spec sequences in `*.flow.ts`.
+  Prefer Playwright's `request` fixture for HTTP contracts. Never mint keys,
+  start Compose, or keep mutable cross-test state in a leaf spec.
+- Test data stays in `fixtures/` and is parsed through Zod. Tag new specs by
+  layer (`@unit`, `@api`, `@smoke`, `@slow`, `@load` as applicable). Keep
+  load tests scoped to a deliberate project and report completed requests,
+  latency and error classes, not only a green exit.
+- Run `bun --bun playwright test --list`, the affected project(s), then the
+  existing `bun test` migration baseline, typecheck and `bun run check`.
+- Docker Desktop and the Azure VMSS are valid e2e targets for the same
+  versioned wire contract. Keep each target in a separate Playwright project
+  with its own typed endpoint/auth fixtures and teardown. The current
+  `azure` project is a local, self-composed Azure-shape rig, not a live VMSS
+  test. A future live project must be explicit opt-in, use pinned image
+  digests and off-repo credentials, and never depend on `stack-setup`.
 - `openapi.json` is GENERATED from the wire schemas, committed, and
   diffed — consumers and tests use it; it never drifts from code.

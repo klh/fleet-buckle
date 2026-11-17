@@ -39,7 +39,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // carol holds every scope on every buckle of the demo topology; her key
-// is MINTED (0600, gitignored) by globalSetup before the stack boots
+// is MINTED (0600, gitignored) by stack-setup before the stack boots
 const ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const CAROL_KEY = readFileSync(
   join(ROOT, "test/deploy/keys/.gen/principal.carol@fleet.key"),

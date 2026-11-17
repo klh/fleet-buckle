@@ -14,7 +14,7 @@ reality. From those fixtures, `bun tools/src/buckle.gen-engine-config.ts`
 generates the litellm engine configs (`test/deploy/engine/*.litellm.yaml`,
 gitignored): every catalog row becomes a deployment under its REAL id —
 engine and catalog can never drift, and the generator runs in the
-playwright global-setup, so the stack always boots consistent.
+the Playwright `stack-setup` project, so the stack always boots consistent.
 
 ## Commit 3 — "the wire" (server: healthz → catalog → forward)
 

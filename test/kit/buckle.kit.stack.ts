@@ -1,7 +1,5 @@
-// buckle.kit.stack.ts — the stack lifecycle is GLOBAL: one boot for the
-// whole playwright run (globalSetup/globalTeardown call these), every
-// project's specs hit the same Docker Desktop topology. docker only —
-// no local mode; compose is the topology of record.
+// Shared Docker topology lifecycle, called by Playwright setup/teardown
+// projects. Isolated Azure and stage0 projects do not use this stack.
 import { stackDown, stackUp as composeUp } from "./buckle.kit.compose.ts";
 import { genEngineConfigs } from "../../tools/src/buckle.gen-engine-config.ts";
 
@@ -19,7 +17,7 @@ export async function stackUp(): Promise<void> {
     cwd,
   });
   genEngineConfigs();
-  composeUp();
+  await composeUp();
 }
 
 export { stackDown };

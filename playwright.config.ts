@@ -1,21 +1,5 @@
-// playwright.config.ts — the ROOT test tree. @playwright/test only,
-// organized as PROJECTS in run order:
-//   1. smoke    — docker engine running; the correct versions of the 3
-//                 buckles running (full stack, this build); they are
-//                 healthy — via the fleet-health SIDECARS, never the
-//                 processes themselves.
-//   2. e2e      — the MITM loop + the federation matrix (the test flow).
-//   3. federation — per-hop grant edges + denial paths (subset of e2e,
-//                 split for sharded runs).
-//   4. load    — the rpm waves (429/503 + Retry-After). The waves are
-//                 loops INSIDE the spec — no repeatEach: one run of the
-//                 project is the load proof. Target it deliberately:
-//                 bun --bun playwright test --project=load
-//   5. rolling — the rolling deploy: v2 up behind the front, gated by
-//                 its own sidecar, state-file flip under load, v1
-//                 drained — zero dropped requests through the front.
-// The stack rides a worker-scoped docker fixture (test/kit) — docker
-// only, no local mode; compose is the topology of record.
+// Project dependencies boot and stop the shared Docker stack. Azure and
+// stage0 own isolated topologies and do not run that setup project.
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
@@ -27,11 +11,13 @@ export default defineConfig({
   reporter: process.env.CI ? [["github"], ["list"]] : "list",
   use: { trace: "on-first-retry" },
   workers: 1,
-  globalSetup: "./test/global-setup.ts",
-  globalTeardown: "./test/global-teardown.ts",
   projects: [
-    { name: "smoke", testMatch: "**/smoke/*.spec.ts" },
-    { name: "e2e", testMatch: "**/e2e/*.spec.ts", dependencies: ["smoke"] },
+    { name: "unit", testDir: "./src", testMatch: "**/*.spec.ts" },
+    { name: "stack-setup", testMatch: "**/setup/stack.setup.ts", teardown: "stack-teardown" },
+    { name: "stack-teardown", testMatch: "**/setup/stack.teardown.ts" },
+    { name: "smoke", testMatch: "**/smoke/buckle.smoke.spec.ts", dependencies: ["stack-setup"] },
+    { name: "stage0", testMatch: "**/smoke/buckle.smoke.stage0.spec.ts" },
+    { name: "e2e", testMatch: "**/e2e/*.spec.ts", testIgnore: "**/e2e/buckle.e2e.azure.spec.ts", dependencies: ["smoke"] },
     // the azure tabula-rasa rig SELF-COMPOSES (its own compose file,
     // minted keys, stub seat) — no global-stack dependency
     { name: "azure", testMatch: "**/e2e/buckle.e2e.azure.spec.ts" },

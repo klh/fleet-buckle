@@ -6,7 +6,7 @@
 //     (test/deploy/fixtures/<provider>.models.json) becomes a
 //     deployment under its REAL id mapped to an openai-compatible leg
 //     at the stub base. Output test/deploy/engine/<p>.litellm.yaml
-//     (generated, gitignored; the playwright global-setup runs this).
+//     (generated, gitignored; the Playwright stack-setup project runs this).
 //
 //   --real: every row of the LIVE catalog (pulled from the registry
 //     endpoint with the muramasa key) becomes a deployment mapped to
