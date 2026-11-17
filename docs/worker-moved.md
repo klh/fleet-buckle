@@ -25,11 +25,12 @@ a `latest` tag, never a cross-repo build.
 
 | when        | fleet-buckle | fleet-worker | image (`fleetbuckle467.azurecr.io/worker`) | note                     |
 | ----------- | ------------ | ------------ | ------------------------------------------ | ------------------------ |
+| 2026-11-17  | `2cb4e0f`+ | `36563a0`    | `worker-gondolin:a4f6700`                 | fence VM-per-task lease (one boot per diff, `fence:4[...]` report #31) + gate journal proven on test-carrying repo (`app.tests cmd=npm test passed=true`); KVM ~3s fences; P2.3 closed; legacy b3 `worker` service stopped (calc repo frozen) |
 | 2026-11-17  | `b03168b`    | `298d2aa`    | `worker-gondolin:298d2aa`                  | live on VMSS; gondolin executor + queue-path post-session fence (report note `fence:N[path:tool;…]`) — fence live fire: PR #37 `fence:1[roman.py:py_compile]` |
 | 2026-11-16  | `f6ff9da`    | `884f405`    | `worker:07a4ad3`                            | live cycle proven (issue → worker → buckle → engine → seat → PR) |
 | rollback    | `45cc66e`    | `e72086d`    | `worker:e72086d`                            | last in-repo build (pre-extraction) |
 
-The VMSS compose pins `worker-gondolin:298d2aa` on all four worker-plane
+The VMSS compose pins `worker-gondolin:a4f6700` on all four worker-plane
 services (worker/supervisor/lane-1/lane-2) with `WORKER_EXECUTOR=gondolin`
 + `XDG_CACHE_HOME=/gcache` + the shared `/opt/buckle/gondolin-cache`
 bind on supervisor and both static lanes (see `deploy/compose.yaml` on

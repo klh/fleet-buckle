@@ -572,6 +572,40 @@ Host-loss reimage recovery remains untested (single VM).
   Stack healthy after recreate; supervisor listening. /dev/kvm gid on
   this VMSS is 993 — bake it as a compose variable if the fleet grows
   beyond this box.
+
+  **Fence VM-per-task lease receipt (2026-11-17, fleet-worker
+  a4f6700):** `checkFiles(files)` boots ONE toolchain guest for the
+  whole diff (lazily — an all-docs batch never boots) and keeps diff
+  order; `checkFile` is single-file sugar over it. Live fire: rig
+  issue #46 (JS port + node test suite) → task 23 → clone-1 →
+  report #31 `settled=done pr=47 turns=9 note="session:settled;
+  fence:4[docs/TEST-SWEEP.md:unchecked;lib/b64.js:node-syntax;
+  package.json:node-parse;test/b64.test.js:node-syntax]"` — four
+  files, three code checks, ONE boot under KVM (~3s, not 3×15s).
+  PR #47 merged; the suite itself is 9 vector classes ×
+  {encode,decode,round-trip} + a statelessness test — genuine tests,
+  not presence stubs.
+
+  **Gate-journal receipt (2026-11-17, same cycle):** the session gate
+  leg is now proven on a test-carrying repo. The task-23 conversation
+  journal (clone-1.sqlite, durable entries) banks
+  `{"kind":"app.tests","cmd":"npm test","kind":"npm","passed":true,
+  "output":"> test\n> node --test\n\n✔ encodeB64: empty string …"}`
+  — detect (package.json scripts.test) → in-container run (tool-seed
+  carries node 26) → journaled GateOutcome, while earlier test-less
+  sessions bank `kind:"none" … no tests detected — gate pass-through`
+  rows in the same table: the contrast proves the detection, not a
+  hardwired pass. A failing suite would surface via harvest (`tests
+  failed after N gate attempt(s)`) and requeue — never silent.
+  Scoped-credential injection via createHttpHooks secrets is
+  DISPOSITIONED DEFERRED: fence guests are default-deny with no
+  network need, and the plaintext childEnv() seam's consumer (guest
+  egress) does not exist yet — revisit when a task legitimately needs
+  guest network.
+
+  P2.3 legs status: queue-path fence ✓, kill/replace/resume ✓, KVM ✓,
+  VM-per-task lease ✓, gate journal ✓, scoped credentials → deferred.
+  **P2.3 closed.**
 - **P2.4** package the runner so Docker Desktop can exercise it locally,
   but require a separate live VMSS boot, tool, loss, and cleanup receipt.
 
