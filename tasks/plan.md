@@ -909,6 +909,39 @@ examples as upgrade candidates, not executable 1.5.2 instructions.
 Verify APIs against the pinned package before adopting a newer upstream
 example; copying the example's React or Cloudflare host is not planned.
 
+### Owner target architecture (directive 2026-11-17, binding)
+
+One **Pi Durable job parent inside a Gondolin guest** is the P6 target
+shape. The parent may execute directly, fan out bounded specialist Pi
+children, or call scoped MCP/A2A capabilities. **Same-guest children**
+ride plain Pi task ownership. **Separately placed children** each need
+their own journal, a fencing epoch, a stable admission ID, cancellation,
+and durable result reconciliation. Fleet's **outside controller stays
+limited to placement, restart, fencing, and observation** — nothing
+else. The current host Pi process does NOT move until the journal-proof
+gate is green: **journal persistence beyond guest replacement and
+replay around external effects, proven with kill/recreate evidence**.
+The production path keeps working during migration (knob-gated executor
+slices, Playwright setup → smoke → flow dependency graph), and every
+change lands bounded in its owning repo.
+
+Minted 2026-11-17 to klh/fleet-worker: #43 (probe must exercise the
+BYOC lane leg), #44 (journal persistence + external-effect replay proof
+gate), #45 (job-parent-in-guest placement/admission/fencing/cancellation
+contract).
+
+**Startup-probe diagnosis receipt (2026-11-17, evidence not
+attribution):** the shared boot probe (`worker.probe.ts`) rides bare
+engine paths with the `bksk_` principal Bearer — it validates the
+ENGINE leg, while BYOC sessions ride `/w/<lane>/<key>/v1/chat/completions`
+with the token in the URL and the lane pin winning. Under `WORKER_BYOC=true`
+the prefer ladder is dead config for asks, and a green probe does not
+prove the leg sessions use. All credentials verified live (`bksk_`
+principal for buckle legs, `gho_` PAT for GitHub API, seat PAT in the
+engine token cache). The session:open burns were seat stream cuts
+(journal: repeated `stopReason:"error"` "socket connection was closed
+unexpectedly"), not credential or pi-ai faults. Fix owed as issue #43.
+
 ### Separation of concerns and authoritative state
 
 **STATUS 2026-11-17 (fleet crunch, supervisor da9e5b4, 8 lanes)**: the
