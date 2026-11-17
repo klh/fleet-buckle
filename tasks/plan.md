@@ -517,11 +517,30 @@ Host-loss reimage recovery remains untested (single VM).
   test-less rig); checkFile (worker.flow.ts:219) is the SWEEP path's
   pre-PR fence only. Closing that gap is the next leg: the queue path
   needs a post-session changed-files check through the same
-  checkFile seam (in-VM syntax fence on every PR the lanes raise). Remaining P2.3 legs: queue-path post-session checkFile fence + journal
-  outcomes (the gate journal records only the repo test command —
-  kind "none" pass-through on the test-less rig), VM-per-task lease,
-  kill-the-guest fence/replace proof, scoped-credential injection via
-  createHttpHooks secrets.
+  checkFile seam (in-VM syntax fence on every PR the lanes raise).
+
+  **Queue-path fence receipt (2026-11-17, fleet-worker 298d2aa):** the
+  post-session fence is LIVE and PROVEN. worker.lane.ts now fences every
+  changed file after the session settles and before the report: default
+  branch via gh, `git diff --name-only origin/<default>...HEAD`, per-file
+  checkFile (cap 25 files / 256KiB; missing/oversized → named `:skipped`,
+  never silent), and the report note banks the evidence. First live fire
+  (recovery-rig issue #35 → task 18 → lane-1, worker-gondolin:298d2aa):
+  report #24 `settled=done pr=37 turns=14 note="session:settled;
+  fence:1[roman.py:py_compile]"` — the agent's roman.py was compiled by
+  python3 inside the qemu toolchain guest BEFORE the PR banked green, PR
+  #37 merged clean (+58/-0 single file). The fence also caught two real
+  deployment gaps on the way (clones lacked XDG_CACHE_HOME → EACCES
+  /tmp/.cache/gondolin; static lane services lacked the gondolin env and
+  died on a socketless docker call — Bun fetch TypeError "typo in the
+  url or port") — loud failures, requeue, fix, green: the design working
+  as intended. Compose now carries WORKER_EXECUTOR+XDG_CACHE_HOME+/gcache
+  on supervisor AND lane-1/lane-2 (uniform topology; lanes never touch
+  the host docker socket). Remaining P2.3 legs: journal outcomes (the
+  gate journal records only the repo test command — kind "none"
+  pass-through on the test-less rig), VM-per-task lease (15s/check
+  cold-boot price), kill-the-guest fence/replace proof, scoped-credential
+  injection via createHttpHooks secrets.
 - **P2.4** package the runner so Docker Desktop can exercise it locally,
   but require a separate live VMSS boot, tool, loss, and cleanup receipt.
 

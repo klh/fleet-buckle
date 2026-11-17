@@ -25,12 +25,16 @@ a `latest` tag, never a cross-repo build.
 
 | when        | fleet-buckle | fleet-worker | image (`fleetbuckle467.azurecr.io/worker`) | note                     |
 | ----------- | ------------ | ------------ | ------------------------------------------ | ------------------------ |
-| 2026-11-16  | `f6ff9da`    | `884f405`    | `worker:07a4ad3`                            | live on VMSS; live cycle proven (issue → worker → buckle → engine → seat → PR) |
+| 2026-11-17  | `b03168b`    | `298d2aa`    | `worker-gondolin:298d2aa`                  | live on VMSS; gondolin executor + queue-path post-session fence (report note `fence:N[path:tool;…]`) — fence live fire: PR #37 `fence:1[roman.py:py_compile]` |
+| 2026-11-16  | `f6ff9da`    | `884f405`    | `worker:07a4ad3`                            | live cycle proven (issue → worker → buckle → engine → seat → PR) |
 | rollback    | `45cc66e`    | `e72086d`    | `worker:e72086d`                            | last in-repo build (pre-extraction) |
 
-The VMSS compose pins `worker:07a4ad3` (see `deploy/compose.yaml` on the
-hub). Rollback = repin to `worker:e72086d` and `git checkout e72086d` of
-fleet-buckle's `deploy/worker/` (the tree still exists at that SHA).
+The VMSS compose pins `worker-gondolin:298d2aa` on all four worker-plane
+services (worker/supervisor/lane-1/lane-2) with `WORKER_EXECUTOR=gondolin`
++ `XDG_CACHE_HOME=/gcache` + the shared `/opt/buckle/gondolin-cache`
+bind on supervisor and both static lanes (see `deploy/compose.yaml` on
+the hub). Rollback = repin to `worker:e72086d` and `git checkout e72086d`
+of fleet-buckle's `deploy/worker/` (the tree still exists at that SHA).
 
 ## Why
 
