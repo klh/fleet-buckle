@@ -150,8 +150,26 @@ flowchart LR
   that PAT only at its dedicated LiteLLM engine. Record the mode in each
   receipt; never switch modes on auth failure. Dedicated identities are later;
   do not claim service identity or independent seat entitlement yet.
-- **fleet-worker** (new repo) = Pi Durable parent/child runtime, OCI image,
-  versioned capability seeds, journal, and whole-cycle e2e. A parent may
+
+- **Future worker credential custody (deferred):** move owner/worker provider
+  credentials to a governed Buckle/LiteLLM secret-backed route. A worker
+  authenticates with a short-lived, scoped lane identity and requests an
+  entitled model or capability; Buckle checks job, principal, epoch and
+  grants, while LiteLLM resolves the upstream secret and applies model,
+  MCP and agent access controls. LiteLLM virtual keys govern caller access;
+  database-managed model credentials are encrypted with LITELLM_SALT_KEY
+  for shared deployments. Its external secret-manager integration requires
+  an Enterprise license; otherwise use a hardened engine-side secret
+  source. Test whether the chosen custody path supports distinct personal
+  Copilot PATs without exposing them to other owners before adopting it.
+  Do not build a provider-key vault in Worker.
+  Raw upstream PATs/keys must not enter the guest image, journal, trace,
+  work brief or URL. Add opt-in enrollment, rotation, revocation, owner
+  attribution and cross-user isolation tests before migrating any human
+  BYOC path. Until then, keep the recorded BYOC and isolated engine-held
+  modes distinct; do not silently switch on auth failure.
+- **fleet-worker** = Pi Durable parent/child runtime, a versioned agent-guest
+  image, capability templates, persistent journals, and whole-cycle e2e. A parent may
   work alone or split into scoped child sessions and integrate their patches.
 - **Runner target** = one Gondolin microVM per autonomous worker lane,
   with a Pi Durable parent that supervises its own task graph, can work
@@ -1545,6 +1563,19 @@ egress to Buckle/LiteLLM and scoped credential handling. Only then
 move the Pi process from the current OCI host into the guest. No nested
 tool VM is required unless a separate isolation need is demonstrated.
 
+**Current production gate, before lane scale-up:** the existing picker
+uses a direct fetch probe against the selected hub, not Pi AI. Both
+worker.main and spawned worker.lane run it at boot. The probe currently
+sends a Buckle bearer key to /v1/chat/completions even when the actual
+BYOC model route uses an owner PAT. Capture the raw status/body from the
+real engine, confirm catalog and route, then fix the one shared picker
+boundary and prove a clone can boot and make a real task call. Bound
+probe attempts and report failed candidates; do not treat a probe
+failure as evidence that Pi 1.5.2 or every model is broken. Keep must=
+pins fail-closed, but make transient model-gateway unavailability a
+visible, recoverable lane condition. The rollout gate is a live parent
+plus spawned lane through the selected credential mode.
+
 1. **[ ] Step 1 — remove competing paths and establish the layout**
    (`fleet-worker`; prerequisite for later steps). Inventory
    `worker.main.ts`'s `flow|durable`, the separately launched
@@ -1860,7 +1891,7 @@ of this broader work blocks the Claude/Copilot smoke or Step 7A.
    sleeping retry and terminal job correctly, with keyboard and
    screen-reader coverage.
 9. **[ ] Step 9 — integrated failure proof and rollout** (each owner
-   verifies its contract; after 1–8 and Step 7A). Run hermetic crash tests at
+   verifies its contract; after 1–8 and Step 7B). Run hermetic crash tests at
    creation, submission, child spawn, GitHub effect, gate, report and
    cancel; include lost/duplicate wakes, closed harness and stale
    epochs. Repeat the eight-lane VMSS recovery on a pinned _new_ image
