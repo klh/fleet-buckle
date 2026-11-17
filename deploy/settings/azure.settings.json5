@@ -35,4 +35,9 @@
     // /w/<lane>/<token> — nothing to configure here, ever
     mscopilot: {},
   },
+  timeouts: {
+    // the seat's /models rate limit runs minutes; keep serving the
+    // last-good catalog for up to an hour of consecutive faults
+    catalog_grace_ms: 3_600_000,
+  },
 }

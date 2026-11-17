@@ -235,6 +235,10 @@ export const BuckleSettings = z
         hop_ms: z.number().int().min(1000).default(120_000),
         /** upstream catalog cache freshness */
         catalog_cache_ms: z.number().int().min(0).default(2000),
+        /** how long a stale catalog keeps serving last-good rows
+         *  while every refresh faults (seat rate limits run minutes,
+         *  far past the brief ttl-derived grace). Default: ttl x3. */
+        catalog_grace_ms: z.number().int().min(0).optional(),
         /** federated stats fold freshness — peer snapshots are pulled
          *  at most this often; the own snapshot stays live */
         stats_cache_ms: z.number().int().min(0).default(2000),

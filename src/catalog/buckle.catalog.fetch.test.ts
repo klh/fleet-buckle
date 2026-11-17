@@ -125,3 +125,61 @@ describe("catalog BYOC denial matrix (P0.2b)", () => {
     }
   });
 });
+
+describe("catalog grace knob (rate-limit survival)", () => {
+  const settingsTimed = (providers: Record<string, unknown>, timeouts: Record<string, number>) => {
+    const parsed = BuckleSettings.safeParse({ hub: { label: "t" }, providers, timeouts });
+    if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join("; "));
+    return parsed.data;
+  };
+
+  /** a seat that serves one good catalog, then 503s forever */
+  const serveThenFail = async () => {
+    let good = true;
+    const pulls: number[] = [];
+    const server = Bun.serve({
+      port: 0,
+      fetch: async () => {
+        pulls.push(pulls.length);
+        if (!good) return new Response("rate limited", { status: 503 });
+        return Response.json({ data: [wire("g1"), wire("g2")] });
+      },
+    });
+    return { server, pulls, break: () => { good = false; } };
+  };
+
+  test("custom catalog_grace_ms keeps last-good rows past the ttl-derived grace", async () => {
+    const seat = await serveThenFail();
+    const pat = "tok-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const settings = settingsTimed(
+      { mscopilot: { url: `http://localhost:${seat.server.port}` } },
+      { catalog_cache_ms: 40, catalog_grace_ms: 60_000 },
+    );
+    try {
+      const warm = await buildCatalog(settings, "00-tr", undefined, pat);
+      expect(warm.models.length).toBe(2);
+      seat.break();
+      await new Promise((r) => setTimeout(r, 120)); // past ttl AND past 3x ttl
+      const held = await buildCatalog(settings, "00-tr", undefined, pat);
+      expect(held.models.map((m) => m.id).sort()).toEqual(["g1", "g2"]);
+    } finally {
+      seat.server.stop(true);
+    }
+  });
+
+  test("default grace (ttl x3) still goes honestly empty", async () => {
+    const seat = await serveThenFail();
+    const pat = "tok-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const settings = settingsTimed({ mscopilot: { url: `http://localhost:${seat.server.port}` } }, { catalog_cache_ms: 40 });
+    try {
+      const warm = await buildCatalog(settings, "00-tr", undefined, pat);
+      expect(warm.models.length).toBe(2);
+      seat.break();
+      await new Promise((r) => setTimeout(r, 200)); // past 3x40ms
+      const drained = await buildCatalog(settings, "00-tr", undefined, pat);
+      expect(drained.models).toEqual([]);
+    } finally {
+      seat.server.stop(true);
+    }
+  });
+});

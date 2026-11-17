@@ -55,7 +55,7 @@ function createFetchCall(parts: {
   return {
     ...parts,
     ttlMs: parts.timeouts.catalog_cache_ms,
-    graceMs: parts.timeouts.catalog_cache_ms * 3,
+    graceMs: parts.timeouts.catalog_grace_ms ?? parts.timeouts.catalog_cache_ms * 3,
   };
 }
 type FetchCall = ReturnType<typeof createFetchCall>;
