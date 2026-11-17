@@ -786,6 +786,19 @@ recovery, and duplicate effects. Promote a versioned seed only with a
 reproducible receipt and rollback digest. Benchmark runs must not write
 to production developer repos.
 
+**FIRST SLICE RECEIVED 2026-11-17** (fleet-worker `docs/TRIALS.md`):
+three-arm matched trial on the real VMSS plane — seed `9011741` cloned
+into three private trial repos, task set T1–T4 (two file pairs each)
+minted identically per arm; solo (1 lane) vs concurrent (4 lanes) vs
+split (1 lane + workers_task hint). All 12/12 settled done att=1,
+fence:6, exactly one PR per task, zero duplicate effects. Concurrent
+arm: 2.2× wall-clock (11.2 → 5 min), no per-session slowdown at 4
+simultaneous seat sessions. Split arm: +27 % session wall, −18 %
+mainline out-tokens. Trial repos are disposable (never production dev
+repos). BLAM-as-a-package is deliberately NOT ported (owner directive:
+the supervisor plane IS the trial harness); Decant/Fleet-knowledge
+stages remain future work.
+
 Once job identity, provenance, and access boundaries are stable, add
 Decant/Fleet knowledge as scoped context. Record the knowledge version
 used by each run. Absurd may then be compared as a Postgres-backed
