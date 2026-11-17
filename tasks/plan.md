@@ -418,6 +418,30 @@ Buckle has no worker-spawn API or deployment supervisor for this demo.
    not proof of VMSS reimage/host-loss recovery; test those separately
    with storage that survives that failure before claiming host recovery.
 
+**RECEIPT — live on the Azure VMSS, 2026-11-17 (fleet-worker
+`2697dd5`, buckle `b5d5726`)**. Rig repo `klh/fleet-recovery-rig`, 16
+GitHub-issue tasks, supervisor container with N clone lanes (not eight
+separate containers; a documented deviation — one supervisor owns the
+lane lifecycle, each clone is its own process/journal). Wave 1: 8
+issues → 8 clones → 8/8 tasks done first-attempt (~30s/task), 8 PRs
+merged. Wave 2: 8 more issues; at 01:25:07Z, mid-work,
+`sudo docker compose stop supervisor` (buckle/engine/gui/health stayed
+up); clones died with PID 1; tasks 9-15 settled in the final seconds
+(PR #31 closed the last one), task 16 stranded on dead clone-8. The
+claim lease (`LEASE_MS` = 15 min, hardcoded) expired at 01:39:47Z;
+the boot sweep flipped task 16 to requeued, the spawner respawned a
+fresh clone, which reclaimed it at `attempts: 2` (~01:40:25Z) and
+settled it ~90s later as PR #32 — merged. No writer epochs exist;
+recovery is task-level at-least-once: per-lane journals
+(`/state/<lane>.sqlite`) and workspaces (`/workspace/<lane>`) ride
+persistent volumes, and PR-match reconciliation (open-PR scan for
+"Closes #N" before any rework) prevents duplicate GitHub effects.
+All 17 PRs merged, branches deleted, 16/16 tasks done. Old/new image
+digests were identical (`2697dd5`) — the kill leg proves lease/requeue
+redelivery, not cross-image journal compatibility; that stays
+untested until the next worker image rotation replays this procedure.
+Host-loss reimage recovery remains untested (single VM).
+
 ## P2 — real microVM tool execution on the existing VMSS
 
 - **P2.1** pin Gondolin and its selected backend. Verify usable KVM on
