@@ -1,9 +1,18 @@
 import type { Config } from "./entra-login.config.ts";
-import { fault, type Fault } from "./entra-login.fault.ts";
+import { FaultSchema, fault } from "./entra-login.fault.ts";
+import { z } from "zod";
+
+/** the gateway's /v1/models face — { hub, models: […] }; only the
+ *  array matters here (a 200 with a wrong shape is still a refusal) */
+const PreflightBodySchema = z.object({ models: z.array(z.unknown()) }).passthrough();
 
 /** Preflight rides the SAME carrier the CLI will use — it must fail
  *  BEFORE a session launches, with a reason a human can act on. */
-export type PreflightResult = { ok: true; models: number } | { ok: false; fault: Fault };
+export const PreflightResultSchema = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), models: z.number().int().min(0) }),
+  z.object({ ok: z.literal(false), fault: FaultSchema }),
+]);
+export type PreflightResult = z.output<typeof PreflightResultSchema>;
 
 export const preflight = async (
   config: Config,
@@ -25,9 +34,10 @@ export const preflight = async (
   if (response.status !== 200) {
     return { ok: false, fault: fault("preflight-failed", `gateway answered ${response.status}`) };
   }
-  const body = (await response.json().catch(() => null)) as { models?: unknown[] } | null;
-  if (!body || !Array.isArray(body.models)) {
+  const raw = await response.json().catch(() => null);
+  const body = PreflightBodySchema.safeParse(raw);
+  if (!body.success) {
     return { ok: false, fault: fault("preflight-failed", "catalog shape unexpected") };
   }
-  return { ok: true, models: body.models.length };
+  return { ok: true, models: body.data.models.length };
 };

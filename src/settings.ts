@@ -12,7 +12,7 @@ import { z } from "zod";
 import { classifyFault, logFault } from "./fault.ts";
 import { mergeSettings, type BuckleSettings } from "./schemas/buckle.settings.zod.ts";
 
-export const SettingsPathsSchema = z
+const _SettingsPathsSchema = z
   .object({
     defaults: z.string().min(1),
     settings: z.string().min(1),
@@ -20,7 +20,7 @@ export const SettingsPathsSchema = z
     over: z.string().min(1).optional(),
   })
   .strict();
-export type SettingsPaths = z.output<typeof SettingsPathsSchema>;
+export type SettingsPaths = z.output<typeof _SettingsPathsSchema>;
 
 export function resolveSettingsPaths(args: string[]): SettingsPaths {
   const flag = (name: string): string | undefined => {

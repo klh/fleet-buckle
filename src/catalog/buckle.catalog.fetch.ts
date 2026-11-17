@@ -21,11 +21,11 @@ import { continueTraceparent } from "../trace/buckle.trace.export.ts";
 import type { TokenReader } from "../federation/buckle.federation.peer.ts";
 import { userIdOf } from "../lane.ts";
 
-export const CacheEntrySchema = z.object({
+const _CacheEntrySchema = z.object({
   at: z.number().int().min(0),
   rows: z.array(BuckleModelWire),
 });
-type CacheEntry = z.output<typeof CacheEntrySchema>;
+type CacheEntry = z.output<typeof _CacheEntrySchema>;
 const cache = new Map<string, CacheEntry>();
 
 const ProviderCatalogSchema = z.object({ data: z.array(z.unknown()).optional() }).passthrough();

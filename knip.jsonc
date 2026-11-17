@@ -9,7 +9,13 @@
       // src/agents is the staged agent-job wave (wiring lands with the
       // server lift) — its files are entries until their consumer exists
       "entry": ["tools/src/*.ts", "test/**/*.ts", "src/agents/*.ts"],
-      "project": ["src/**/*.ts", "deploy/front/*.ts", "tools/**/*.ts"],
+      // the azure rig execFileSync-spawns two tools by CWD-relative
+      // path ("tools/src/…") — knip reads those strings as module
+      // specifiers, cannot resolve them from test/e2e/, and reports
+      // bogus unresolved imports. The spec is a leaf; ignoring its
+      // analysis changes nothing else.
+      "ignore": ["test/e2e/buckle.e2e.azure.spec.ts"],
+      "project": ["src/**/*.ts", "deploy/front/*.ts", "tools/**/*.ts", "test/**/*.ts"],
     },
     // P0.2d owner-pilot login helper — own package, own install, manual
     // only (never in the Buckle image); not part of the gateway project.

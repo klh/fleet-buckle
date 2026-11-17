@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { fault, type Fault } from "./entra-login.fault.ts";
+import { FaultSchema, fault } from "./entra-login.fault.ts";
 
 /** Runtime config shape — machine file (0600, never committed; the
  *  committed entra-login.example.json carries placeholders only).
@@ -18,7 +18,11 @@ export const ConfigSchema = z.object({
 });
 export type Config = z.output<typeof ConfigSchema>;
 
-export type ConfigResult = { ok: true; value: Config } | { ok: false; fault: Fault };
+export const ConfigResultSchema = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), value: ConfigSchema }),
+  z.object({ ok: z.literal(false), fault: FaultSchema }),
+]);
+export type ConfigResult = z.output<typeof ConfigResultSchema>;
 
 export const parseConfig = (raw: unknown): ConfigResult => {
   const parsed = ConfigSchema.safeParse(raw);
