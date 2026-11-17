@@ -689,6 +689,25 @@ or isolated worker-engine mode. Dedicated worker identities and
 Copilot entitlements require a later explicit migration and access test.
 A no-split choice is a valid recorded outcome.
 
+**Receipts**:
+
+- **2026-11-17 (simultaneous jobs, 8-way)** — supervisor on the Azure
+  VMSS (worker-gondolin:4858518, MAX_LANES=8, executor=gondolin,
+  /dev/kvm) imported 8 freshly minted issues
+  (#95–#102) from `icomdev/Vanilla-JavaScript-Calculator`, ramped one
+  clone per 15s spawn tick to **7 simultaneous working lanes**, and
+  settled **8/8 tasks done with zero failures and zero retries** in
+  ~4 minutes of wall time (sessions 99–167s, 14–23 turns,
+  2.7K–8.9K out-tokens each): PRs #103–#110. Fences ran on every
+  settle (up to fence:9 on #110 incl. `tests/backspace.test.js:
+  node-syntax`); one transient `remote rejected … commit_refs_rules`
+  push was retried and landed by the lane itself (#106). Sessions ride
+  the Copilot seat lane via the principal-Bearer shape (WORKER_BYOC=
+  false). Evidence: supervisor board (tasks 24–31 done),
+  `[lane clone-N] task N: settled=done pr=…` log lines, PRs on the
+  fork. The rig-era 8-worker recovery (23 tasks on
+  klh/fleet-recovery-rig) predates this on the same plane.
+
 **AC**: run two simultaneous jobs and one parent/children job on the real
 hosts. Independently kill a guest and a parent; prove journal resume,
 stale-lease refusal, no duplicate unsafe GitHub effects, Fleet run-key
