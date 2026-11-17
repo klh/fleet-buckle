@@ -1874,8 +1874,10 @@ flooding the model transcript with every intermediate payload. Keep the
 parent JobTask, child ownership, wake schedule, validation and terminal
 receipt in Pi Durable, outside the script. Code mode runs alongside the
 harness inside the lane guest; its QuickJS sandbox does not replace
-Gondolin isolation or Buckle/LiteLLM authorization. No second MCP
-client or gateway is added to Worker.
+Gondolin isolation or Buckle/LiteLLM authorization. Worker needs one
+small authenticated client adapter to LiteLLM MCP that maps approved
+tools into Pi Durable; it must not implement a second MCP gateway or
+copy Pi MCP server internals.
 
 Qualify the installed 1.5.2 API rather than copying current main:
 bounded memory, wall time, output, nested calls and model requests;
