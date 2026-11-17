@@ -94,7 +94,7 @@ services:
   # API leg. Durable journal: /state/worker.sqlite (survives
   # restarts; sweeps resume mid-cycle).
   worker:
-    image: ${WORKER_IMAGE:-fleetbuckle467.azurecr.io/worker:e72086d}
+    image: ${WORKER_IMAGE:-fleetbuckle467.azurecr.io/worker-gondolin:3e7da45}
     restart: on-failure
     environment:
       WORKER_REPO: ${WORKER_REPO:-icomdev/Vanilla-JavaScript-Calculator}

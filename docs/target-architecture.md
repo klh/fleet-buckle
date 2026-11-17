@@ -656,3 +656,11 @@ deployment receipt before the claim can be treated as landed.
     (duplicate requests recover the same generation), and that any
     authority change forces a new job generation (a widened
     controller or skill edit cannot widen a live job).
+
+11. **[DISPOSITIONED 2026-11-17] Health probe runs in-process.** The
+    2026-11-17 review flagged the fleet-health sidecar as potentially
+    sharing the served process's event loop. Verified live: the Azure
+    compose builds the sidecar from `klh/fleet-health#v1.0.0` as its
+    OWN container (`deploy/compose.azure.yaml` `health:` service) that
+    polls the stack over the network and serves the verdict on its own
+    port — the outside-process health law holds. No code change owed.
