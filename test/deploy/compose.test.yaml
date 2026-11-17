@@ -45,7 +45,8 @@ services:
 
   # ── unit 1 ──
   litellm1:
-    image: ghcr.io/berriai/litellm:v1.103.0 # digest-pin at v0.0.1 tag
+    # litellm v1.103.0
+    image: ghcr.io/berriai/litellm@sha256:bd089afdcd35b894b14a93f9743cdc8b591f82da1a38dd43a010a7b0c9de5fd7
     # cold-boot flake: litellm's embedded Prometheus face sometimes misses
     # its own 30s readiness window under a full-stack boot and exits 1 —
     # compose restart is the durable retry
@@ -93,7 +94,8 @@ services:
 
   # ── unit 2 ──
   litellm2:
-    image: ghcr.io/berriai/litellm:v1.103.0
+    # litellm v1.103.0
+    image: ghcr.io/berriai/litellm@sha256:bd089afdcd35b894b14a93f9743cdc8b591f82da1a38dd43a010a7b0c9de5fd7
     restart: on-failure
     command:
       [
@@ -132,7 +134,8 @@ services:
 
   # ── unit 3 ──
   litellm3:
-    image: ghcr.io/berriai/litellm:v1.103.0
+    # litellm v1.103.0
+    image: ghcr.io/berriai/litellm@sha256:bd089afdcd35b894b14a93f9743cdc8b591f82da1a38dd43a010a7b0c9de5fd7
     restart: on-failure
     command:
       [

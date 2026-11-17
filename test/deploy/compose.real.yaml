@@ -31,7 +31,8 @@ services:
 
   # ── unit 1: openrouter ──
   litellm1:
-    image: ghcr.io/berriai/litellm:v1.103.0
+    # litellm v1.103.0
+    image: ghcr.io/berriai/litellm@sha256:bd089afdcd35b894b14a93f9743cdc8b591f82da1a38dd43a010a7b0c9de5fd7
     command: ["--config", "/etc/engine/openrouter.litellm.yaml", "--port", "4000"]
     environment:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?}
@@ -63,7 +64,8 @@ services:
 
   # ── unit 2: ms copilot (github_copilot legs + PAT pre-seed) ──
   litellm2:
-    image: ghcr.io/berriai/litellm:v1.103.0
+    # litellm v1.103.0
+    image: ghcr.io/berriai/litellm@sha256:bd089afdcd35b894b14a93f9743cdc8b591f82da1a38dd43a010a7b0c9de5fd7
     command: ["--config", "/etc/engine/mscopilot.litellm.yaml", "--port", "4000"]
     environment:
       COPILOT_API_KEY: ${COPILOT_API_KEY:?}
@@ -96,7 +98,8 @@ services:
 
   # ── unit 3: zai ──
   litellm3:
-    image: ghcr.io/berriai/litellm:v1.103.0
+    # litellm v1.103.0
+    image: ghcr.io/berriai/litellm@sha256:bd089afdcd35b894b14a93f9743cdc8b591f82da1a38dd43a010a7b0c9de5fd7
     command: ["--config", "/etc/engine/zai.litellm.yaml", "--port", "4000"]
     environment:
       ZAI_API_KEY: ${ZAI_API_KEY:?}
