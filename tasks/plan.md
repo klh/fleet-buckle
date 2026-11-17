@@ -867,8 +867,9 @@ P1–P5 record real pilot receipts. They do **not** prove that a retried
 supervisor assignment resumes the same Pi Durable conversation, that an
 unsafe external effect is reconciled exactly once, or that the current
 "background" child survives its parent's tool call and process death.
-P6 closes those gaps before treating the pilot as a reliable autonomous
-worker service. Design references are the installed
+P6 is production hardening for an already operating worker service.
+Changes need compatibility, security, observability, rollback and
+failure-injection evidence before rollout. Design references are the installed
 `@earendil-works/pi-durable@1.5.0` API, upstream examples
 [`22-subagent-background`](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/22-subagent-background.ts),
 [`32-tests-after-edits`](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/32-tests-after-edits.ts),
@@ -882,7 +883,7 @@ example; copying the example's React or Cloudflare host is not planned.
 
 | Owner                             | Authority and output                                                                                                                                                                                                 | Boundary                                                                                                                                                                                    |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fleet Suspenders                  | Global job admission, capacity, placement, writer epoch, operator cancel intent and audit.                                                                                                                           | The current `fleet-worker` supervisor is a pilot adapter. Migrate it deliberately; never run two independent authoritative schedulers for the same jobs.                                    |
+| Fleet Suspenders                  | Global job admission, capacity, placement, writer epoch, operator cancel intent and audit.                                                                                                                           | The current `fleet-worker` supervisor is a production adapter awaiting migration. Migrate it deliberately; never run two independent authoritative schedulers for the same jobs.            |
 | `fleet-worker` Pi host            | One process owns each journal. The durable job document and task graph own conversation/submission identity, local phase, child ownership, gate outcome and effect receipts. Expose versioned read and command APIs. | Do not mint global Fleet work or open one journal in two processes. An external control DB and a Pi journal cannot share a transaction; reconcile with stable keys and idempotent commands. |
 | `fleet-worker` execution adapters | Assignment-scoped workspace, GitHub effects, Gondolin/Docker tool guests. Model connection and journal stay outside the guest.                                                                                       | A guest neither decides job state nor owns the sole journal. Never clean a workspace still used by a live conversation.                                                                     |
 | `fleet-buckle` and LiteLLM        | Buckle owns identity, context, traffic and usage observation; LiteLLM owns model routing.                                                                                                                            | Neither schedules workers or owns Pi task state.                                                                                                                                            |
@@ -1008,21 +1009,44 @@ Adopt features in dependency order, with one policy owner per decision:
    spend, qualify paginated spend logs and the price map with a
    database; `$0` without a known price is unknown spend. Throughput
    does not prove productive Pi work.
-3. **Model routing.** The worker's `.prefer`/`must` probe chooses an
-   entitled model group for a job. LiteLLM may pick among equivalent
-   deployments in that group. Test least-busy, usage-aware and
-   latency-aware choices against matched traffic. Put retries and
-   cooldowns in one layer, with each attempt visible. Cross-group
-   fallback must respect `must`/`prefer`, grants, context size,
-   tool/SSE support, quality, price and BYOC credential boundaries.
-   After content reaches the client, continuation needs a separate
-   semantic test and a visible served-model receipt. LiteLLM never
-   reassigns a Pi job or owns its journal. Explicitly set and test the
-   retry policy: LiteLLM's documented default is two same-group retries,
-   while the worker currently configures Pi with `maxRetries: 3`.
-   Without a budget across layers, one failed generation can multiply
-   upstream attempts. The BYOC pass-through route is a direct endpoint;
-   do not assume router selection or cross-group fallback applies there.
+3. **Auto Router is the production model selector for eligible Pi turns.**
+   Configure LiteLLM's [Auto Router](https://docs.litellm.ai/docs/auto_router/)
+   as a virtual model whose tiers refer to deployed engine rows. It selects
+   a model group per request; deployment balancing is a separate router
+   decision. Several Copilot models suffice even with one vendor. Register
+   Kev as a private OpenAI-compatible model for `classifier_type: llm` if
+   its structured output, latency and quality qualify; the
+   [classifier guide](https://docs.litellm.ai/docs/auto_router/optimize_classifier)
+   documents this seam. A System One classifier or Python plugin needs a
+   different interface. Pin the image, tier map, default model, classifier
+   timeout, circuit breaker and fallback policy in generated config.
+
+   Preserve the anchored `.prefer` contract above: `must=a,b` tries only
+   those models in order, and `prefer=a,b` tries them before defaults.
+   A router alias is eligible only when explicitly listed as a candidate
+   or chosen in the documented default list; do not reinterpret an
+   existing list as a broad tier set. A `must` list of concrete models
+   bypasses Auto Router. Migrate the owner-controlled defaults to the
+   router alias only after matched qualification, with a named rollback
+   to the former ordered defaults. The current worker builds one Pi provider model
+   at boot from `pick.model` (`src/worker.session.ts`): verify its router
+   alias, served-model receipt, context limits, tools, SSE and usage before
+   switching traffic. Keep one Kev routing decision per turn across the
+   worker/Suspenders/LiteLLM boundary. BYOC pass-through is a direct
+   endpoint and does not inherit Auto Router behavior.
+
+   Put retries and cooldowns in one layer with a bounded attempt budget:
+   LiteLLM documents two same-group retries by default, and the worker
+   currently configures Pi with `maxRetries: 3`. Cross-group fallbacks
+   must honor pins, grants, context, tool/SSE support, quality and
+   credential boundaries. Never silently continue a tool stream on a
+   different model after content was delivered. Record requested alias,
+   classifier tier, served model, attempts and fallback cause under the
+   Pi submission. Compare held-out Fleet tasks and a bounded shadow
+   evaluation before switching production traffic; measure solver
+   success, classifier cost, total spend and p95 latency, not tier-choice
+   agreement alone. [Evaluation guide](https://docs.litellm.ai/docs/auto_router/evaluate).
+
 4. **Access consolidation.** Compare Buckle principal scopes and
    APIM/Entra identity with LiteLLM virtual keys, teams, roles, access
    groups, JWT mapping and audit logs. Choose one authoritative model
@@ -1040,12 +1064,111 @@ Adopt features in dependency order, with one policy owner per decision:
    redaction before export. Each feature gets a bounded issue,
    matched on/off test, rollback and source-of-truth decision.
 
+**Use LiteLLM's agent gateway capabilities for remote workers.**
+The [A2A gateway](https://docs.litellm.ai/docs/a2a) is a strong fit
+for an external agent-to-agent entry point: agent cards, `message/send`,
+`message/stream`, task lookup/cancel/resubscribe, key/team grants and
+trace attribution are already defined. LiteLLM routes to an upstream
+A2A agent; it does not turn today's Pi worker or coordinator into one.
+Implement a thin A2A endpoint only where a real remote caller needs it,
+mapping task IDs to Fleet job IDs/epochs and commands to the one
+authoritative admission/cancel API. Register that endpoint in LiteLLM
+and let Buckle carry identity, scopes, correlation and streaming through
+to it. Pin protocol version 1.0 or 0.3 and test task persistence,
+reconnect, cancellation, auth and duplicate delivery. The LiteLLM
+kill-switch webhook is an admin action, not a replacement for Fleet's
+durable cancellation and epoch fencing.
+
+The [MCP gateway](https://docs.litellm.ai/docs/mcp) can expose selected
+coordinator/worker tools through native key/team access and Streamable
+HTTP, SSE or stdio. Use Buckle as the authenticated ingress and pass
+LiteLLM's protocol through without inventing another tool registry.
+Inventory tool authority and side effects first; privileged actions
+still need Fleet's idempotency, receipts and writer-epoch checks. MCP
+SSE, model-token SSE and the operator SSE feed have separate contracts.
+Keep stdio disabled unless a specific trusted tool needs it.
+
+**Enable [LiteLLM Lens](https://docs.litellm.ai/docs/proxy/lens) in
+production.** The [deployment guide](https://docs.litellm.ai/docs/proxy/lens/deployment)
+says Lens is a separate service with ClickHouse; a LiteLLM sidebar
+connection alone does not instrument agents. Plan and deploy a pinned
+Lens image, private ClickHouse storage, backups, retention, service
+tokens and restricted UI access. Connect it to the LiteLLM dashboard,
+then export Pi worker and coordinator OpenTelemetry traces directly
+to Lens with job/conversation/submission/epoch correlation and a tracing
+key. Configure the analysis model before scheduled investigations.
+Prove a stored tool/model trace, a linked LiteLLM spend record and a
+redacted investigation in a test environment before production
+traffic. Preserve Fleet's Pi journal and effect receipts as authority;
+Lens traces and findings are diagnostic evidence, with explicit missing
+data and sampling. Its docs label it early access, so qualify release
+support, image compatibility, security and rollback before rollout.
+
+**Production change order for the current one-vendor deployment:**
+
+Use LiteLLM's [production guide](https://docs.litellm.ai/docs/proxy/prod)
+as a release gate. Set `LITELLM_MODE=PRODUCTION`, keep the master key in
+a secret manager, configure `trusted_proxy_ranges` for the actual ingress,
+disable verbose/content logging and use structured logs. Pin explicit
+request and stream timeouts to the Buckle/APIM/Pi deadline budget; do
+not copy the guide's sample timeout without an end-to-end stream test.
+If adding the database, keep `LITELLM_SALT_KEY` stable, size its
+connection pool for the maximum replica/worker count, batch spend
+writes, back it up and run migrations once before serving the new
+image. Decide fail-closed versus LiteLLM's restricted DB-outage mode
+with an explicit threat and outage test; the latter is documented only
+for private-network deployments. On multiple replicas, give LiteLLM's
+shared scheduled jobs one owner and use Redis for routing state.
+Production metrics need retention, alert ownership and a tested
+recovery path, not just a reachable `/metrics` endpoint.
+
+- Repair the checked-in Buckle→engine address and service credential
+  mapping, keep the engine API off public ingress, and prove both
+  engine-held and BYOC calls through Buckle. The engine-held service
+  credential should be a scoped LiteLLM virtual key once DB-backed
+  keys are qualified; the master key stays in the engine/admin plane.
+  Resolve the live overlay before changing files, and preserve the
+  working route during a canary. Pin the qualified image digest and
+  retain the previous image/config for rollback.
+- Change the source generator
+  `tools/src/buckle.gen-engine-config.ts`, then regenerate the
+  checked-in LiteLLM config; never hand-edit its generated model rows.
+  Enable the Prometheus callback on the qualified image and scrape
+  privately on the existing engine port first. Add explicit retry
+  settings and a cross-layer attempt ceiling after failure tests.
+  Generate the Auto Router row with deployed tiers and a qualified
+  Kev classifier leg; validate the router alias through Pi, `must` and
+  `.prefer` policy, classifier outage fallback and held-out task quality
+  before canary traffic. Record the selected model and router decision.
+  Route fallback only among separately qualified Copilot models; with
+  one backend per group, least-busy/latency routing has no useful
+  deployment choice yet. Keep mid-stream continuation disabled until
+  it passes tool, JSON and crash tests.
+- If per-user access, enforced budgets and durable spend logs are
+  required, deploy backed-up PostgreSQL before enabling LiteLLM virtual
+  keys and team policy. Test migration, DB outage, key revocation,
+  spend lag and rollback. Add Redis when multiple LiteLLM processes or
+  replicas need shared cooldown/rate/affinity state; one process does
+  not need it solely for routing. Validate feature availability and
+  licensing on the pinned image, especially pass-through auth and
+  advanced identity/admin options.
+- Define SLOs and alerts for availability, first-token latency, stream
+  completion, rate-limit/fallback rate, spend-log lag and unknown usage.
+  Deploy and connect Lens plus ClickHouse as a separately monitored
+  service, instrument Pi and coordinator traces, and verify retention,
+  redaction, spend join, backups and trace access before enabling
+  investigations. Qualify native A2A/MCP gateway calls through Buckle
+  with real remote-worker and coordinator use cases.
+  An outside-process probe remains the health authority. Rehearse
+  engine restart, DB/Redis loss, a failed image upgrade and rollback
+  with in-flight Pi work before claiming production readiness.
+
 ### 2026-11-17 work audit and merge gates
 
 - Fleet-worker issue #1 is labeled docs only. Open PR #2 now contains
   only `docs/ownership-map.md`. Its proposed target table moves global
   mint, claim, lease and requeue policy into worker `job/`, conflicting
-  with Suspenders target ownership above. Label those as current pilot
+  with Suspenders target ownership above. Label those as current adapter
   policy and map their eventual Suspenders move before accepting PR #2.
 - Open PR #6 addresses issue #3 (`useTemplate`) and currently contains
   the session fix, regression test and test notes. PRs #2 and #6 remain
@@ -1101,16 +1224,16 @@ per `implementation-contract.md`; do not give one agent all of P6.
    into small `job/` (identity,
    durable task, receipts), `agent/` (harness, conversation, child,
    gate), `execution/` (workspace, GitHub effects, guest tools), and
-   `adapters/supervisor/` (temporary pilot wire) modules. Keep thin
+   `adapters/supervisor/` (current placement wire) modules. Keep thin
    compatibility entry points, `worker.env.ts` as the worker env
    boundary, and existing laws. Move no scheduler or Pi code into
    Buckle. **Exit:** one documented start path for supervised jobs,
-   one ownership map, no duplicated scan/settle logic, unchanged pilot
+   one ownership map, no duplicated scan/settle logic, unchanged production
    cycle against the existing image contract, and typecheck, unit,
    law and e2e gates green. Each physical move gets its own bounded
    file allowlist. Fleet-worker issue #1 requests the ownership map;
    review its target-module table against this separation before accepting
-   PR #2. The current pilot may contain minting and leases in worker
+   PR #2. The current adapter contains minting and leases in worker
    `supervisor/`, but those remain Suspenders target responsibilities.
    `worker.durable-main.ts` is already above the 400-line warning and is
    the first decomposition candidate. Keep each move law-clean.
@@ -1142,7 +1265,7 @@ per `implementation-contract.md`; do not give one agent all of P6.
    through a recoverable outbox/reconciliation step because the two
    stores cannot commit atomically. Compare-and-swap reports and
    cancellation by epoch. Cancel reaches Pi `abort()` and owned
-   children and records whether cleanup completed. Migrate the pilot
+   children and records whether cleanup completed. Migrate the current
    supervisor behind this contract, then switch placement authority
    to Suspenders without dual dispatch. **Exit:** lost claim response,
    expired lease, stale writer, repeated cancel and lost report yield
@@ -1221,7 +1344,11 @@ per `implementation-contract.md`; do not give one agent all of P6.
    blocked and productively finished work; slow clients, reconnect and
    worker loss neither fabricate zero usage nor erase the terminal outcome.
 8. **[ ] Step 8 — build the UI from Pi's typed view structures**
-   (GUI owner in its own client surface; after 7). Amend
+   (GUI owner in its own client surface; after 7). Start with an API and
+   GUI design review: task flows, data ownership, versioned schemas,
+   sample payloads, SSE reconnect/error states, permission matrix,
+   responsive layouts and accessibility. Approve those artifacts
+   before component or route implementation. Amend
    `tasks/gui-brief.md` before implementation: retain its uniform
    layer registry, vanilla DOM, tokenized CSS, glyph+word states,
    server-side credentials and read-mostly API boundary. Add optional
