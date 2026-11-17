@@ -1,32 +1,15 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   // The entry/project contract (the qlty.toml knip block points here).
-  // Truthful model: deploy/worker is a real workspace — its own
-  // package.json, its own pinned image install; the root package.json
-  // declares it under "workspaces". knip-native runs (`npx knip@5.88.1`)
-  // are CLEAN in this model.
-  //
-  // KNOWN ARTIFACT, deliberately NOT silenced: qlty additionally invokes
-  // knip once per workspace with cwd=deploy/worker while still passing
-  // this root config; from that cwd knip resolves zero project files and
-  // reports deploy/worker's five deps (the four runtime deps + pi-schema
-  // for the vendored examples) as unused. Do not add config tricks
-  // (dual-face globs, ignoreDependencies) to hide those five — they are
-  // an invocation artifact, and the fix belongs upstream in qlty's
-  // per-workspace config handling. Verify with: npx knip@5.88.1
+  // The durable worker LIVES IN klh/fleet-worker now (see
+  // docs/worker-moved.md); this repo is the gateway only. Verify with:
+  // npx knip@5.88.1
   "workspaces": {
     ".": {
       // src/agents is the staged agent-job wave (wiring lands with the
       // server lift) — its files are entries until their consumer exists
       "entry": ["tools/src/*.ts", "test/**/*.ts", "src/agents/*.ts"],
       "project": ["src/**/*.ts", "deploy/front/*.ts", "tools/**/*.ts", "test/**/*.ts"],
-    },
-    "deploy/worker": {
-      // examples/ is the vendored @earendil-works/pi-durable v1.5.0
-      // teaching corpus (provenance in examples/README.md): each file is
-      // a self-contained runnable, i.e. an entry — not dead code
-      "entry": ["worker.main.ts", "examples/*.ts"],
-      "project": ["*.ts"],
     },
   },
   "ignoreBinaries": ["qlty"],

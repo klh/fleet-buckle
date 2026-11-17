@@ -224,7 +224,7 @@ provider`), so a chain (b1→b2→b3) plus a direct edge (b1→b3) still
 - **Types are zod-anchored.** Every data shape lives in `src/schemas/`
   as `buckle.<thing>.zod.ts`; types are `z.output`, never hand-written.
   **ZOD SCHEMAS FIRST → TYPES DERIVED FROM IT, ALWAYS** — no
-  compartment is exempt (deploy/worker, gui, tools, tests included):
+  compartment is exempt (gui, tools, tests included):
   the schema is the source, the type is `z.infer`, a hand-written
   `interface`/`type` standing in for a wire/config shape is a defect.
   Codecs parse in/out at every boundary; failures are a `validation`

@@ -23,8 +23,8 @@
     "README.md"
   ],
   "scripts": {
-    "test": "bun test && bun test ./deploy/worker",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p deploy/gui && tsc --noEmit -p deploy/worker",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p deploy/gui",
     "test:smoke": "bun --bun playwright test --project=smoke",
     "test:e2e": "bun --bun playwright test --project=e2e",
     "test:federation": "bun --bun playwright test --project=federation",
@@ -34,9 +34,6 @@
     "quality:smells": "qlty smells --all --no-upgrade-check",
     "quality:dead": "qlty check --all --filter knip --no-upgrade-check"
   },
-  "workspaces": [
-    "deploy/worker"
-  ],
   "dependencies": {
     "@earendil-works/pi-ai": "1.5.0",
     "@earendil-works/pi-durable": "1.5.0",

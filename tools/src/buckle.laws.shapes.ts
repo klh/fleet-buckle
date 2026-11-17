@@ -27,16 +27,8 @@ export function checkNaming(ctx: LawsCtx, files: string[]): void {
 // 2. REPO RULE: every type comes from a zod schema and typeof —
 // hand-written interfaces and object-literal type aliases fail anywhere
 // (src/, tools/, test/); a type alias is legal ONLY as z.output/z.input.
-// VENDORED EXEMPTION: deploy/worker/examples/ is the upstream
-// @earendil-works/pi-durable v1.5.0 teaching corpus, copied verbatim
-// (only import paths + run-line comments rewritten; provenance in its
-// README). Rewriting upstream teaching code to this repo's zod idiom
-// would misrepresent the API it documents — the exemption is scoped to
-// that directory and does NOT cover new repo code.
-const VENDORED_EXAMPLES = "/deploy/worker/examples/";
 export function checkTypeLaw(ctx: LawsCtx, files: string[]): void {
   for (const f of tsFiles(files)) {
-    if (f.includes(VENDORED_EXAMPLES)) continue;
     const src = readFileSync(f, "utf8");
     const iface = src.match(/^\s*(export\s+)?interface\s+(\w+)/m);
     if (iface)

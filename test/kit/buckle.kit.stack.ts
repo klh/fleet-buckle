@@ -52,7 +52,4 @@ export const SERVICES = [
   "buckle1",
   "buckle2",
   "buckle3",
-  "gh-stub",
-  "worker3",
-  "worker4",
 ] as const;
