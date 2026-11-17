@@ -691,6 +691,21 @@ A no-split choice is a valid recorded outcome.
 
 **Receipts**:
 
+- **2026-11-17 (parent/children split, live)** — worktree-per-child
+  landed (fleet-worker `570a1f0`: `worker.session.scopes.ts` registry,
+  `sessionTaskHost.spawn` cuts `git worktree add -b <parent>-cN
+  .children/<branch>`, depth cap 1, bash/gh/gate resolve cwd per
+  caller) and PROVED live on the VMSS rig: issue #51
+  (`klh/fleet-recovery-rig`, "two INDEPENDENT additions") was claimed
+  by the parent session, which did reverse.py solo, spawned a child
+  (worktree branch `agent/51-c1`, commit `62798f2` "Add Unicode case
+  helpers and table-driven CLI coverage for #51" authored in the
+  child), MERGED the child's commit into mainline `agent/51`
+  (`61863d8`), finished the docs itself, and settled done — PR #52,
+  fence:6, 130 python tests passing, 21 turns, 202s. The child's
+  branch, worktree dir (`.children/agent/51-c1`), and merged commit
+  were all observed on disk post-run.
+
 - **2026-11-17 (simultaneous jobs, 8-way)** — supervisor on the Azure
   VMSS (worker-gondolin:4858518, MAX_LANES=8, executor=gondolin,
   /dev/kvm) imported 8 freshly minted issues
