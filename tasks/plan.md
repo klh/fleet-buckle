@@ -112,15 +112,15 @@ flowchart LR
   OB --> Engines[Model engines] --> H100[H100 NVL hosts]
   AZ -->|context policy then proxy| Seat[VMSS LiteLLM engine: Copilot BYOC]
   Fleet[Fleet Suspenders: admission and recovery] --> Host[Approved runner host]
-  Host --> Pi[Pi Durable parent and durable journal]
-  Pi -->|models using owner identity in pilot| APIM
-  Pi -->|bounded tools| Runner[Gondolin runner] --> VM[MicroVM guest]
-  Pi -->|optional split| Child[Child Pi Durable session]
-  Child -->|scoped tools| Runner
+  Host -->|launch and fence| Runner[Gondolin substrate]
+  Runner --> VM[Parent lane microVM: Pi Durable supervisor]
+  VM -->|models using owner identity in pilot| APIM
+  VM -->|work directly or split| Child[Specialist Pi Durable children]
+  Child -->|isolated placement when needed| ChildVM[Child Gondolin microVM]
   Child -->|model requests| APIM
-  Pi --> Result[PR, trace, usage, outcome] --> Fleet
-  Result --> BLAM[BLAM matched trials] -->|measured seeds| Pi
-  Knowledge[Decant and Fleet knowledge: later] -.-> Pi
+  VM --> Result[PR, trace, usage, outcome] --> Fleet
+  Result --> BLAM[BLAM matched trials] -->|measured seeds| VM
+  Knowledge[Decant and Fleet knowledge: later] -.-> VM
 ```
 
 - **fleet-buckle** = the identity-aware MITM around LiteLLM. It presents
@@ -153,8 +153,15 @@ flowchart LR
 - **fleet-worker** (new repo) = Pi Durable parent/child runtime, OCI image,
   versioned capability seeds, journal, and whole-cycle e2e. A parent may
   work alone or split into scoped child sessions and integrate their patches.
-- **Runner** = disposable microVMs for bounded tool operations. The Pi
-  supervisor, model connection, and durable journal stay outside guests.
+- **Runner target** = one Gondolin microVM per autonomous worker lane,
+  with a Pi Durable parent that supervises its own task graph, can work
+  itself, and can create scoped Pi Durable specialist children. A child
+  may share the parent guest or get its own fenced microVM when isolation,
+  capacity or lifetime warrants it. The host
+  supervisor admits, fences, starts and observes the guest. The journal
+  must survive guest replacement outside its disposable root disk;
+  model access goes through Buckle/LiteLLM under scoped host policy.
+  Current bounded tool guests are an intermediate proof, not the target.
   Inference GPUs and microVM-capable runner hosts can be separate machines.
 - **Fleet Suspenders** = admission, capacity, fencing, monitoring, recovery,
   and operator outcomes. Minimal integration is needed for the runner pilot;
@@ -496,8 +503,9 @@ Host-loss reimage recovery remains untested (single VM).
   (buckleadmin itself lacks the kvm group; the device mapping
   suffices). First slice of P2.2 proven; the executor seam is next.
 
-- **P2.2** keep the Pi Durable parent and journal in the OCI worker on
-  the host. Add a Gondolin executor for bounded tool guests, with
+- **P2.2 (intermediate, already implemented)** keep the Pi Durable parent
+  and journal in the OCI worker on the host. Add a Gondolin executor for
+  bounded tool guests, with
   workspace leases, resource limits, default-denied network, and scoped
   credentials. A tool-guest proof is not whole-worker microVM packaging.
 
@@ -871,15 +879,15 @@ unsafe external effect is reconciled exactly once, or that the current
 P6 is production hardening for an already operating worker service.
 Changes need compatibility, security, observability, rollback and
 failure-injection evidence before rollout. Design references are the installed
-`@earendil-works/pi-durable@1.5.0` API, upstream examples
+`@earendil-works/pi-durable@1.5.2` API, upstream examples
 [`22-subagent-background`](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/22-subagent-background.ts),
 [`32-tests-after-edits`](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/32-tests-after-edits.ts),
 [`34-submit-in-commit`](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/34-submit-in-commit.ts),
 [`40-tool-waits-for-webhook`](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/40-tool-waits-for-webhook.ts),
 and the [Cloudflare wake/activity example](https://github.com/earendil-works/pi-durable-cloudflare).
 Upstream main now documents signal-driven parked tools and `onYield`
-hook tasks that the installed 1.5.0 package does not export. Treat those
-examples as upgrade candidates, not executable 1.5.0 instructions.
+hook tasks that the installed 1.5.2 package does not export. Treat those
+examples as upgrade candidates, not executable 1.5.2 instructions.
 Verify APIs against the pinned package before adopting a newer upstream
 example; copying the example's React or Cloudflare host is not planned.
 
@@ -902,11 +910,86 @@ is live in the same queue (task 67 att2).
 | Owner                             | Authority and output                                                                                                                                                                                                 | Boundary                                                                                                                                                                                    |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Fleet Suspenders                  | Global job admission, capacity, placement, writer epoch, operator cancel intent and audit.                                                                                                                           | The current `fleet-worker` supervisor is a production adapter awaiting migration. Migrate it deliberately; never run two independent authoritative schedulers for the same jobs.            |
-| `fleet-worker` Pi host            | One process owns each journal. The durable job document and task graph own conversation/submission identity, local phase, child ownership, gate outcome and effect receipts. Expose versioned read and command APIs. | Do not mint global Fleet work or open one journal in two processes. An external control DB and a Pi journal cannot share a transaction; reconcile with stable keys and idempotent commands. |
-| `fleet-worker` execution adapters | Assignment-scoped workspace, GitHub effects, Gondolin/Docker tool guests. Model connection and journal stay outside the guest.                                                                                       | A guest neither decides job state nor owns the sole journal. Never clean a workspace still used by a live conversation.                                                                     |
+| `fleet-worker` Pi guest (target)  | One process owns each journal. The durable job document and task graph own conversation/submission identity, local phase, child ownership, gate outcome and effect receipts. Expose versioned read and command APIs. | Do not mint global Fleet work or open one journal in two processes. An external control DB and a Pi journal cannot share a transaction; reconcile with stable keys and idempotent commands. |
+| `fleet-worker` execution adapters | Assignment-scoped workspace, GitHub effects, Gondolin lane guests and interim tool guests. The target guest runs Pi, models and tools; its journal survives guest replacement.                                       | The host owns placement and fencing; only the active guest writes its journal. Never clean a workspace still used by a live conversation.                                                   |
 | `fleet-buckle` and LiteLLM        | Buckle owns identity, context, traffic and usage observation; LiteLLM owns model routing.                                                                                                                            | Neither schedules workers or owns Pi task state.                                                                                                                                            |
 | `fleet-health`                    | Outside-process service and host health verdicts.                                                                                                                                                                    | A responsive service or heartbeat does not certify productive Pi work.                                                                                                                      |
 | Operator GUI                      | Separate thin client over authenticated, versioned HTTP snapshot/stream/command APIs.                                                                                                                                | No SQLite, Docker, journal or orchestration imports; no second mutable job ledger.                                                                                                          |
+
+**Image layering and Pi upgrade invariant.** The published `tool-seed`
+contains Bun, Playwright, TypeScript and CLI tools; its layer audit forbids
+Pi Durable and Pi AI. Today's `fleet-worker` image installs Pi libraries
+and runs Pi outside the tool guest; this is the intermediate state. The
+target per-lane Gondolin guest image layers Pi Durable and its worker
+runtime on the tool base and runs the **whole agent** inside the VM. A
+thin host supervisor owns placement, fencing, guest policy and API
+projection. The guest's journal must persist outside disposable VM root
+storage, with proven SQLite lock/fsync semantics or another qualified
+durable backend; one fenced guest writes it at a time. Gondolin disk
+checkpoints are reusable environments, not journal receipts. Model
+traffic reaches Buckle/LiteLLM through scoped host policy.
+
+The current Worker Dockerfile must copy `package.json` **and** `bun.lock`
+and install with `--frozen-lockfile`; carry that law to the guest image.
+The separate historical `pi-durable-workers/seed` tree is not the
+deployed `tool-seed`. A Pi upgrade changes the Worker/agent-guest image
+and requires recovery proof before rolling; it does not rebuild Buckle,
+LiteLLM or `tool-seed` unless their own content changed. Verify the
+published `tool-seed` tag and descriptor separately for provenance.
+
+The Pi parent inside the lane guest is the **job supervisor**: it may
+execute a task itself or shard independent, bounded work into durable
+specialist children, await or track their handles, validate each result,
+integrate the outputs and close children. Admission limits parent fan-out
+and budgets; a child gets a scoped brief, workspace, credentials and
+stable ownership key, not a copy of the parent's whole mutable context.
+Same-guest children can use Pi's conversation/task ownership in the
+parent journal. A separately placed child has its own fenced process and
+journal, with durable parent-child admission and report reconciliation.
+The outside Fleet controller only places, restarts, fences and observes
+these guests across host loss; it does not implement the parent's
+reasoning or task decomposition. Durability resumes committed Pi work;
+external GitHub/model effects still require idempotency and reconciliation.
+
+### Durable capability dispatch
+
+The Pi parent makes one journaled decision per work unit: **execute in
+its own context**, **start a specialist Pi child**, **invoke a governed
+MCP tool**, or **submit an external A2A agent task**. Its choice uses a
+versioned capability registry (purpose, input/output schema, supported
+model/tool features, trust scope, data/effect class, placement, cost and
+concurrency limits). Keep specialization as data and explicit agent
+templates; do not copy the parent's entire prompt, secrets or mutable
+workspace into every child. A child receives a bounded brief, its own
+workspace scope, budget and stable parent/child key. The parent may fan
+out to multiple independent children, wait by policy, integrate their
+receipts, cancel or steer them, and release their guest when terminal.
+Keep a cap on total children, depth and outstanding cost.
+
+Same-guest Pi children use Pi Durable task/conversation ownership and
+the parent journal. A separately placed Pi child is another durable
+worker with its own journal and fencing epoch; the parent commits
+dispatch intent before launch, records the external child ID and
+reconciles admission, result and cancellation after restart. Gondolin
+places/isolate guests; it does not schedule the task graph. MCP is the
+scoped tool boundary through LiteLLM and Buckle, not a second agent
+scheduler. A2A is appropriate only for a genuinely remote agent with a
+task protocol and independent lifecycle; wrap its task ID, status,
+cancel and result in a Pi durable effect task. Do not route a local Pi
+child through A2A merely because the protocol exists.
+
+Every decision and effect emits an audit receipt: job/parent/child/task
+ID, journal generation and writer epoch, capability and template
+version, selected model/deployment, principal, bounded input digest,
+request/idempotency key, attempt, outcome, artifact reference, elapsed
+time, token/cost usage and trace. Redact secrets and sensitive payloads;
+retain enough to explain model choice, tool action and recovery. On
+restart, find the existing child or external task by stable key before
+launching again. A journal resume does not by itself guarantee exactly
+once delivery to GitHub, MCP or A2A. Fault-inject before dispatch, after
+remote acceptance, after result and before receipt commit. Show the
+parent and specialist task tree, wait reason, wake time, retries and
+receipts through the typed read API and GUI.
 
 The admission owner mints one **global job ID**. Each placement has a
 monotonically increasing **writer epoch**. The Pi journal stores that ID
@@ -1450,20 +1533,35 @@ Each numbered step is a dependency boundary. Dispatch it as bounded,
 one-repository, one-behavior work items with file allowlists and tests
 per `implementation-contract.md`; do not give one agent all of P6.
 
+**Architecture gate before Step 1:** specify the host launcher ↔ Pi
+guest protocol (admit, wake, inspect, cancel, stream, terminal receipt),
+the per-lane guest image and tool environment, and a persistent journal
+backend. Prove real SQLite durability and locking through the selected
+Gondolin mount, or choose a tested remote backend; never equate a VM
+snapshot with a durable journal. Kill and replace the VM after intent,
+remote effect and terminal commit; reopen the **same** journal under a
+new fenced epoch with no duplicate effect or second writer. Prove guest
+egress to Buckle/LiteLLM and scoped credential handling. Only then
+move the Pi process from the current OCI host into the guest. No nested
+tool VM is required unless a separate isolation need is demonstrated.
+
 1. **[ ] Step 1 — remove competing paths and establish the layout**
    (`fleet-worker`; prerequisite for later steps). Inventory
    `worker.main.ts`'s `flow|durable`, the separately launched
    `worker.lane.ts`, and `supervisor.main.ts`. The canonical target is
-   one per-assignment Pi `JobTask` using the existing session extension:
-   the lane entry point becomes a thin admission/host adapter, while
+   one per-assignment Pi `JobTask` inside the lane guest, using the
+   existing session extension: the host entry point becomes a thin
+   Gondolin launcher/admission adapter and the guest entry point opens
+   the fenced journal and resumes the job, while
    the `flow` sweep and forever GitHub-scanning durable mode are
    migration sources, not competing supervised runtimes. Inventory
    their behavior and tests before retiring either; no silent deletion
    or wholesale rewrite. Decompose the mixed files by responsibility
    into small `job/` (identity,
    durable task, receipts), `agent/` (harness, conversation, child,
-   gate), `execution/` (workspace, GitHub effects, guest tools), and
-   `adapters/supervisor/` (current placement wire) modules. Keep thin
+   gate), `execution/` (in-guest workspace, GitHub effects and tools),
+   `adapters/gondolin/` (host launch, mounts, egress policy and lifecycle),
+   and `adapters/supervisor/` (placement wire) modules. Keep thin
    compatibility entry points, `worker.env.ts` as the worker env
    boundary, and existing laws. Move no scheduler or Pi code into
    Buckle. **Exit:** one documented start path for supervised jobs,
@@ -1525,7 +1623,7 @@ per `implementation-contract.md`; do not give one agent all of P6.
    cannot steal an active scan. Give each GitHub branch, comment, push
    and PR action a stable job/effect key and an observed-before-retry
    reconciliation query covering open, closed and merged PRs. Bank the
-   remote result before advancing. On pinned pi-durable 1.5.0,
+   remote result before advancing. On pinned pi-durable 1.5.2,
    `afterRun` tasks run **after** the answer and submission settle
    `done`; use them for follow-up tests, not as the job's pass gate.
    Its `onYield` can request a continuation but cannot return a
@@ -1546,7 +1644,9 @@ per `implementation-contract.md`; do not give one agent all of P6.
    A failing test plus an existing PR must stay failed or blocked.
    Then make that result a durable phase input to reporting.
 5. **[ ] Step 5 — implement foreground and background children**
-   (`fleet-worker`; after 2–4). A foreground child is owned by its
+   (`fleet-worker`; after 2–4). The Pi parent chooses direct execution or bounded specialist fan-out
+   from task needs and capacity; child count is an explicit budget, not
+   an unbounded process clone. A foreground child is owned by its
    replay-safe tool task: find an existing child by owner task before
    creation, use a stable request ID, wait for its outcome, and merge
    only reviewed commits. A genuinely deferred child uses a durable
@@ -1558,8 +1658,8 @@ per `implementation-contract.md`; do not give one agent all of P6.
    execution or report-back produces one child, correct scope, correct
    parent wait/idle behavior and one integrated result; parent abort
    follows the chosen ownership boundary.
-6. **[ ] Step 6 — use wake as scheduling data** (`fleet-worker` host,
-   then Suspenders adapter; after 3). Pinned pi-durable 1.5.0 supports
+6. **[ ] Step 6 — use wake as scheduling data** (`fleet-worker` Pi
+   guest and host adapter, then Suspenders adapter; after 3). Pinned pi-durable 1.5.2 supports
    checkpointed **time sleeps** and `wake()`, but does not export
    `defineSignal`, `harness.signal()`, or the newer parked-tool signal
    API shown on upstream main. Use time sleeps for retries and backoff;
@@ -1567,8 +1667,8 @@ per `implementation-contract.md`; do not give one agent all of P6.
    and a bounded reconciliation timer. Upgrade pi-durable deliberately
    before planning signal-driven parked tools or `SubmissionSettled`
    notifications; prove replay, duplicate/late delivery and cancellation
-   against the pinned replacement. On a persistent Bun host, use Pi's
-   timers. If the host is evictable, use `onWake`/`wake()` to arm one serialized alarm
+   against the pinned replacement. For a running Pi guest, use Pi's
+   timers. If the guest is evictable, the host uses `onWake`/`wake()` to arm one serialized alarm
    at the earliest sleep or active-work recovery heartbeat; arm before
    admission/resume, reopen on storage failure, and tolerate early or
    duplicate alarms. Outside-process host/lane health stays separate.
@@ -1714,8 +1814,25 @@ catalogs, credential storage, revocation and Lens exports. Keep
 client-scoped credentials separate from upstream OAuth tokens. None
 of this broader work blocks the Claude/Copilot smoke or Step 7A.
 
+### [ ] Step 7B — dispatch governed capabilities durably
+
+   (`fleet-worker`; after 3, 5 and 7A).
+   Implement the versioned capability registry and one parent decision
+   boundary for self-execution, specialist Pi child, LiteLLM MCP tool
+   and remote A2A task. Keep local Pi children on the native durable
+   task graph; separately placed children and remote A2A tasks need
+   stable external IDs, bounded admission, cancellation and result
+   reconciliation. MCP tools execute under scoped LiteLLM/Buckle grants
+   and return typed results to a Pi effect task. Give each path an
+   attempt budget, audit receipt and explicit failure state. Do not
+   build a second MCP gateway or agent scheduler in Worker. **Exit:**
+   one supervised job exercises all four paths in an isolated rig;
+   crash and replay at each dispatch/result boundary produces one
+   accepted child or external task, no duplicate side effect, faithful
+   usage/trace, and an operator-visible parent/child task tree.
+
 8. **[ ] Step 8 — build the UI from Pi's typed view structures**
-   (GUI owner in its own client surface; after 7 and 7A). Start with an API and
+   (GUI owner in its own client surface; after 7, 7A and 7B). Start with an API and
    GUI design review: task flows, data ownership, versioned schemas,
    sample payloads, SSE reconnect/error states, permission matrix,
    responsive layouts and accessibility. Approve those artifacts
