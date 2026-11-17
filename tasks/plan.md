@@ -14,7 +14,8 @@
 - [ ] P3 — H100 federation — parked (m04268)
 - [x] P4 pilot receipts — 8-way concurrent (PRs #103–#110), parent/child split (PR #52), run-key revocation (PR #50), stale-lease refusal (d3584bd), docs/RECOVERY.md; P6 tracks stronger durability claims
 - [x] P5 first slice — matched trials solo/concurrent/split run + docs/TRIALS.md (full BLAM deliberately not ported — owner directive)
-- [ ] ChatGPT review fixes (13 findings, 2026-11-17) — IN PROGRESS: #1 catch-all auth and #2 Buckle SSE landed in code; verify live paths and #3–#13 separately
+- [ ] ChatGPT review fixes (13 findings, 2026-11-17) — IN PROGRESS: #1 catch-all auth and #2 Buckle SSE landed in code; live-path verification and #3–#13 outstanding. #13 (litellm digest pinning) landed by a fleet lane as klh/fleet-buckle PR #2 (+55/−9, 8 files; new image-digest law `buckle.laws.images.ts`) — review/merge pending. Remaining findings #3–#12 need itemized briefs before they can be minted as fleet work.
+- [ ] P6 first slices — MINTED to the fleet (2026-11-17, klh/fleet-worker issues #22/#23/#24): exactly-once effects (#24) settled done att1; same-conversation recovery (#22) and operator SSE watch feed (#23) in flight on the VMSS (8 lanes, supervisor da9e5b4).
 - [ ] GUI — ChatGPT draft awaited against tasks/gui-brief.md (uniform layer-registry face)
 - [ ] zram on VMSS (m02251) · tracked-settings pin (m02917) · azure-buckle-as-Mac-upstream (m00957)
 - [ ] t-shirt store templatization — owner-queued, awaiting brief
@@ -880,6 +881,20 @@ Verify APIs against the pinned package before adopting a newer upstream
 example; copying the example's React or Cloudflare host is not planned.
 
 ### Separation of concerns and authoritative state
+
+**STATUS 2026-11-17 (fleet crunch, supervisor da9e5b4, 8 lanes)**: the
+worker plane ate its own backlog — klh/fleet-worker PRs #16 (issue #9
+guards/hardening), #17 (issue #11 durable child-scope rows), #20 (issue
+#18 no-op terminal settle + mint refuses closed issues), #21 (issue #19
+worker.lane.ts split into lane.fence.ts + lane.gh.ts) all merged
+clean (squash c24126e / 5fd6793 / 19432b7 + merge da9e5b4), gates green
+at every step (tsc, 152/152 unit, full Playwright rig 6/6 incl. the
+picker seam: claude-haiku-5.5 via `.prefer`, direct engine path). New
+worker-gondolin:da9e5b4 deployed on the VMSS. Repo-scoped tasks proven:
+supervisor tasks carry their own `repo` (POST /tasks minted
+klh/fleet-buckle #1 → PR #2 by clone-3, 10 turns, 3.5k out-tokens,
+fence 8 files). A second fleet repo (klh/fleet-belt, ChatGPT scaffold)
+is live in the same queue (task 67 att2).
 
 | Owner                             | Authority and output                                                                                                                                                                                                 | Boundary                                                                                                                                                                                    |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
