@@ -967,6 +967,50 @@ must not settle it as a successful completion. Test both first-chunk
 JSON errors and mid-stream SSE errors through APIM→Buckle→LiteLLM→Pi.
 Do not assume A2A, MCP or management errors share the LLM error envelope.
 
+### Request compatibility and conversation integrity
+
+The checked-in LiteLLM generator emits global `drop_params: true` for
+Copilot seats. Per the
+[drop-params guide](https://docs.litellm.ai/docs/completion/drop_params),
+that silently discards unsupported OpenAI parameters; it does not prove
+the requested tool, reasoning, JSON or cache behavior actually reached
+the selected model. Build a model × client-wire × feature matrix for
+Pi chat, Claude Messages, Codex Responses and Auto Router. For each
+row, capture the outbound provider shape and the returned behavior.
+Prefer deployment-specific `additional_drop_params` for known bad
+fields and narrowly declared `allowed_openai_params` only after the
+provider accepts them. Reject a required capability that would be
+dropped; never report a degraded call as full-featured success. The
+docs note that Claude Code/Codex user agents trigger implicit dropping
+on some LiteLLM versions, including a 1.103–1.108 bug around explicit
+`drop_params: false`; pin and probe the production build.
+
+[Provider-specific parameters](https://docs.litellm.ai/docs/completion/provider_specific_params)
+can pass through model config or request bodies. Keep model/provider
+settings in the generated LiteLLM row; allow request-time overrides
+only from trusted, scoped callers with a reviewed field allowlist.
+Never rely on `drop_params` to remove arbitrary provider-specific
+fields such as `mcp_servers`; test the actual Copilot rejection and
+strip or reject those fields explicitly at the owning boundary.
+
+LiteLLM's [message sanitization](https://docs.litellm.ai/docs/completion/message_sanitization)
+uses global `modify_params: true` in its Anthropic transformation: it
+may insert dummy tool results, remove orphaned real results and replace
+empty messages. That can make a request provider-valid while hiding a
+Pi journal/replay defect or changing the evidence the agent sees.
+Keep it disabled for durable Pi conversations unless a matched test
+proves the exact transformed transcript is recorded and an interrupted
+tool is never mistaken for a completed effect. Validate the Pi message
+sequence before the model call, and fail/repair from the durable
+journal when tool IDs or results disagree. For interactive CLI traffic,
+qualify sanitization separately with sampled before/after receipts and
+an explicit operator-visible repair marker. The docs say the setting
+is global with no per-request override, so isolate traffic by gateway
+instance if the required policies differ. Do not turn it on globally
+as a generic fix for malformed durable history. Its documented
+Anthropic-only application does not establish behavior for the
+`github_copilot/` provider path.
+
 ### LiteLLM capability and telemetry adoption
 
 LiteLLM can select deployments within a model group, retry, cool down
@@ -1393,6 +1437,11 @@ rollback, security review and an end-to-end receipt:
   Buckle; Pi distinguishes pre-stream JSON failure from HTTP-200
   in-band SSE error. Failure injection proves no false success,
   unbounded retry or lost fallback-attempt evidence.
+- The model/client compatibility matrix proves which parameters are
+  forwarded, explicitly dropped or rejected. A required tool/reasoning
+  feature cannot silently disappear. Durable Pi tool history passes
+  without global sanitization masking a missing result; any opt-in
+  CLI repair has a visible, recorded before/after receipt.
 - Database-backed virtual keys, team/model/agent/MCP grants, budgets,
   revocation and audit are active for remote workers. Test denial,
   quota exhaustion and DB failure without widening access.
