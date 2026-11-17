@@ -609,6 +609,36 @@ Host-loss reimage recovery remains untested (single VM).
 - **P2.4** package the runner so Docker Desktop can exercise it locally,
   but require a separate live VMSS boot, tool, loss, and cleanup receipt.
 
+  Local receipts (2026-11-17, Docker Desktop, fleet-worker 7016770,
+  supervisor-compose.local.yaml + real overlay):
+  - **BOOT**: hermetic world (zai-stub + gh-stub + buckle3 + supervisor)
+    up clean; supervisor listening :7780.
+  - **TOOL (real leg)**: issue #91 on icomdev/Vanilla-JavaScript-Calculator
+    → imported → clone lane → session via the Azure seat (claude-sonnet-5.5
+    BYOC lane) → branch agent/91 → **PR #92 merged-ready, 307 node --test
+    pass**, docker fence `fence:4[README.md:unchecked;docs/KEYBOARD.md:
+    unchecked;script.js:node-syntax;test/keyboard.test.js:node-syntax]`,
+    task settled=done (turns=9, 964 out-tok, 45.6 s).
+  - **LOSS (banked 2026-11-17 06:12)**: `docker compose kill supervisor`
+    mid-task (issue #93, branch agent/93 cut, session mid-flight) →
+    lane processes died with the container; restart booted clean and the
+    task rode the 15-min lease (supervisor.store.ts frees `assigned`
+    tasks only at lease expiry). At expiry the sweep requeued it
+    (attempts 1→2), a fresh clone claimed it, integrated the orphaned
+    remote agent/93 branch without force-push, and settled **done**:
+    **PR #94**, 359 node --test pass. Lane-loss with the supervisor
+    ALIVE is the loud immediate requeue (ECONNRESET, proven on VMSS);
+    supervisor-loss is lease-clock recovery — both receipted.
+  - **CLEANUP**: `down -v` removes the world + volumes (receipt below).
+
+  Root causes found on the local leg (all fixed in fleet-worker 7016770):
+  Docker Desktop's socket is root:root 0660 (VMSS is root:docker 993) —
+  `group_add: ["0"]` or the fence's unix-socket fetch dies as
+  FailedToOpenSocket; the lane's gh CLI legs hardcoded real github (now
+  REST via env.ghUrl + WORKER_GIT_URL); importOne's dupe guard ignored
+  failed tasks (poison re-mint); handleReport double-read the body
+  ("Body is disturbed or locked").
+
 **AC**: a real VMSS microVM executes a tool step during the full worker
 cycle. Kill the guest and prove the same Pi session reports the failure,
 fences the old guest, replaces it, and resumes safely. Docker Desktop
