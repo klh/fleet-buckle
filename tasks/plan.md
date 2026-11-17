@@ -877,6 +877,9 @@ failure-injection evidence before rollout. Design references are the installed
 [`34-submit-in-commit`](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/34-submit-in-commit.ts),
 [`40-tool-waits-for-webhook`](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/40-tool-waits-for-webhook.ts),
 and the [Cloudflare wake/activity example](https://github.com/earendil-works/pi-durable-cloudflare).
+Upstream main now documents signal-driven parked tools and `onYield`
+hook tasks that the installed 1.5.0 package does not export. Treat those
+examples as upgrade candidates, not executable 1.5.0 instructions.
 Verify APIs against the pinned package before adopting a newer upstream
 example; copying the example's React or Cloudflare host is not planned.
 
@@ -1522,9 +1525,16 @@ per `implementation-contract.md`; do not give one agent all of P6.
    cannot steal an active scan. Give each GitHub branch, comment, push
    and PR action a stable job/effect key and an observed-before-retry
    reconciliation query covering open, closed and merged PRs. Bank the
-   remote result before advancing. `afterRun` remains the test hook;
-   an `onYield` review task may hold the final answer until its verdict.
-   A failed gate cannot report `done` merely because a PR exists.
+   remote result before advancing. On pinned pi-durable 1.5.0,
+   `afterRun` tasks run **after** the answer and submission settle
+   `done`; use them for follow-up tests, not as the job's pass gate.
+   Its `onYield` can request a continuation but cannot return a
+   durable review task. Run required tests/review in the explicit
+   validating job phase and commit their verdict before the reporting
+   phase can settle `done`. A later pi-durable upgrade may use
+   `onYield` hook tasks only after its API and restart behavior pass
+   compatibility tests. A failed gate cannot report `done` merely
+   because a PR exists.
    Paginate journal
    usage and gate reads beyond the current first 200 entries. **Exit:**
    kill after each remote effect but before its receipt; recovery
@@ -1549,11 +1559,16 @@ per `implementation-contract.md`; do not give one agent all of P6.
    parent wait/idle behavior and one integrated result; parent abort
    follows the chosen ownership boundary.
 6. **[ ] Step 6 — use wake as scheduling data** (`fleet-worker` host,
-   then Suspenders adapter; after 3). Use durable sleeps/signals for Pi
-   work and deduplicate webhook/assignment kicks by event ID in a
-   journal document; keep a bounded reconciliation timer for missed
-   external events. On a persistent Bun host, use Pi's timers. If the
-   host is evictable, use `onWake`/`wake()` to arm one serialized alarm
+   then Suspenders adapter; after 3). Pinned pi-durable 1.5.0 supports
+   checkpointed **time sleeps** and `wake()`, but does not export
+   `defineSignal`, `harness.signal()`, or the newer parked-tool signal
+   API shown on upstream main. Use time sleeps for retries and backoff;
+   keep webhook/assignment admission in the host with stable event IDs
+   and a bounded reconciliation timer. Upgrade pi-durable deliberately
+   before planning signal-driven parked tools or `SubmissionSettled`
+   notifications; prove replay, duplicate/late delivery and cancellation
+   against the pinned replacement. On a persistent Bun host, use Pi's
+   timers. If the host is evictable, use `onWake`/`wake()` to arm one serialized alarm
    at the earliest sleep or active-work recovery heartbeat; arm before
    admission/resume, reopen on storage failure, and tolerate early or
    duplicate alarms. Outside-process host/lane health stays separate.
