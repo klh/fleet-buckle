@@ -241,6 +241,12 @@ export const BuckleSettings = z
         /** federated stats fold freshness — peer snapshots are pulled
          *  at most this often; the own snapshot stays live */
         stats_cache_ms: z.number().int().min(0).default(2000),
+        /** the serving socket's idle allowance (Bun.serve idleTimeout,
+         *  seconds). Bun 1.4+ defaults to 10s, which cuts quiet
+         *  streaming generations (thinking-heavy seats emit no deltas
+         *  for minutes). 0 disables the idle cut — upstream legs stay
+         *  bounded by engine_ms/hop_ms and clients own disconnects. */
+        server_idle_s: z.number().int().min(0).max(255).default(0),
       })
       .strict()
       .prefault({}),

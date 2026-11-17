@@ -336,6 +336,9 @@ export function bootServer(input: {
   return Bun.serve({
     hostname: "0.0.0.0",
     port: input.port ?? settings.hub.ports.buckle,
+    // streaming generations go quiet for minutes (thinking-heavy
+    // seats); Bun's 10s idle default cuts them mid-tool-call
+    idleTimeout: settings.timeouts.server_idle_s,
     fetch: (req) => serveRequest(srv, req),
   });
 }
