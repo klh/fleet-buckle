@@ -11,7 +11,7 @@ Every new rule needs a check or a tracked migration gap.
 ## Owner plan file (tasks/plan.md)
 
 Read `tasks/plan.md` at the start of every session. Its binding
-vocabulary, Pi Durable source map and P6 architecture govern the work.
+vocabulary, task dependencies and Pi Durable source map govern the work.
 Edit the plan when the owner directs it; otherwise propose changes with
 evidence before changing binding architecture.
 
