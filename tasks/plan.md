@@ -1862,6 +1862,32 @@ of this broader work blocks the Claude/Copilot smoke or Step 7A.
    accepted child or external task, no duplicate side effect, faithful
    usage/trace, and an operator-visible parent/child task tree.
 
+### [ ] Step 7C — qualify Pi Durable code mode for bounded tool composition
+
+Pi Durable 1.5.2 already exports createCodemodeExtension and the QuickJS
+sandbox through its pinned pi-codemode dependency. In one Worker-owned
+slice, expose only reviewed, typed tools to code mode; group LiteLLM MCP
+tools by namespace and use deferred discovery where useful. Let a parent
+or specialist compose bounded reads, classification and simple tool calls
+with parallel JavaScript, returning a small structured result instead of
+flooding the model transcript with every intermediate payload. Keep the
+parent JobTask, child ownership, wake schedule, validation and terminal
+receipt in Pi Durable, outside the script. Code mode runs alongside the
+harness inside the lane guest; its QuickJS sandbox does not replace
+Gondolin isolation or Buckle/LiteLLM authorization. No second MCP
+client or gateway is added to Worker.
+
+Qualify the installed 1.5.2 API rather than copying current main:
+bounded memory, wall time, output, nested calls and model requests;
+replay after a completed nested call and during an in-flight call;
+script divergence and sandbox/version change; cancellation, gateway
+denial and rate limit; no raw secrets in script output or store/load.
+Long waits on external agents stay in explicit Pi tasks and handles.
+Measure token use, p95 latency and journal growth against direct typed
+tool calls on matched workloads. **Exit:** a reproducible positive
+receipt with a narrow allowed use, or a recorded negative result that
+keeps direct tools. Do not make all job work depend on code mode.
+
 8. **[ ] Step 8 — build the UI from Pi's typed view structures**
    (GUI owner in its own client surface; after 7, 7A and 7B). Start with an API and
    GUI design review: task flows, data ownership, versioned schemas,
@@ -1891,7 +1917,7 @@ of this broader work blocks the Claude/Copilot smoke or Step 7A.
    sleeping retry and terminal job correctly, with keyboard and
    screen-reader coverage.
 9. **[ ] Step 9 — integrated failure proof and rollout** (each owner
-   verifies its contract; after 1–8 and Step 7B). Run hermetic crash tests at
+   verifies its contract; after 1–8 and Steps 7B–7C). Run hermetic crash tests at
    creation, submission, child spawn, GitHub effect, gate, report and
    cancel; include lost/duplicate wakes, closed harness and stale
    epochs. Repeat the eight-lane VMSS recovery on a pinned _new_ image
