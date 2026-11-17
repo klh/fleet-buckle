@@ -1,149 +1,127 @@
-// buckle.catalog.fetch.test.ts — the OWN catalog is FETCHED from
-// providers, never declared (law c): a stub provider serves fixture
-// rows (bare ids AND a full mscopilot-shaped row); GET /v1/models
-// maps them through the wire schema — origin names the provider, full
-// metadata rides VERBATIM (captured, never fabricated). Worlds ride
-// the kit; responses parse through BuckleModelsResponse.
+// buckle.catalog.fetch.test.ts — P0.2b catalog denial matrix at the
+// unit seam: BYOC catalogs are PER-USER. The stub seat answers a
+// DIFFERENT catalog per bearer, so cross-user cache reuse is directly
+// observable. What must hold (tasks/plan.md P0.2b):
+//   1. a caller's PAT lists only that caller's entitled rows — even
+//      back-to-back with another caller inside one TTL window;
+//   2. a tokenless caller gets honest emptiness (no warm rows fetched
+//      under someone else's PAT — the refusal names /w/ upstream);
+//   3. a classic (keyed) provider keeps its seat-wide cache (shared);
+//   4. no raw credential ever rides a response body.
+// Each test uses its own provider label+port: the cache is module
+// state, and distinct keys keep tests independent of each other.
 import { describe, expect, test } from "bun:test";
-import {
-  bootBuckle,
-  mintKeyDir,
-  stubProvider,
-  type AccessRegistry,
-  type WorldProvider,
-} from "../kit.ts";
-import { CacheEntrySchema } from "./buckle.catalog.fetch.ts";
-import { BuckleAccessRegistry } from "../schemas/buckle.access.zod.ts";
-import { BuckleModelsResponse } from "../schemas/buckle.model.wire.zod.ts";
+import { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
+import { buildCatalog } from "./buckle.catalog.fetch.ts";
 
-const DIR = mintKeyDir({ "principal.wire@fleet.test.key": "bksk_wire_test" });
-const AUTH = { authorization: "Bearer bksk_wire_test" };
-/** a dev's own copilot-seat credential for the /w/<lane>/<token> rides */
-const BYOC_TOKEN = "ghp_" + "wire4test2wire4test2wire4test2wire4test";
-const ACCESS: AccessRegistry = BuckleAccessRegistry.parse({
-  principals: [{ id: "wire@fleet.test", kind: "service", groups: [] }],
-  grants: [{ principal: "wire@fleet.test", scopes: ["models.list", "models.use"] }],
-  tiers: [],
-});
-
-/** a full mscopilot-shaped provider row (captured shape) */
-const FULL_ROW = {
-  id: "mscopilot/gpt-6-astra",
-  name: "GPT-6 Astra",
-  vendor: "openai",
-  version: "6.0",
-  preview: false,
-  policy: { state: "enabled" },
-  capabilities: {
-    limits: { max_context_window_tokens: 200000, max_output_tokens: 100000 },
-    supports: { tool_calls: true, streaming: true },
-  },
+// the label rides the REAL registry (mscopilot: user_token by
+// default, dialect/chat defaults) — the url alone points at the stub
+const settingsOf = (providers: Record<string, unknown>) => {
+  const parsed = BuckleSettings.safeParse({ hub: { label: "t" }, providers });
+  if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join("; "));
+  return parsed.data;
 };
 
-async function bootedWithProviders(providers: Record<string, WorldProvider>) {
-  const world = await bootBuckle({
-    label: "b1",
-    dir: DIR,
-    access: ACCESS,
-    providers,
-    hubs: {},
-  });
-  return { world, base: world.base };
-}
+const wire = (id: string) => ({ id, object: "model", owned_by: "stub" });
 
-describe("the catalog cache entry (the fetch cache's contract)", () => {
-  test("rows + stamped at, strict", () => {
-    const entry = CacheEntrySchema.safeParse({
-      at: 1,
-      rows: [{ id: "zai/glm-5.3", origin: { kind: "provider", label: "zai" } }],
-    });
-    expect(entry.success).toBe(true);
-    // the ROW is the contract: a model without its origin never caches
-    expect(CacheEntrySchema.safeParse({ at: 1, rows: [{ id: "zai/glm-5.3" }] }).success).toBe(
-      false,
-    );
+/** a stub seat answering per-bearer catalogs: bearer A → [a1, a2],
+ * bearer B → [b1], any other/absent bearer → 401. Records every
+ * authorization header it saw so cache behavior (hit vs fetch) is
+ * observable without reading module internals. */
+const serveSeat = async () => {
+  const seen: string[] = [];
+  const server = Bun.serve({
+    port: 0,
+    fetch: async (req) => {
+      seen.push(req.headers.get("authorization") ?? "(none)");
+      const bearer = (req.headers.get("authorization") ?? "").replace(/^Bearer /u, "");
+      if (bearer === "tok-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") {
+        return Response.json({ data: [wire("a1"), wire("a2")] });
+      }
+      if (bearer === "tok-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") {
+        return Response.json({ data: [wire("b1")] });
+      }
+      // the keyed (classic) leg rides the unit key, not a user PAT
+      if (bearer === "sk-unit-key") {
+        return Response.json({ data: [wire("shared1")] });
+      }
+      return new Response("unauthorized", { status: 401 });
+    },
   });
-});
+  return { server, seen, url: `http://localhost:${server.port}` };
+};
 
-describe("/v1/models (fetch, never declare)", () => {
-  test("bare provider rows pass through with origin", async () => {
-    const provider = stubProvider([
-      { id: "openrouter/qwen3-coder" },
-      { id: "openrouter/qwen3-235b" },
-    ]);
-    const { world, base } = await bootedWithProviders({
-      openrouter: `http://127.0.0.1:${provider.port}`,
-    });
+describe("catalog BYOC denial matrix (P0.2b)", () => {
+  test("one PAT lists only its own rows; a second PAT never reuses them", async () => {
+    const seat = await serveSeat();
+    const settings = settingsOf({ mscopilot: { url: `${seat.url}` } });
     try {
-      const r = await fetch(`${base}/v1/models`, { headers: AUTH });
-      expect(r.status).toBe(200);
-      const body = BuckleModelsResponse.parse(await r.json());
-      expect(body.hub).toBe("b1");
-      expect(body.models.map((m) => m.id).sort()).toEqual([
-        "openrouter/qwen3-235b",
-        "openrouter/qwen3-coder",
+      const first = await buildCatalog(settings, "00-tr", undefined, "tok-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+      expect(first.models.map((m) => m.id).sort()).toEqual(["a1", "a2"]);
+
+      // same TTL window, different caller: must fetch with B's PAT,
+      // never serve A's cached rows to B
+      const second = await buildCatalog(settings, "00-tr", undefined, "tok-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+      expect(second.models.map((m) => m.id)).toEqual(["b1"]);
+
+      // and A again, still only A's rows (its own cache entry)
+      const again = await buildCatalog(settings, "00-tr", undefined, "tok-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+      expect(again.models.map((m) => m.id).sort()).toEqual(["a1", "a2"]);
+
+      // exactly TWO seat pulls — one per caller. A's second view is a
+      // cache hit on A's OWN key (per-user cache), never B's rows
+      expect(seat.seen).toEqual([
+        "Bearer tok-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "Bearer tok-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       ]);
-      for (const m of body.models)
-        expect(m.origin).toEqual({
-          kind: "provider",
-          label: "openrouter",
-          url: `http://127.0.0.1:${provider.port}`,
-        });
     } finally {
-      provider.stop();
-      world.stop();
+      seat.server.stop(true);
     }
   });
 
-  test("FULL provider metadata rides verbatim — captured, never fabricated", async () => {
-    const provider = stubProvider([FULL_ROW]);
-    const { world, base } = await bootedWithProviders({
-      mscopilot: `http://127.0.0.1:${provider.port}`,
-    });
+  test("a tokenless caller gets honest emptiness — no one else's warm rows", async () => {
+    const seat = await serveSeat();
+    const settings = settingsOf({ mscopilot: { url: `${seat.url}` } });
     try {
-      // the copilot seat is BYOC by registry default: a key-only
-      // caller pulls NOTHING (no unit credential exists to ride)
-      const bare = await fetch(`${base}/v1/models`, { headers: AUTH });
-      expect(BuckleModelsResponse.parse(await bare.json()).models).toEqual([]);
-      // the SAME caller on /w/<lane>/<token>/… pulls the seat's
-      // full list riding THEIR token — metadata verbatim
-      const r = await fetch(`${base}/w/copilot/${BYOC_TOKEN}/v1/models`, {
-        headers: AUTH,
-      });
-      const body = BuckleModelsResponse.parse(await r.json());
-      expect(body.models.length).toBe(1);
-      const m = body.models[0]!;
-      expect(m.id).toBe("mscopilot/gpt-6-astra");
-      expect(m.origin).toEqual({
-        kind: "provider",
-        label: "mscopilot",
-        url: `http://127.0.0.1:${provider.port}`,
-      });
-      // verbatim: every field of the provider's own row survives
-      expect(m.meta).toEqual(FULL_ROW);
+      // warm the cache under A's PAT first
+      const warm = await buildCatalog(settings, "00-tr", undefined, "tok-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+      expect(warm.models.length).toBe(2);
+
+      // tokenless: honest emptiness, and NO new request to the seat
+      const pullsBefore = seat.seen.length;
+      const cold = await buildCatalog(settings, "00-tr", undefined, null);
+      expect(cold.models).toEqual([]);
+      expect(seat.seen.length).toBe(pullsBefore);
     } finally {
-      provider.stop();
-      world.stop();
+      seat.server.stop(true);
     }
   });
 
-  test("a dead provider fails CLOSED for its rows only (others still serve)", async () => {
-    const alive = stubProvider([{ id: "zai/glm-5.3" }]);
-    // port 1 on 127.0.0.1: nothing listens — fetch fails fast
-    const { world, base } = await bootedWithProviders({
-      zai: `http://127.0.0.1:${alive.port}`,
-      // unknown label: the registry law needs the dialect explicit
-      dead: { url: "http://127.0.0.1:1", dialect: "openai" },
-    });
+  test("a classic (keyed) provider keeps its seat-wide shared cache", async () => {
+    const seat = await serveSeat();
+    const settings = settingsOf({ mscopilot: { url: `${seat.url}`, key: "/etc/keys/seat.key" } });
     try {
-      const r = await fetch(`${base}/v1/models`, { headers: AUTH });
-      expect(r.status).toBe(200);
-      const body = BuckleModelsResponse.parse(await r.json());
-      expect(body.models.map((m) => m.id)).toEqual(["zai/glm-5.3"]);
-      expect(body.models.every((m) => m.origin.kind === "provider")).toBe(true);
+      const tokenOf = () => "sk-unit-key";
+      const first = await buildCatalog(settings, "00-tr", tokenOf);
+      const second = await buildCatalog(settings, "00-tr", tokenOf);
+      expect(first.models.map((m) => m.id)).toEqual(["shared1"]);
+      expect(second.models.map((m) => m.id)).toEqual(["shared1"]);
+      // TTL hit: the seat saw exactly one keyed pull
+      expect(seat.seen).toEqual(["Bearer sk-unit-key"]);
     } finally {
-      alive.stop();
-      world.stop();
+      seat.server.stop(true);
+    }
+  });
+
+  test("no raw credential rides a catalog response body", async () => {
+    const seat = await serveSeat();
+    const pat = "tok-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const settings = settingsOf({ mscopilot: { url: `${seat.url}` } });
+    try {
+      const view = await buildCatalog(settings, "00-tr", undefined, pat);
+      expect(JSON.stringify(view).includes(pat)).toBe(false);
+    } finally {
+      seat.server.stop(true);
     }
   });
 });

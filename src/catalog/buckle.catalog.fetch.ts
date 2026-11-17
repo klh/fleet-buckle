@@ -19,6 +19,7 @@ import { bodyJson, httpSend, logFault } from "../fault.ts";
 import type { Fault } from "../schemas/buckle.fault.zod.ts";
 import { continueTraceparent } from "../trace/buckle.trace.export.ts";
 import type { TokenReader } from "../federation/buckle.federation.peer.ts";
+import { userIdOf } from "../lane.ts";
 
 export const CacheEntrySchema = z.object({
   at: z.number().int().min(0),
@@ -63,8 +64,8 @@ type FetchCall = ReturnType<typeof createFetchCall>;
  *  one is configured, plus any headers the registry demands. A BYOC
  *  provider (user_token) carries the CALLER's /w/ token instead —
  *  no unit key exists for it, so the catalog rides the user's own
- *  credential (never cached ACROSS users: the cache holds only the
- *  seat-wide model list, never the credential) */
+ *  credential (cached under the PSEUDONYMOUS user id, never the
+ *  credential; one user's rows are never served to another) */
 function headersOf(
   entry: ProviderEntry,
   call: FetchCall,
@@ -144,15 +145,16 @@ async function fetchProvider(
   call: FetchCall,
   userToken: string | null,
 ): Promise<BuckleModelWire[]> {
-  // a BYOC provider without a caller token triggers NOTHING: no
-  // fetch, no delete — warm rows (the seat-wide list, identical for
-  // every dev) stay readable, a cold cache answers honest emptiness
-  // (the refusal names the /w/ contract at the pipeline)
-  const key = `${entry.label}|${entry.url}`;
-  if (entry.provider.user_token && userToken === null) {
-    const warm = cache.get(key);
-    return warm !== undefined && Date.now() - warm.at < call.graceMs ? warm.rows : [];
-  }
+  // BYOC catalogs are PER-USER (the caller's PAT decides the entitled
+  // rows): the cache key carries the pseudonymous user id — never the
+  // credential — so one user's rows can never be served to another.
+  // A tokenless caller gets honest emptiness: no fetch, no warm rows
+  // fetched under someone else's PAT (P0.2b — the refusal names the
+  // /w/ contract at the pipeline).
+  const key = entry.provider.user_token
+    ? `${entry.label}|${entry.url}|${userToken === null ? "anon" : userIdOf(userToken)}`
+    : `${entry.label}|${entry.url}`;
+  if (entry.provider.user_token && userToken === null) return [];
   const hit = cache.get(key);
   if (hit !== undefined && Date.now() - hit.at < call.ttlMs) return hit.rows;
 

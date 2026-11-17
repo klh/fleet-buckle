@@ -215,6 +215,17 @@ do not add a Buckle model pin or a hardcoded catalog row.
   A second user's PAT must never be reused or exposed by catalog cache,
   logs, traces, error bodies, or the current `/w/<lane>/<token>` URL
   carrier. If the carrier cannot be made safe, change it before rollout.
+
+  **STATUS 2026-11-17**: catalog cache isolation landed — BYOC rows
+  cache under the PSEUDONYMOUS user id (never the credential; one
+  user's rows never served to another — unit-proven with per-bearer
+  stub seats), and a tokenless caller gets honest emptiness (the
+  warm-under-someone's-PAT branch is gone). Classic providers keep
+  the seat-wide cache. Docker azure spec already proves the tokenless
+  404-with-contract-hint and two-dev/two-principal isolation through
+  the engine leg. Remaining live axis (two REAL seats' entitlements
+  differing) is owner-pilot observation, blocked on the Entra client
+  ID with the rest of P0.2.
 - **P0.2c** prove unmodified Claude Code can use Buckle as its gateway:
   put its gateway variables in the user's Claude settings JSON. For
   Bearer-PAT mode, `ANTHROPIC_BASE_URL` points at the APIM Buckle
