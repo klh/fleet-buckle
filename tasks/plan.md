@@ -949,6 +949,24 @@ and test each hop's buffering and limits separately. The operator feed
 gets its own reconnect/overflow/crash tests and must show a truthful
 `reconciling` or `interrupted` state until the snapshot catches up.
 
+LiteLLM's [SDK exception mapping](https://docs.litellm.ai/docs/exception_mapping)
+normalizes provider failures to OpenAI exception classes. Fleet's
+HTTP clients instead need the
+[gateway error contract](https://docs.litellm.ai/docs/proxy/error_reference):
+preserve status, `error` shape, `x-litellm-call-id`, retry headers and
+the request/served-model IDs across Buckle. Classify gateway auth,
+budget, cooldown and model-access errors separately from provider
+throttling, timeout and content/context rejection. A 429 is not always
+retryable: budget exhaustion needs a policy decision, while rate limits
+honor `retry-after`; 400/401/403 generally require request or access
+repair. A failed fallback chain may return the **first** group's status,
+so bank every attempted deployment from gateway logs, not status alone.
+An error after first SSE content arrives keeps HTTP 200 and appears as
+an in-band `error` event; Pi must mark that generation interrupted and
+must not settle it as a successful completion. Test both first-chunk
+JSON errors and mid-stream SSE errors through APIM→Buckle→LiteLLM→Pi.
+Do not assume A2A, MCP or management errors share the LLM error envelope.
+
 ### LiteLLM capability and telemetry adoption
 
 LiteLLM can select deployments within a model group, retry, cool down
@@ -1182,6 +1200,15 @@ recovery path, not just a reachable `/metrics` endpoint.
   `$0.000` cost field lacks usable pricing evidence despite substantial
   token usage; do not use it as a verified spend figure. The reported
   VMSS repoint and clean boot are not Step 9 recovery evidence.
+- The current VMSS supervisor still runs the old issue/PR matcher;
+  `worker-gondolin:f209e9d` was built locally but is not a deployed
+  receipt. Task 53 was falsely marked done for issue #11. Preserve
+  that row and its reports as audit history: `mintTask` permits a new
+  issue #11 task after a done row, so use the authenticated `/tasks`
+  contract and verify the new task/claim before any cleanup. The
+  automatic `importOne` guard blocks any historical row; design an
+  explicit retry/supersede command instead of deleting rows or making
+  every failed/done issue remint on each sweep.
 
 ### Ordered implementation slices
 
@@ -1275,6 +1302,10 @@ per `implementation-contract.md`; do not give one agent all of P6.
    epoch compare-and-swap. Retain both checks afterward: the epoch
    fences the placement generation and the lane check fences the holder.
    Port the stale-report refusal test and add an old-epoch case.
+   Define a manual retry/supersede command for falsely settled or
+   failed issues that preserves the old task and report rows, creates
+   one new attempt under a stable issue/job link, and fences old-lane
+   reports. Never use raw row deletion as the recovery interface.
 4. **[ ] Step 4 — checkpoint the job and external effects**
    (`fleet-worker`; after 3). Define Pi task phases for workspace
    ready, admitted, working, validating, delivering and reporting.
@@ -1358,6 +1389,10 @@ rollback, security review and an end-to-end receipt:
 - LiteLLM Prometheus metrics, spend/usage records, fallback logs and
   Buckle correlation reach the production collector/read model.
   Unknown usage remains unknown; alerts and retention have owners.
+- Gateway/provider error classes, retry headers and call IDs survive
+  Buckle; Pi distinguishes pre-stream JSON failure from HTTP-200
+  in-band SSE error. Failure injection proves no false success,
+  unbounded retry or lost fallback-attempt evidence.
 - Database-backed virtual keys, team/model/agent/MCP grants, budgets,
   revocation and audit are active for remote workers. Test denial,
   quota exhaustion and DB failure without widening access.
