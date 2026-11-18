@@ -21,9 +21,9 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
-      - "16686:16686" # UI
-      - "4317:4317" # OTLP gRPC
-      - "4318:4318" # OTLP HTTP
+      - "${P_JAEGER:-16686}:16686" # UI
+      - "${P_OTLPG:-4317}:4317" # OTLP gRPC
+      - "${P_OTLPH:-4318}:4318" # OTLP HTTP
 
   # ── stub providers (fixtures ride mounts; the kit serves model rows) ──
   openrouter-stub:
@@ -41,7 +41,7 @@ services:
     # host face for the EVIDENCE ring — specs assert the lane pin and
     # injection from /_seen (what the stub SAW), never hand-typed ids
     ports:
-      - "4742:8080"
+      - "${P_ZAISEEN:-4742}:8080"
 
   # ── unit 1 ──
   litellm1:
@@ -75,7 +75,7 @@ services:
     volumes:
       - ./health/h1.settings.json5:/etc/health/settings.json5:ro
     ports:
-      - "4712:4112"
+      - "${P_B1H:-4712}:4112"
     depends_on: [buckle1, jaeger]
   buckle1:
     build: ../..
@@ -89,7 +89,7 @@ services:
       - ./settings/b1.stub.json5:/etc/buckle/over.json5:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:
-      - "4711:4111"
+      - "${P_B1:-4711}:4111"
     depends_on: [litellm1, openrouter-stub, jaeger]
 
   # ── unit 2 ──
@@ -115,7 +115,7 @@ services:
     volumes:
       - ./health/h2.settings.json5:/etc/health/settings.json5:ro
     ports:
-      - "4722:4212"
+      - "${P_B2H:-4722}:4212"
     depends_on: [buckle2, jaeger]
   buckle2:
     build: ../..
@@ -129,7 +129,7 @@ services:
       - ./settings/b2.stub.json5:/etc/buckle/over.json5:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:
-      - "4721:4111"
+      - "${P_B2:-4721}:4111"
     depends_on: [litellm2, mscopilot-stub, jaeger]
 
   # ── unit 3 ──
@@ -155,7 +155,7 @@ services:
     volumes:
       - ./health/h3.settings.json5:/etc/health/settings.json5:ro
     ports:
-      - "4732:4312"
+      - "${P_B3H:-4732}:4312"
     depends_on: [buckle3, jaeger]
   buckle3:
     build: ../..
@@ -169,6 +169,6 @@ services:
       - ./settings/b3.stub.json5:/etc/buckle/over.json5:ro
       - ./keys/.gen:/etc/buckle/keys:ro
     ports:
-      - "4731:4111"
+      - "${P_B3:-4731}:4111"
     depends_on: [litellm3, zai-stub, jaeger]
 
