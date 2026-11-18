@@ -71,7 +71,7 @@ describe("legacy ratchet", () => {
     const ctx = createLawsCtx();
     checkLegacyRatchet(ctx, [
       "/repo/src/schemas/fixtures/seed.demo.json5",
-      "/repo/src/agents/agents.seed.test.ts",
+      "/repo/src/agents.seed.test.ts",
     ]);
     expect(ctx.errors.length).toBe(0);
   });

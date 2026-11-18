@@ -40,11 +40,6 @@ export function checkBoundaryEscape(
 // seed path still standing. ADDITIONS fail the law; REMOVALS shrink
 // this list — the ratchet only turns one way.
 export const LEGACY_BASELINE = [
-  "src/agents/buckle.agents.guard.ts",
-  "src/agents/buckle.agents.paths.ts",
-  "src/agents/buckle.agents.seed.ts",
-  "src/agents/buckle.agents.writer.ts",
-  "src/agents/buckle.agents.zod.ts",
 ];
 
 const rel = (f: string): string => f.slice(f.indexOf("src/"));
