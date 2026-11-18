@@ -41,11 +41,15 @@ import { fileURLToPath } from "node:url";
 // carol holds every scope on every buckle of the demo topology; her key
 // is MINTED (0600, gitignored) by stack-setup before the stack boots
 const ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
-const CAROL_KEY = readFileSync(
-  join(ROOT, "test/deploy/keys/.gen/principal.carol@fleet.key"),
-  "utf8",
-).trim();
-const AUTH = { authorization: `Bearer ${CAROL_KEY}` };
+// lazy: keys are minted by stack-setup, absent at --list time
+const AUTH = {
+  get authorization(): string {
+    return `Bearer ${readFileSync(
+      join(ROOT, "test/deploy/keys/.gen/principal.carol@fleet.key"),
+      "utf8",
+    ).trim()}`;
+  },
+};
 
 // catalog expectations DERIVE from the fixture stores — the same real
 // captured files the stubs serve, so a fixture refresh never needs a

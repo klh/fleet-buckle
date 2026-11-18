@@ -10,8 +10,12 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const KEY = (p: string) => readFileSync(join(ROOT, `test/deploy/keys/.gen/${p}`), "utf8").trim();
-const alice = KEY("principal.alice@fleet.key");
-const carol = KEY("principal.carol@fleet.key");
+let alice = "";
+let carol = "";
+test.beforeAll(() => {
+  alice = KEY("principal.alice@fleet.key");
+  carol = KEY("principal.carol@fleet.key");
+});
 const B1 = "http://127.0.0.1:4711";
 
 const chat = (token: string) =>
