@@ -1,0 +1,19 @@
+# B10 registration input (integration lane merges into the engine config).
+# LiteLLM's NATIVE MCP registry is the only tool registry; the Worker owns the
+# domain tools (W18 face). Stdio stays disabled. Access is by key/team grants.
+mcp_servers:
+  fleet_worker:
+    url: "os.environ/FLEET_WORKER_MCP_URL"   # W18 Streamable HTTP endpoint
+    transport: "http"
+    auth_type: "bearer_token"
+    authentication_token: "os.environ/FLEET_WORKER_MCP_TOKEN"
+    description: "Fleet Worker command/read face (Worker-owned tools)"
+    # tool allowlist at the registry; per-key/team narrowing via object_permission
+    allowed_tools: ["worker_status", "worker_submit_command"]
+# Grants (per virtual key / team), set via /key/generate or /team/new:
+#   object_permission: { mcp_servers: ["fleet_worker"],
+#                        mcp_tool_permissions: { fleet_worker: ["worker_status"] } }
+# Audit registry (executor / side effects / idempotency / receipts):
+#   worker_status          executor=Worker  side_effect=none   idempotency=n/a
+#   worker_submit_command  executor=Worker  side_effect=write  idempotency=Idempotency-Key header
+#                          (Worker dedupes + fences by writer epoch; receipt in Worker journal)
