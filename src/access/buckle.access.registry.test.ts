@@ -102,3 +102,42 @@ describe("the authenticated faces", () => {
     }
   });
 });
+
+import { engineKeyFor, resolveCredential } from "./buckle.access.registry.ts";
+import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
+
+describe("engine key shape", () => {
+  const acc = BuckleAccessRegistry.parse({
+    principals: [
+      { id: "alice@fleet", kind: "human", byoc_key_path: "/run/s/alice", limits: { max_budget: 5, budget_duration: "30d" } },
+      { id: "bob@fleet", kind: "human", byoc_key_path: "/run/s/bob", revoked: true },
+      { id: "svc@fleet", kind: "service" },
+      { id: "adm@fleet", kind: "developer" },
+    ],
+    grants: [
+      { principal: "alice@fleet", scopes: ["models.use"] },
+      { principal: "bob@fleet", scopes: ["models.use"] },
+      { principal: "adm@fleet", scopes: ["admin"] },
+      { principal: "svc@fleet", scopes: ["models.use"] },
+    ],
+  });
+  const s = { access: acc } as unknown as BuckleSettings;
+  test("quota shape, deny, revoke, isolation", () => {
+    const a = engineKeyFor(s, "alice@fleet", "/w");
+    expect(a.ok && a.key.maxBudget).toBe(5);
+    expect(a.ok && a.key.keyPath).toBe("/run/s/alice");
+    expect(engineKeyFor(s, "bob@fleet", "/w")).toMatchObject({ ok: false, status: 401 });
+    expect(engineKeyFor(s, null, "/w")).toMatchObject({ ok: false, status: 401 });
+    expect(engineKeyFor(s, "adm@fleet", "/w")).toMatchObject({ ok: false, status: 403 });
+    const v = engineKeyFor(s, "alice@fleet", "/w");
+    if (v.ok) expect(v.key.routeFamilies).not.toContain("admin" as never);
+    const sv = engineKeyFor(s, "svc@fleet", "/w");
+    expect(sv.ok && sv.key.keyPath).not.toBe("/run/s/alice");
+  });
+  test("BYOC failure never falls back; db failure fail-closed", () => {
+    const a = engineKeyFor(s, "alice@fleet", "/w");
+    if (!a.ok) throw new Error("x");
+    expect(resolveCredential(a.key, "human", () => null, "/w/worker")).toEqual({ ok: false, status: 401 });
+    expect(resolveCredential(a.key, "human", () => { throw new Error("db"); })).toEqual({ ok: false, status: 503 });
+  });
+});

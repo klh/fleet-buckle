@@ -58,3 +58,81 @@ export function bearerOf(req: Request): string | null {
   const token = h.slice("Bearer ".length).trim();
   return token.length > 0 ? token : null;
 }
+
+/** revoked (or unknown) principals never authenticate or hold scopes */
+export function isRevoked(settings: BuckleSettings, principal: string): boolean {
+  const p = settings.access?.principals.find((x) => x.id === principal);
+  return p === undefined || p.revoked;
+}
+
+export interface EngineKeyShape {
+  principalId: string;
+  keyAlias: string;
+  /** secret PATH, never a value */
+  keyPath: string;
+  teams: string[];
+  maxBudget?: number;
+  budgetDuration?: string;
+  rpmLimit?: number;
+  /** ordinary model keys never carry admin routes */
+  routeFamilies: ("chat" | "responses" | "embeddings" | "models")[];
+}
+
+export type EngineKeyVerdict =
+  | { ok: true; key: EngineKeyShape }
+  | { ok: false; status: 401 | 403 | 503; reason: string };
+
+/** principal -> scoped LiteLLM virtual-key shape. Unknown/revoked = 401.
+ *  `admin` scope never becomes an engine model-key route (admin escalation denied). */
+export function engineKeyFor(
+  settings: BuckleSettings,
+  principal: string | null,
+  workerKeyDir: string | undefined,
+): EngineKeyVerdict {
+  if (principal === null) return { ok: false, status: 401, reason: "unauthenticated" };
+  const p = settings.access?.principals.find((x) => x.id === principal);
+  if (p === undefined || p.revoked) return { ok: false, status: 401, reason: "revoked-or-unknown" };
+  if (!holdsScope(settings, principal, "models.use")) {
+    return { ok: false, status: 403, reason: "no models.use grant" };
+  }
+  const grant = settings.access?.grants.find((g) => g.principal === principal);
+  const tier = settings.access?.tiers.find((t) => (p.tier ? t.label === p.tier : t.kind === p.kind));
+  const lim = { ...tier, ...grant?.limits, ...p.limits };
+  // BYOC humans carry their own credential; never the engine-held worker one
+  const keyPath = p.kind === "human" ? p.byoc_key_path : join(workerKeyDir ?? "", `${KEY_PREFIX}${p.id}${KEY_SUFFIX}`);
+  if (keyPath === undefined || (p.kind !== "human" && workerKeyDir === undefined)) {
+    return { ok: false, status: 503, reason: "no credential path; fail closed" };
+  }
+  return {
+    ok: true,
+    key: {
+      principalId: p.id,
+      keyAlias: p.id,
+      keyPath,
+      teams: p.groups,
+      ...(lim.max_budget !== undefined ? { maxBudget: lim.max_budget } : {}),
+      ...(lim.budget_duration !== undefined ? { budgetDuration: lim.budget_duration } : {}),
+      ...(lim.max_rpm !== undefined ? { rpmLimit: lim.max_rpm } : {}),
+      routeFamilies: ["chat", "responses", "embeddings", "models"],
+    },
+  };
+}
+
+/** credential resolution: a BYOC failure is a denial, never a worker-key fallback;
+ *  a DB/engine failure fails closed (503). */
+export function resolveCredential(
+  key: EngineKeyShape,
+  kind: string,
+  read: (path: string) => string | null,
+  workerKeyPath?: string,
+): { ok: true; token: string } | { ok: false; status: 401 | 503 } {
+  let token: string | null;
+  try {
+    token = read(key.keyPath);
+  } catch {
+    return { ok: false, status: 503 };
+  }
+  if (token !== null && token.length > 0) return { ok: true, token };
+  void workerKeyPath; // deliberately unused: no fallback
+  return { ok: false, status: kind === "human" ? 401 : 503 };
+}
