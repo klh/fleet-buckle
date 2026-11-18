@@ -1,0 +1,22 @@
+// revocation.settings.json5 — the B04.1 probe unit: azure-shaped, but the
+// engine is the hermetic provider stub (probe-stub) and three principals
+// exist: admin, victim (revoked mid-probe), bystander (must stay live).
+{
+  hub: { label: "revprobe", ports: { buckle: 4111 } },
+  engine: { url: "http://probe-stub:8080" },
+  keys: { principals_dir: "/state/keys" },
+  providers: { zai: { url: "http://probe-stub:8080", key: "/state/keys/zai.key" } },
+  access: {
+    principals: [
+      { id: "admin@probe", kind: "service", groups: [] },
+      { id: "victim@probe", kind: "human", groups: [] },
+      { id: "bystander@probe", kind: "human", groups: [] },
+    ],
+    grants: [
+      { principal: "admin@probe", scopes: ["admin", "models.list"] },
+      { principal: "victim@probe", scopes: ["models.list", "models.use"] },
+      { principal: "bystander@probe", scopes: ["models.list", "models.use"] },
+    ],
+    tiers: [],
+  },
+}
