@@ -17,6 +17,8 @@ export const BucklePrincipal = z
     kind: BucklePrincipalKind,
     /** Group memberships — Entra groups map onto these verbatim. */
     groups: z.array(z.string().min(1)).default([]),
+    revoked: z.boolean().default(false),
+    byoc_key_path: z.string().min(1).optional(),
     /** Named tier override; absent = the tier for this kind. */
     tier: z.string().min(1).optional(),
     /** Per-principal limits; field-wise over the tier (most specific wins). */

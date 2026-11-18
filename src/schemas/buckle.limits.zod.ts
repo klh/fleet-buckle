@@ -9,6 +9,8 @@ export const BuckleLimits = z
     max_concurrent: z.number().int().positive().optional(),
     max_per_ip: z.number().int().positive().optional(),
     max_rpm: z.number().int().positive().optional(),
+    max_budget: z.number().positive().optional(),
+    budget_duration: z.string().regex(/^[0-9]+[smhd]$/).optional(),
   })
   .strict();
 export type BuckleLimits = z.output<typeof BuckleLimits>;
