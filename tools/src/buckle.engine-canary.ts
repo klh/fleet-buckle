@@ -17,7 +17,7 @@ export async function runCanary(url: string, key: string): Promise<CanaryReceipt
   const positive = await get(key);
   const anonymous = await get();
   const wrongKey = await get(`${key}-wrong`);
-  const denied = (n: number) => n === 401 || n === 403;
+  const denied = (n: number) => n === 401 || n === 403 || n === 400; // litellm answers 400 for a malformed/tampered key — still a deny
   return { positive, anonymous, wrongKey, ok: positive === 200 && denied(anonymous) && denied(wrongKey) };
 }
 
