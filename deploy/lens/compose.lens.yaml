@@ -1,0 +1,38 @@
+# B07 Lens fragment (early-access; see README.md). Merge: docker compose -f compose.yaml -f lens/compose.lens.yaml
+# Images MUST be digest pinned: set LENS_IMAGE and CLICKHOUSE_IMAGE in lens.env as repo@sha256:...
+services:
+  lens-clickhouse:
+    image: ${CLICKHOUSE_IMAGE:?pin clickhouse by digest}
+    restart: unless-stopped
+    networks: [lens-private]
+    environment:
+      CLICKHOUSE_USER: lens
+      CLICKHOUSE_PASSWORD: ${LENS_CLICKHOUSE_PASSWORD:?}
+    volumes:
+      - lens-ch-data:/var/lib/clickhouse
+      - ./clickhouse-retention.xml:/etc/clickhouse-server/config.d/retention.xml:ro
+      - lens-backup:/backups
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "-q", "SELECT 1"]
+      interval: 10s
+      retries: 6
+  lens:
+    image: ${LENS_IMAGE:?pin lens by digest}
+    restart: unless-stopped
+    depends_on:
+      lens-clickhouse: { condition: service_healthy }
+    networks: [lens-private, default]
+    ports: ["127.0.0.1:4318:4318"] # OTLP/HTTP ingest, loopback only
+    environment:
+      CLICKHOUSE_URL: http://lens:${LENS_CLICKHOUSE_PASSWORD:?}@lens-clickhouse:8123
+      LENS_ADMIN_TOKEN: ${LENS_ADMIN_TOKEN:?admin credential; never given to workers}
+      LENS_TRACE_KEY: ${LENS_TRACE_KEY:?ingest-only key shared with exporters}
+      LENS_RETENTION_DAYS: ${LENS_RETENTION_DAYS:-30}
+      LENS_ANALYSIS_MODEL: ${LENS_ANALYSIS_MODEL:?set before investigations}
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:?}
+      LENS_REDACT: "true"
+networks:
+  lens-private: { internal: true }
+volumes:
+  lens-ch-data: {}
+  lens-backup: {}
