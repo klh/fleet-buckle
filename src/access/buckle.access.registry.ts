@@ -18,7 +18,7 @@ function candidateKeys(settings: BuckleSettings): { dir: string; ids: string[] }
   const dir = settings.keys?.principals_dir;
   const registry = settings.access;
   if (dir === undefined || registry === undefined) return null;
-  const ids = registry.principals.map((p) => p.id);
+  const ids = registry.principals.filter((p) => !p.revoked).map((p) => p.id);
   return listDir(dir) === null ? null : { dir, ids };
 }
 
@@ -46,7 +46,7 @@ export function holdsScope(
   principal: string | null,
   scope: BuckleScope,
 ): boolean {
-  if (principal === null) return false;
+  if (principal === null || isRevoked(settings, principal)) return false;
   const grants = settings.access?.grants ?? [];
   return grants.some((g) => g.principal === principal && g.scopes.includes(scope));
 }
@@ -135,4 +135,24 @@ export function resolveCredential(
   if (token !== null && token.length > 0) return { ok: true, token };
   void workerKeyPath; // deliberately unused: no fallback
   return { ok: false, status: kind === "human" ? 401 : 503 };
+}
+
+/** per-principal engine credential for the forward path: swaps the shared
+ *  master-key path for the principal's scoped key. Null = fail closed
+ *  (no master fallback; BYOC humans ride the user leg, never the engine key). */
+export function scopedTokenReader(
+  settings: BuckleSettings,
+  principal: string | null,
+  base: (path: string) => string | null,
+): (path: string) => string | null {
+  const master = settings.keys?.engine;
+  const dir = settings.keys?.principals_dir;
+  if (master === undefined || principal === null || dir === undefined) return base;
+  const p = settings.access?.principals.find((x) => x.id === principal);
+  if (p === undefined || p.kind === "human") return base;
+  return (path) => {
+    if (path !== master) return base(path);
+    const v = base(join(dir, `engine.${p.id}.key`));
+    return v !== null && v.length > 0 ? v : null;
+  };
 }
