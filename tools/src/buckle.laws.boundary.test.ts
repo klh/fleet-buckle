@@ -60,11 +60,8 @@ describe("legacy ratchet", () => {
     expect(ctx.errors[0]).toContain("ratchet blocks additions");
   });
 
-  test("baseline paths pass; a vanished one asks to shrink the baseline", () => {
-    const ctx = createLawsCtx();
-    checkLegacyRatchet(ctx, ["/repo/" + LEGACY_BASELINE[0]]);
-    expect(ctx.errors.length).toBe(0);
-    expect(ctx.warnings.length).toBe(LEGACY_BASELINE.length - 1);
+  test("baseline is empty: the legacy agent runtime is gone", () => {
+    expect(LEGACY_BASELINE.length).toBe(0);
   });
 
   test("fixtures and tests never count as legacy paths", () => {
