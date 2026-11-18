@@ -168,6 +168,37 @@ async function pullCatalog(
   return { label, rows };
 }
 
+/** PURE renderer: catalog ids -> the real engine yaml. The ONLY place
+ *  engine rows are produced (live pull and fixture round-trip share it). */
+export function renderRealConfig(
+  label: KnownProviderLabel,
+  rows: string[],
+  at: string,
+  passThrough = "",
+): string {
+  const known = KNOWN_PROVIDERS[label];
+  const lines = ["model_list:"];
+  for (const id of rows) {
+    lines.push(
+      `  - model_name: ${JSON.stringify(id)}`,
+      "    litellm_params:",
+      ...realLegOf(known, id),
+    );
+  }
+  return (
+    header([
+      `GENERATED from the LIVE ${label} catalog (${known.url}/models)`,
+      `at ${at} — never hand-edited.`,
+      `Keys ride os.environ/${known.key_env} (never this file).`,
+    ]) +
+    lines.join("\n") +
+    "\nlitellm_settings:\n  drop_params: true # tolerate wire params the seat 400s on\n" +
+    // the engine gate: only a buckle holding keys/engine reaches the legs
+    "\ngeneral_settings:\n  master_key: os.environ/ENGINE_MASTER_KEY\n" +
+    (passThrough !== "" ? "  pass_through_endpoints:\n" + passThrough : "")
+  );
+}
+
 export async function genRealEngineConfigs(outDir: string): Promise<void> {
   mkdirSync(outDir, { recursive: true });
   // REAL_PROVIDERS filters the loop (wiring, not hand-authored
@@ -199,27 +230,9 @@ export async function genRealEngineConfigs(outDir: string): Promise<void> {
     const { rows } = await pullCatalog(label);
     if (rows.length === 0)
       throw new Error(`${label}: live catalog empty — refusing to emit an empty engine`);
-    const lines = ["model_list:"];
-    for (const id of rows) {
-      lines.push(
-        `  - model_name: ${JSON.stringify(id)}`,
-        "    litellm_params:",
-        ...realLegOf(known, id),
-      );
-    }
     writeFileSync(
       join(outDir, `${label}.litellm.yaml`),
-      header([
-        `GENERATED from the LIVE ${label} catalog (${known.url}/models)`,
-        `at ${new Date().toISOString()} — never hand-edited.`,
-        `Keys ride os.environ/${known.key_env} (never this file).`,
-      ]) +
-        lines.join("\n") +
-        "\nlitellm_settings:\n  drop_params: true # tolerate wire params the seat 400s on\n" +
-        // the engine gate: only a buckle holding keys/engine reaches
-        // the legs (anonymous + wrong key are 401 by litellm master_key)
-        "\ngeneral_settings:\n  master_key: os.environ/ENGINE_MASTER_KEY\n" +
-        (passThrough !== "" ? "  pass_through_endpoints:\n" + passThrough : ""),
+      renderRealConfig(label, rows, new Date().toISOString(), passThrough),
     );
     console.log(
       `${outDir}/${label}.litellm.yaml: ${rows.length} real legs (${known.dialect})${passThrough !== "" ? " + BYOC pass-through" : ""}`,
