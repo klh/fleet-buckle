@@ -4,11 +4,19 @@ This plan owns gateway delivery. Worker owns Pi Durable runtime, Absurd work int
 placement. Stable task IDs below are the only dispatch index; the later requirements retain the
 source links and acceptance detail. No runtime capability is claimed complete here.
 
+## Reviewed state and completed scope
+
+Reviewed source: `f290e1d` (2026-11-18). [Completed work](completed.md) records B13
+copied-runtime removal and scoped fixes/test receipts. B15 retains unused dependency cleanup and
+release regression/qualification; archived implementation does not waive those gates.
+Other B packages remain partial, blocked or unqualified. Pi reports deployed Buckle `807cf85`,
+config-only LiteLLM and no Lens/protocol activation; current main is not a qualified deployment.
+
 ## Reading order
 
 Read vocabulary and execution rules, then the shared gates and task cards. Follow referenced
 requirements when implementing a card. Task numbers are stable identifiers; dependency fields
-determine readiness. Architecture source maps stay active reference material.
+determine readiness. Architecture source maps stay active reference material. Completed B13 resolves in [completed.md](completed.md), not as a new dispatch card; B15 retains its residual cleanup and release gates.
 
 ## Start here after a context reset
 
@@ -100,7 +108,7 @@ catalog.
 Close a leaf with its commit, relevant test command/result, image/config revision and durable
 receipt; close the package only when all acceptance cases pass. Fixture success does not substitute
 for live deployment proof. Completed evidence leaves this active plan after review; preserve it in
-the repo's evidence record. Never archive an active API/source map.
+[completed.md](completed.md) with its exact scope and residual gate. Never archive an active API/source map.
 
 ## Surface ownership
 
@@ -127,7 +135,7 @@ lane.
 | 3 — domain modules                       | W04, W05, W13, W15 and B03, B04, B06; W06 follows W04; W14 follows B06 | Placement/intake/commands and scoped model route ready.                             |
 | 4 — first pull                           | W16; B05 can run alongside; W18 follows W06/W13                        | One real charter→pull→Pi→model/read-only-tool outcome survives guest replacement.   |
 | 5 — trial readiness                      | W07 and W12; W09 follows W07; W10 follows W09; B14 follows W16/B05/B06 | W17's wake, mission, local-child, effect, read/trace and gateway gates accepted.    |
-| 6 — backlog trial and remaining features | W17; W11, B07–B13 and W20 may proceed or be queued by W17 when ready   | Accepted remaining work, including remote protocols, Lens and Auto Router adoption. |
+| 6 — backlog trial and remaining features | W17; W11, B07–B12 and W20 may proceed or be queued by W17 when ready   | Accepted remaining work, including remote protocols, Lens and Auto Router adoption. |
 | 7 — release                              | B15, then W19                                                          | Full release evidence, external E-GUI gate and removed obsolete paths.              |
 
 B09 may start after B01/B02/B04 and E-BELT; B08 after B05/B06 and E-BELT. These Belt branches do not
@@ -166,6 +174,22 @@ No gateway task creates Worker mission logic. No Worker task regenerates Buckle 
 configuration. A required change in the other repo becomes a linked leaf owned there, and the
 consumer waits for its receipt.
 
+## GUI client boundary — existing API first
+
+The GUI repository owns a Buckle API client and a separate GUI-only presentation API. It consumes
+existing gateway model/catalog/tree/stats/admin/protocol faces with appropriate scopes; the browser
+never receives gateway administrator credentials. Preserve current route names, payload semantics
+and gateway responsibility. OpenAPI coverage may be corrected to describe existing mounted routes.
+Do not add GUI discovery, pagination, dashboard summaries, sessions, browser SSE or runner workflows
+to Buckle. GUI config binds associated service origins; one Buckle base URL is not evidence of an
+existing general service-discovery API.
+
+A producer change requires a concrete missing generic domain capability: name the existing API
+examined, the absent domain operation/data, its authority and a reusable contract, then assign a
+scoped owner leaf. The current W06/W13 Worker bindings and B06 evidence gaps qualify for that
+review; a preferred table shape does not. GUI client/projection work never blocks on a cosmetic
+Buckle API redesign. [GUI plan](../../fleet-buckle-gui/plan.md) owns all GUI deployment work.
+
 ## External acceptance gates
 
 | Gate   | Producer and required artifact                                                                                                                                                                                                                                      | Consumers                                                   |
@@ -185,173 +209,141 @@ wording.
 
 ### B00 — Freeze gateway decomposition
 
-- **Status:** pending; verify live evidence before claiming.
+- **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
 - **Depends on:** none.
 - **Owns:** tasks/refactor-inventory.md; no runtime edits.
-- **Acceptance:** Inventory reachable Buckle modules, copied agents, seeds, live overlays and
-  consumers; reserve exact feature files and preserve API ownership.
+- **Remaining:** Refresh reachable-source and deployed-image/config inventories, including the already removed src/agents tree and stale OpenAPI coverage. Reserve exact integration files; do not create discovery, GUI read models or workflow endpoints in Buckle.
 - **Verification:** Import/route map plus live image/config receipt; shared-file ownership is
   explicit.
 
 ### B01 — Freeze gateway identity and evidence contracts
 
-- **Status:** pending; verify live evidence before claiming.
+- **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
 - **Depends on:** B00, W01.
 - **Owns:** src/schemas/ and versioned contract fixtures; integration owns exports.
-- **Acceptance:** Define principal→engine identity, route families, trace joins, error/missing-usage
-  receipts and decision capability in Zod. Consume Worker artifact without source imports.
+- **Remaining:** Publish compatible existing gateway schema/OpenAPI artifacts and actual route/scoping contracts for clients, including mounted faces currently omitted from OpenAPI. Bind Worker identity/evidence consumers and fix schema-test framework discovery. Documenting an existing route is not permission to redesign it for a page.
 - **Verification:** Schema denied/malformed cases and compatible published fixtures for Worker/GUI.
 
 ### B02 — Qualify engine deployment and config generation
 
-- **Status:** pending; verify live evidence before claiming.
+- **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
 - **Depends on:** B01.
 - **Owns:** tools/src/buckle.gen-engine-config.ts; deploy/engine/, deploy/settings/, compose,
   package and lock files; integration lane.
-- **Acceptance:** Pin LiteLLM, resolve engine URL/credential, define Postgres
-  roles/migrations/backups, production logging, trusted proxy ranges and config precedence.
-  Generator is the only source of generated engine rows.
+- **Remaining:** Qualify the effective engine URL/credential, pinned generated configuration and live canary; then deploy the required DB lifecycle, roles, migrations, salt/backup/restore, logging and trusted-proxy settings. Current config-only LiteLLM and generated YAML do not establish DB-backed features or an available UI.
 - **Verification:** Generated config round-trip, authenticated engine canary, DB outage/backup
   restore; no PAT exposure.
 
 ### B03 — Preserve base model wire
 
-- **Status:** pending; verify live evidence before claiming.
+- **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
 - **Depends on:** B01, B02.
 - **Owns:** src/proxy/ model/stream files reserved by B00; no identity or retry-owner files.
-- **Acceptance:** Preserve Messages/chat tools, terminal markers, cancellation, in-band errors and
-  exception mapping. Qualify drop_params, sanitization, provider params, JSON/reasoning and tool
-  execution ownership against detailed requirements.
+- **Remaining:** Qualify existing model-wire helpers against the actual entitled engine/provider path: tools, quiet/cut/cancel streams, terminal/in-band errors, drop/sanitize/provider parameters and JSON/reasoning behavior. Preserve byte identity and do not infer completion or token usage at response headers.
 - **Verification:** Hermetic Copilot wire matrix and one live entitled VMSS model/tool stream; no
   Mac-only dependency.
 
 ### B04 — Enforce scoped caller identity
 
-- **Status:** pending; verify live evidence before claiming.
+- **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
 - **Depends on:** B01, B02.
 - **Owns:** src/access/, src/admission/, identity passthrough files reserved by B00.
-- **Acceptance:** Map principal to LiteLLM scoped keys/teams/grants, preserve human BYOC isolation,
-  deny admin escalation and enforce revocation/budgets. Credential custody stays runtime-configured.
+- **Remaining:** Retain the real-ingress revocation/scoped-token fix from #29. Bind and qualify required LiteLLM scoped identities/keys, quotas/budgets and revocation at both boundaries, including DB loss and BYOC isolation. Entra profiles and expanded GUI RBAC stay deferred.
 - **Verification:** Deny, revoke, quota, DB failure and cross-user isolation cases at both
   boundaries.
 
 ### B05 — Bound retry and routing policy
 
-- **Status:** pending; verify live evidence before claiming.
+- **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
 - **Depends on:** B03, B04.
 - **Owns:** src/proxy/ retry/deadline files reserved by B00; config requests handed to B02 owner.
-- **Acceptance:** One attempt budget covers Pi/gateway/provider; preserve pins, tags, grants and
-  context limits. Define pre/post-first-chunk fallback and measured timeout behavior.
+- **Remaining:** Choose and enforce one actual attempt/deadline owner across Pi/gateway/provider. Prove pre/post-first-chunk fallback, hard pins/grants, Retry-After and long quiet streams against the pinned chain; manually sending another request is not an internal retry-budget test.
 - **Verification:** Classifier/model/peer failure, quiet stream and Retry-After tests show bounded
   attempts and no false terminal.
 
 ### B06 — Publish gateway metrics and spend evidence
 
-- **Status:** pending; verify live evidence before claiming.
+- **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
 - **Depends on:** B01, B02.
 - **Owns:** src/metrics/ and src/trace/ gateway collectors; no Lens deployment files.
-- **Acceptance:** Privately scrape full engine metrics, join request/attempt/spend receipts, bound
-  labels and expose unknown usage honestly. Define SLOs, retention and alert owner.
+- **Remaining:** Bind terminal model-attempt/usage/spend correlation into the real request path and private engine collector. Publish existing or genuinely missing generic evidence reads for consumers; qualify unknown price, spend lag, collector loss, retention/SLO/alert ownership. No GUI summary or page-specific log endpoint.
 - **Verification:** A schema-valid fixture carries the W14 correlation fields; missing-price,
   spend-lag and collector-outage cases pass. W14 subsequently proves a live Pi call joins this
   collector.
 
 ### B07 — Deploy Lens with agent traces
 
-- **Status:** pending; verify live evidence before claiming.
+- **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
 - **Depends on:** B02, B04, B06, W14.
 - **Owns:** deploy/lens/ and tracing configuration; shared Compose edits through integration lane.
-- **Acceptance:** Pinned Lens/ClickHouse has restricted access, retention, backup and trace key; Pi
-  model/tool spans and LiteLLM spend join. Configure analysis model before investigations.
+- **Remaining:** Deploy and qualify the existing Lens/ClickHouse scaffold with pinned images, restricted access, retention, backup and trace credentials. Store native Worker model/tool spans, join spend and run a redacted investigation. There are no running Lens containers in the verified VMSS baseline.
 - **Verification:** Stored/redacted trace, linked spend, backup restore and one useful investigation
   with current release qualification.
 
 ### B08 — Enable Auto Router with Belt Kev
 
-- **Status:** pending; verify live evidence before claiming.
+- **Status:** not implemented / producer-blocked; reviewed 2026-11-18.
 - **Depends on:** B04, B05, B06; E-BELT.
 - **Owns:** routing config specification/fixtures; engine generator edits serialized through B02
   owner.
-- **Acceptance:** Qualify System One decision wire, tier map, hard-pin preservation, defaults and
-  classifier fallback. Publish the callable alias, classifier result and attempt evidence after
-  held-out quality qualification; W20 owns Pi policy adoption before default-traffic canary.
+- **Remaining:** Consume qualified E-BELT System One inference and implement generated Auto Router deployment/tier/alias configuration on a supported pinned LiteLLM version. Prove hard pins, grants, context/tools, outage fallback and matched quality/cost/p95 before W20/default traffic adoption.
 - **Verification:** Real Kev call, classifier down, model down, tools/context/usage and matched
   quality/cost/p95 evidence.
 
 ### B09 — Advertise authorized Kev decisions
 
-- **Status:** pending; verify live evidence before claiming.
+- **Status:** not implemented / producer-blocked; reviewed 2026-11-18.
 - **Depends on:** B01, B02, B04; E-BELT.
 - **Owns:** src/catalog/ decision files and decision proxy module reserved by B00.
-- **Acceptance:** Live catalog reports decision capability, qualified origin and health; authorized
-  decision calls preserve trace/error semantics. Kev is not advertised as chat.
+- **Remaining:** Implement/qualify Kev decision capability in the existing catalog/proxy contract using E-BELT origin and independent inference health. Prove authorization, stale/down behavior and decision wire; do not advertise Kev as chat.
 - **Verification:** Entitled/denied, stale inference health and decision wire tests.
 
 ### B10 — Expose scoped MCP commands
 
-- **Status:** pending; verify live evidence before claiming.
+- **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
 - **Depends on:** B03, B04, W18.
 - **Owns:** MCP gateway authorization/passthrough files reserved by B00; registration config through
   integration lane.
-- **Acceptance:** Use native LiteLLM MCP registry/grants; Worker-owned domain adapter invokes
-  versioned command/read API. Audit executor, idempotency and side effects; GUI API remains
-  separate.
+- **Remaining:** Consume mounted W18 Worker MCP commands/reads, repair gateway/domain tool-name mismatch and have the generator consume reviewed native registry/grant config. Qualify an authorized replay-safe command and denied tool end to end; gateway transport never owns execution.
 - **Verification:** Rejected unauthorized tool and one replay-safe command through Buckle/LiteLLM to
   Worker.
 
 ### B11 — Expose remote A2A runner invocation
 
-- **Status:** pending; verify live evidence before claiming.
+- **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
 - **Depends on:** B03, B04, W18.
 - **Owns:** A2A gateway authorization/passthrough files reserved by B00; registration config through
   integration lane.
-- **Acceptance:** Register Worker-owned A2A face with native LiteLLM; map task IDs to runner/Pi IDs
-  and epoch. Discovery/send/stream/status/resubscribe/cancel persist correctly.
+- **Remaining:** Register the mounted Worker A2A face through native LiteLLM and bind persistent runner/Pi/epoch identities. Remove any gateway-side substitute execution state; prove real discovery/send/stream/status/resubscribe/cancel, duplicate delivery and restart on the same fenced runner.
 - **Verification:** Remote caller duplicate delivery, restart and cancellation against the same
   fenced runner.
 
 ### B12 — Disposition optional engine capabilities
 
-- **Status:** pending; verify live evidence before claiming.
+- **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
 - **Depends on:** B05, B06.
 - **Owns:** tasks/engine-feature-decisions.md and feature-specific fixtures; no shared generator
   edits.
-- **Acceptance:** Record enable/defer/reject plus evidence for caching, guardrails, advanced
-  routing/identity, batching, JSON/reasoning and gateway-executed tools. Required Lens/Auto
-  Router/MCP/A2A cannot be silently deferred here.
+- **Remaining:** Review the existing proposed capability dispositions against every detailed requirement and record actual owner decisions. Complete missing option coverage and matched on/off evidence before any enablement; the document enables nothing and cannot defer required Lens/Auto Router/MCP/A2A.
 - **Verification:** Matched feature-on/off evidence, owner and rollback per enabled feature; every
   documented optional capability has a disposition.
 
-### B13 — Remove copied agent runtime
-
-- **Status:** pending; verify live evidence before claiming.
-- **Depends on:** W16, B03, W06, W13.
-- **Owns:** src/agents/ and its consumers; integration owns entry-point deletion.
-- **Acceptance:** Inventory reachability, move needed contracts to Worker and delete copied Pi
-  seed/writer runtime from Buckle. Gateway behavior stays under its own owner.
-- **Verification:** No gateway Pi runtime/journal/task scheduler imports; scoped route and
-  regression suite pass.
-
 ### B14 — Accept the integrated test rig
 
-- **Status:** pending; verify live evidence before claiming.
+- **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
 - **Depends on:** B03, B04, B05, B06, W16.
 - **Owns:** test/setup/, test/fixtures/, test/kit/, test/deploy/, playwright.config.*; integration
   lane.
-- **Acceptance:** Single setup→bounded readiness→flows→teardown graph uses published Worker image
-  and isolated fixtures. Prove model identity, streams, deny cases, retries and trace joins before
-  backlog trial.
+- **Remaining:** Repair actual Playwright discovery/framework/key-initialization failures, use the published forward Worker image and accepted W16 path, and qualify isolated topology/readiness, real identity/attempt/usage joins and an entitled live VMSS canary. Passing helper tests do not accept this rig.
 - **Verification:** Parallel hermetic stacks and live VMSS canary receipts; zero live issue
   fixtures.
 
 ### B15 — Qualify and release production features
 
-- **Status:** pending; verify live evidence before claiming.
+- **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
 - **Depends on:** B07, B08, B09, B10, B11, B12, B13, B14, W17, W20.
 - **Owns:** test/rolling/, test/load/; deployment manifests/release pins in integration lane.
-- **Acceptance:** All required capabilities pass combined outage/load/auth/recovery gates. Validate
-  DB/Redis loss as applicable, migration ownership, salt backup, in-flight Pi work and forward
-  rollback.
+- **Remaining:** Remove the unused Pi dependencies left after completed B13 removal; retire embedded deploy/gui packaging after the independent GUI release is accepted and its owner switches ingress. Keep container wiring separate from gateway APIs, re-run gateway regressions and qualify the combined required features on running digests. Prove DB/Redis/engine loss as applicable, real in-flight eight-runner interruption, 100-runner GUI receipt and forward rollback; merge state is not deployed acceptance.
 - **Verification:** Pinned release plus representative Fleet throughput, eight-runner interruption
   and linked 100-runner GUI/Worker observation receipt.
 
@@ -432,8 +424,8 @@ defines queue pull, pinned assignment and recovery. The
 upstream README heading and public interface. These are the single architecture/API specifications;
 Buckle implements model/protocol routing, identity and evidence at their boundaries.
 
-Worker tasks own runtime and seed changes. B00 inventories Buckle reachability; B13 removes its
-copied Pi runtime. B01 freezes the public contract before independent gateway lanes start.
+Worker tasks own runtime and seed changes. B00 inventories Buckle reachability; B13 copied-runtime removal is archived in
+[completed.md](completed.md); B15 owns remaining dependency cleanup and qualification. B01 freezes the public contract before independent gateway lanes start.
 
 ### Streaming requirements (B03, B05, B14)
 
@@ -824,8 +816,9 @@ pass.
 ### Gateway retirement inventory (B00, B13)
 
 B00 records caller, state owner and keep/move/delete disposition for every reachable gateway module,
-entry point, deployment and test. B13 removes copied runtime under `src/agents/` after W16 and the
-Worker command/read contract pass.
+entry point, deployment and test. B13 already removed `src/agents/`; do not recreate it or
+follow the stale inventory's deletion recipe. B15 removes unused Pi dependencies and proves gateway
+regressions against the qualified forward Worker path.
 [Worker migration requirements](../../fleet-worker/plan.md#migration-inventory-requirements-w00-w08-w19)
 own seed/template/image facts.
 
