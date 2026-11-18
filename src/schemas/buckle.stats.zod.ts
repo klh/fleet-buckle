@@ -132,3 +132,69 @@ export const BuckleStatsResponse = z
   })
   .strict();
 export type BuckleStatsResponse = z.output<typeof BuckleStatsResponse>;
+
+// ── B06 read model: request/attempt/spend receipts joined ──────────
+/** the ONLY metric label names the exposition may carry — bounded;
+ *  never prompt content, never runner ids / request ids */
+export const BUCKLE_METRIC_LABELS = ["model", "provider", "outcome", "cost_state"] as const;
+
+/** W14 correlation — rides rows/traces, NEVER metric labels */
+export const BuckleCorrelation = z
+  .object({
+    runner_uuid: z.string().uuid(),
+    writer_epoch: z.number().int().min(0),
+    conversation: z.string().min(1),
+    submission: z.string().min(1),
+    request_id: z.string().min(1),
+    traceparent: z.string().regex(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/),
+    call_id: z.string().min(1),
+  })
+  .strict();
+export type BuckleCorrelation = z.output<typeof BuckleCorrelation>;
+
+/** cost honesty: unknown is null + a named state, never 0 */
+export const BuckleCostState = z.enum(["priced", "missing_price", "spend_lag", "unknown"]);
+export type BuckleCostState = z.output<typeof BuckleCostState>;
+
+export const BuckleSpendJoinRow = z
+  .object({
+    correlation: BuckleCorrelation,
+    model: z.string().min(1),
+    provider: z.string().min(1).nullable(),
+    outcome: z.enum(["ok", "error", "unknown"]),
+    attempts: z.number().int().min(1),
+    prompt_tokens: z.number().int().min(0).nullable(),
+    completion_tokens: z.number().int().min(0).nullable(),
+    cost_usd: z.number().min(0).nullable(),
+    cost_state: BuckleCostState,
+  })
+  .strict();
+export type BuckleSpendJoinRow = z.output<typeof BuckleSpendJoinRow>;
+
+export const BuckleReadModel = z
+  .object({
+    schema_version: z.literal(1),
+    generated_at: z.number().int().min(0),
+    collector: z
+      .object({
+        state: z.enum(["up", "outage"]),
+        last_success_at: z.number().int().min(0).nullable(),
+      })
+      .strict(),
+    slo: z
+      .object({
+        scrape_freshness_s: z.number().int().min(1),
+        spend_lag_budget_s: z.number().int().min(1),
+        join_completeness_target: z.number().min(0).max(1),
+      })
+      .strict(),
+    retention: z
+      .object({
+        rows_days: z.number().int().min(1),
+        aggregates_days: z.number().int().min(1),
+      })
+      .strict(),
+    rows: z.array(BuckleSpendJoinRow),
+  })
+  .strict();
+export type BuckleReadModel = z.output<typeof BuckleReadModel>;
