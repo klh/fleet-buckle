@@ -63,6 +63,7 @@ test.describe.serial("graph flows", () => {
         return r.status;
       }, { timeout: 90_000 })
       .toBe(200);
+    if (!r) throw new Error("trace-join chat did not complete");
     let spans: { traceID: string; spans: { traceID: string; spanID: string }[] } | undefined;
     await expect
       .poll(
