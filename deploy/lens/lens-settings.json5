@@ -1,0 +1,10 @@
+{
+  // Trace key joins Pi spans and LiteLLM spend. Exporters get ONLY the ingest key.
+  traceKey: { header: "x-lens-trace-key", valueEnv: "LENS_TRACE_KEY", scope: "ingest-only" },
+  correlationAttributes: ["fleet.runner_id","fleet.conversation_id","fleet.submission_id","fleet.writer_epoch","litellm.call_id"],
+  retention: { days: 30, ttlTables: ["otel_traces","spend_links"] },
+  backup: { schedule: "0 3 * * *", target: "/backups", keepDays: 14, restoreDrill: "README.md#backup-restore" },
+  access: { ui: "admin token, loopback/VPN only", workerCredential: "trace key only; never admin" },
+  analysis: { modelEnv: "LENS_ANALYSIS_MODEL", required: true, redact: true },
+  sampling: { ratio: 1.0, note: "record any lower ratio; missing data is explicit" },
+}

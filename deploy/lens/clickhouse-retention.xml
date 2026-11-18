@@ -1,0 +1,3 @@
+<clickhouse><!-- retention is enforced via table TTL in lens-settings.json5; this file caps log growth -->
+  <logger><level>warning</level><size>100M</size><count>5</count></logger>
+</clickhouse>
