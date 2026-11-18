@@ -41,11 +41,9 @@ import { fileURLToPath } from "node:url";
 // carol holds every scope on every buckle of the demo topology; her key
 // is MINTED (0600, gitignored) by stack-setup before the stack boots
 const ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
-const CAROL_KEY = readFileSync(
-  join(ROOT, "test/deploy/keys/.gen/principal.carol@fleet.key"),
-  "utf8",
-).trim();
-const AUTH = { authorization: `Bearer ${CAROL_KEY}` };
+const CAROL_KEY = (): string =>
+  readFileSync(join(ROOT, "test/deploy/keys/.gen/principal.carol@fleet.key"), "utf8").trim();
+const AUTH = (): { authorization: string } => ({ authorization: `Bearer ${CAROL_KEY()}` });
 
 // catalog expectations DERIVE from the fixture stores — the same real
 // captured files the stubs serve, so a fixture refresh never needs a
@@ -102,7 +100,7 @@ for (const unit of UNITS) {
 
     // catalog — fetched from the provider stub, hub label ours
     const catalog = BuckleModelsResponse.parse(
-      await (await fetch(`${unit.base}/v1/models`, { headers: AUTH })).json(),
+      await (await fetch(`${unit.base}/v1/models`, { headers: AUTH() })).json(),
     );
     expect(catalog.hub).toBe(unit.label);
     // carol's view FEDERATES: own ids always present (peers add rows)
@@ -122,7 +120,7 @@ for (const unit of UNITS) {
     const postChat = (): Promise<Response> =>
       fetch(`${unit.base}/v1/chat/completions`, {
         method: "POST",
-        headers: { "content-type": "application/json", traceparent: inbound, ...AUTH },
+        headers: { "content-type": "application/json", traceparent: inbound, ...AUTH() },
         body: JSON.stringify({
           model: unit.chatModel,
           messages: [{ role: "user", content: `hello from ${unit.label} e2e` }],
@@ -155,7 +153,7 @@ for (const unit of UNITS) {
     // unknown model fails LOUD (problem+json, never the engine's 404)
     const unknown = await fetch(`${unit.base}/v1/chat/completions`, {
       method: "POST",
-      headers: { "content-type": "application/json", ...AUTH },
+      headers: { "content-type": "application/json", ...AUTH() },
       body: JSON.stringify({ model: "nope/nothing", messages: [] }),
     });
     expect(unknown.status).toBe(404);
@@ -163,7 +161,7 @@ for (const unit of UNITS) {
 
     // the federated tree — b1's view carries its peers (and b2's own
     // peer b3 as a SUMMARY); b2 carries b3; b3 carries nobody
-    const tree = await fetch(`${unit.base}/v1/tree`, { headers: AUTH });
+    const tree = await fetch(`${unit.base}/v1/tree`, { headers: AUTH() });
     expect(tree.status).toBe(200);
     const treeBody = BuckleTreeResponse.parse(await tree.json());
     expect(treeBody.self.buckle.label).toBe(unit.label);
@@ -178,7 +176,7 @@ for (const unit of UNITS) {
     }
 
     // live stats — grant-gated overview reflects the chatted traffic
-    const stats = await fetch(`${unit.base}/v1/stats`, { headers: AUTH });
+    const stats = await fetch(`${unit.base}/v1/stats`, { headers: AUTH() });
     expect(stats.status).toBe(200);
     // engine telemetry SURFACED (litellm's own /metrics + spend —
     // never re-counted): reachable with scalars banked; spend folds
@@ -200,7 +198,7 @@ for (const unit of UNITS) {
         async () => {
           try {
             const body = BuckleStatsResponse.parse(
-              await (await fetch(`${unit.base}/v1/stats`, { headers: AUTH })).json(),
+              await (await fetch(`${unit.base}/v1/stats`, { headers: AUTH() })).json(),
             );
             return Object.keys(body.self.engine?.series ?? {}).length;
           } catch {
@@ -231,7 +229,7 @@ test.describe("b2: injection dialects + /w/ lanes + pass-through", () => {
   const post = (path: string, body: unknown): Promise<Response> =>
     fetch(`${B2}${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json", ...AUTH },
+      headers: { "content-type": "application/json", ...AUTH() },
       body: JSON.stringify(body),
     });
 
@@ -294,14 +292,14 @@ test.describe("b2: injection dialects + /w/ lanes + pass-through", () => {
   test("unhandled faces pass through to the ENGINE verbatim", async () => {
     // a real litellm face, reached THROUGH the buckle gate (auth
     // consumed at the gate; the engine token rides)
-    const live = await fetch(`${B2}/health/liveliness`, { headers: AUTH });
+    const live = await fetch(`${B2}/health/liveliness`, { headers: AUTH() });
     expect(live.status).toBe(200);
     expect(JSON.parse(await live.text())).toBe("I'm alive!");
     // the engine's own verdict relays byte-identical — an unknown
     // path answers with LITELLM'S 404, not a buckle one
     const unknown = await fetch(`${B2}/v1/no/such/face`, {
       method: "POST",
-      headers: { "content-type": "application/json", ...AUTH },
+      headers: { "content-type": "application/json", ...AUTH() },
       body: "{}",
     });
     expect(unknown.status).toBe(404);

@@ -11,9 +11,9 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const KEY = (p: string) => readFileSync(join(ROOT, `test/deploy/keys/.gen/${p}`), "utf8").trim();
-const alice = KEY("principal.alice@fleet.key");
-const bob = KEY("principal.bob@fleet.key");
-const carol = KEY("principal.carol@fleet.key");
+const alice = (): string => KEY("principal.alice@fleet.key");
+const bob = (): string => KEY("principal.bob@fleet.key");
+const carol = (): string => KEY("principal.carol@fleet.key");
 
 import { BuckleModelsResponse } from "../../src/schemas/buckle.model.wire.zod.ts";
 import { BuckleProblem } from "../../src/schemas/buckle.problem.zod.ts";
@@ -53,28 +53,28 @@ const union = (...sets: string[][]): string[] => [...new Set(sets.flat())].sort(
 test.describe("the federation matrix (Docker)", () => {
   // a key valid HERE sees the view the REGISTRY grants — per cell:
   test("alice@b1: own provider rows ONLY (empty peer list)", async () => {
-    expect(await ids(B1, alice)).toEqual(union(OR));
+    expect(await ids(B1, alice())).toEqual(union(OR));
   });
 
   test("bob@b1: own + b3's zai rows", async () => {
-    expect(await ids(B1, bob)).toEqual(union(OR, ZAI));
+    expect(await ids(B1, bob())).toEqual(union(OR, ZAI));
   });
 
   test("carol@b1: every peer rides (openrouter + copilot + zai)", async () => {
-    expect(await ids(B1, carol)).toEqual(union(OR, CP, ZAI));
+    expect(await ids(B1, carol())).toEqual(union(OR, CP, ZAI));
   });
 
   test("carol@b2: copilot + b3's zai", async () => {
-    expect(await ids(B2, carol)).toEqual(union(CP, ZAI));
+    expect(await ids(B2, carol())).toEqual(union(CP, ZAI));
   });
 
   test("carol@b3: zai only (leaf buckle — nothing downstream)", async () => {
-    expect(await ids(B3, carol)).toEqual(union(ZAI));
+    expect(await ids(B3, carol())).toEqual(union(ZAI));
   });
 
   test("denial paths — 401 unknown principal on THIS buckle", async () => {
     // bob's key exists in the shared dir, but b2's registry doesn't know him
-    const r = await view(B2, bob);
+    const r = await view(B2, bob());
     expect(r.status).toBe(401);
     expect(r.headers.get("content-type")).toContain("application/problem+json");
     expect(BuckleProblem.parse(await r.json()).title).toBeTruthy();
@@ -83,7 +83,7 @@ test.describe("the federation matrix (Docker)", () => {
   test("denial paths — 403 known principal without the scope", async () => {
     // bob IS a principal on b3, but holds no tree.read there
     const r = await fetch(`${B3}/v1/tree`, {
-      headers: { authorization: `Bearer ${bob}` },
+      headers: { authorization: `Bearer ${bob()}` },
     });
     expect(r.status).toBe(403);
     expect(r.headers.get("content-type")).toContain("application/problem+json");

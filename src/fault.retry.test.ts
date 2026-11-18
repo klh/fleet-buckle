@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mayAttempt, retryAfterSeconds, retryableBeforeFirstChunk, MAX_ATTEMPTS } from "./fault.ts";
+import { mayAttempt, retryAfterSeconds, retryableBeforeFirstChunk, MAX_ATTEMPTS } from "./fault.retry.ts";
 import { interruptibleStream } from "./proxy/buckle.proxy.settle.ts";
 import { mergeSettings } from "./schemas/buckle.settings.zod.ts";
 

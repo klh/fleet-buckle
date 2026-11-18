@@ -65,7 +65,7 @@ function checkTimeoutKnobs(ctx: LawsCtx, files: string[]): void {
 //    exception.
 function checkYaml(ctx: LawsCtx, files: string[]): void {
   for (const f of files.filter((f) => f.endsWith(".yaml") || f.endsWith(".yml"))) {
-    if (!f.includes("/deploy/compose") && !f.includes("/deploy/engine/"))
+    if (!f.includes("/deploy/compose") && !/\/deploy\/[^/]+\/compose\.[^/]*\.ya?ml$/.test(f) && !f.includes("/deploy/engine/"))
       ctx.errors.push(`yaml authored outside compose wiring: ${f}`);
   }
 }
