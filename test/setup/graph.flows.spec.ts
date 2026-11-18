@@ -41,10 +41,7 @@ test.describe.serial("graph flows", () => {
     expect(r.headers.get("content-type")).toContain("problem+json");
   });
 
-  // PENDING B06 defect fix (task 186): jaegertracing all-in-one accepts OTLP
-  // only as protobuf; the exporter posts OTLP/JSON and silently drops the
-  // non-2xx reject. Flip back from .fixme when the B06 exporter lands.
-  test.fixme("trace join: traceparent reaches Jaeger and W14 correlation fields join", async () => {
+  test("trace join: traceparent reaches Jaeger and W14 correlation fields join", async () => {
     // the W14 correlation row (B06 fixture) must satisfy the schema, and
     // its traceparent's trace id is the join key the gateway must carry
     const fixture = JSON.parse(
