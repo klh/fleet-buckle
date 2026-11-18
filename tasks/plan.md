@@ -74,7 +74,7 @@ accepted evidence. Pending means unverified here, not proof that no implementati
 current code, active claims and live receipts before dispatch.
 
 Each ID is a work package. Before dispatch, split a package into leaves with at most five production
-files and one acceptance case per leaf. Record the exact file allowlist, input contract revision and
+files and one bounded capability with its required positive/negative cases per leaf. Record the exact file allowlist, input contract revision and
 evidence path in the bootstrap coordination surface recorded by W00/B00, then in Absurd after W03;
 keep the package ID as parent. Do not create a Markdown claim ledger. A leaf owns its tests in the
 same allowlist. Distinct files in the same directory are not implicit permission to change a shared
@@ -110,6 +110,21 @@ receipt; close the package only when all acceptance cases pass. Fixture success 
 for live deployment proof. Completed evidence leaves this active plan after review; preserve it in
 [completed.md](completed.md) with its exact scope and residual gate. Never archive an active API/source map.
 
+## Shared dispatch and acceptance authority
+
+The [Worker dispatch/acceptance contract](https://github.com/klh/fleet-worker/blob/main/plan.md#dispatch-and-acceptance-contract)
+is binding for Buckle and GUI leaves as well. B00 establishes exact reviewed source/
+image/config/seed/mount facts and a complete hashed remote handoff bundle; B14
+enforces required case discovery/no-skips, native caller-chain negative controls
+and fail-closed promotion. No required red check may become accepted/ready/merged/
+released; only an explicitly labeled diagnostic draft PR can carry failing evidence.
+No-plugin/zero-file/zero-test checks are not whole-repository qualification.
+
+Qualification smoke must verify the served build/image revision as well as readiness.
+Use isolated ports/containers; a reused local server must pass the exact provenance
+handshake or be rejected. Never accept stale service bytes or kill another lane's
+server to make a test pass.
+
 ## Surface ownership
 
 B00 reserves exact files under existing `src/` responsibility directories. B03 owns model-wire
@@ -120,9 +135,117 @@ endpoints. B02/B14/B15 share one serialized integration lane for config generati
 topology and deployment. Feature lanes provide reviewed inputs to that owner instead of editing
 shared files.
 
+## Executable acceptance dependency graph
+
+This is the single cross-repository dependency definition. Parent cards with sub-gates
+are joins, not dispatch prerequisites: accept each named sub-gate on its own evidence.
+Names such as `gui:D01` and `buckle:D01` are different deferred scopes. Leaf briefs
+use `repo:card.subgate/leaf@revision`, never a bare ambiguous number or a CLI work ID.
+The `joins` table defines package completion; no dependency may target a join.
+
+G10.1 is an internal API-readiness test against existing gateway/session/health,
+not a read-only product milestone, operator cutover or E-GUI. Native GUI work follows
+qualified Worker bindings. `buckle:B15.1` qualifies backend features without a GUI;
+`gui:G06` then supplies E-GUI; `buckle:B15.2` joins/cuts over; `worker:W19` is last.
+E-GUI always means the full functional operation-map/G06 receipt, never an internal
+smoke test, missing required management action or legacy task view.
+
+The integration owner must validate this JSON, missing/duplicate IDs, acyclicity and
+required test discovery before dispatch and after dependency edits. Card fields below
+are readable references to this graph. Gate-number overview tables are not authority.
+
+<!-- prettier-ignore -->
+```json
+{
+  "schema_version": 1,
+  "dependencies": {
+    "worker:W00": [],
+    "worker:W01": ["worker:W00"],
+    "worker:W02": ["worker:W01"],
+    "worker:W03": ["worker:W01"],
+    "worker:W04": ["worker:W02","worker:W03"],
+    "worker:W05": ["worker:W02","worker:W03"],
+    "worker:W06": ["worker:W01","worker:W02","worker:W03","worker:W04"],
+    "worker:W07": ["worker:W16"],
+    "worker:W08": ["worker:W01"],
+    "worker:W09": ["worker:W16","worker:W08","worker:W07"],
+    "worker:W10": ["worker:W09"],
+    "worker:W11": ["worker:W10","worker:W07"],
+    "worker:W12": ["worker:W16"],
+    "worker:W13": ["worker:W01","worker:W02","worker:W03"],
+    "worker:W14": ["worker:W02","buckle:B01.2","buckle:B06"],
+    "worker:W15": ["worker:W01","worker:W02","worker:W03"],
+    "worker:W16": ["worker:W04","worker:W05","worker:W06","worker:W08","worker:W15","buckle:B03","buckle:B04.1"],
+    "worker:W17": ["worker:W07","worker:W09","worker:W10","worker:W12","worker:W13","worker:W14","buckle:B14"],
+    "worker:W18": ["worker:W06","worker:W13"],
+    "worker:W19": ["worker:W11","worker:W17","worker:W18","worker:W20","buckle:B13","buckle:B15.2","gui:G06"],
+    "worker:W20": ["worker:W02","worker:W08","worker:W16","buckle:B08"],
+    "buckle:B00": [],
+    "buckle:B01.1": ["buckle:B00"],
+    "buckle:B01.2": ["buckle:B01.1","worker:W01"],
+    "buckle:B02.1": ["buckle:B01.1"],
+    "buckle:B02.2": ["buckle:B02.1"],
+    "buckle:B03": ["buckle:B01.1","buckle:B02.1"],
+    "buckle:B04.1": ["buckle:B01.1","buckle:B02.1"],
+    "buckle:B04.2": ["buckle:B01.2","buckle:B02.2","buckle:B04.1"],
+    "buckle:B05": ["buckle:B03","buckle:B04.1"],
+    "buckle:B06": ["buckle:B01.2","buckle:B02.1"],
+    "buckle:B07": ["buckle:B02.2","buckle:B04.2","buckle:B06","worker:W14"],
+    "buckle:B08": ["buckle:B04.2","buckle:B05","buckle:B06","belt:E-BELT"],
+    "buckle:B09": ["buckle:B01.1","buckle:B02.1","buckle:B04.1","belt:E-BELT"],
+    "buckle:B10": ["buckle:B03","buckle:B04.2","worker:W18"],
+    "buckle:B11": ["buckle:B03","buckle:B04.2","worker:W18"],
+    "buckle:B12": ["buckle:B05","buckle:B06"],
+    "buckle:B14": ["buckle:B03","buckle:B04.1","buckle:B05","buckle:B06","worker:W16"],
+    "buckle:B15.1": ["buckle:B02.2","buckle:B04.2","buckle:B07","buckle:B08","buckle:B09","buckle:B10","buckle:B11","buckle:B12","buckle:B13","buckle:B14","worker:W17","worker:W20"],
+    "buckle:B15.2": ["buckle:B15.1","gui:G06"],
+    "gui:G00": [],
+    "gui:G01.1": ["gui:G00","buckle:B01.1"],
+    "gui:G01.2": ["gui:G01.1","buckle:B01.2","worker:W01","worker:W06","worker:W13"],
+    "gui:G12.1": ["gui:G01.1"],
+    "gui:G12.2": ["gui:G12.1","buckle:B04.2"],
+    "gui:G09.1": ["gui:G01.1"],
+    "gui:G09.2": ["gui:G09.1"],
+    "gui:G02.1": ["gui:G12.1","gui:G09.1"],
+    "gui:G13": ["gui:G01.2"],
+    "gui:G02.3": ["gui:G02.1","gui:G13"],
+    "gui:G02.2": ["gui:G02.3"],
+    "gui:G03.1": ["gui:G02.3","gui:G09.2","worker:W08","worker:W04"],
+    "gui:G03.2": ["gui:G02.1","gui:G13","worker:W08"],
+    "gui:G10.1": ["gui:G02.1","gui:G09.2","buckle:B03","buckle:B04.1"],
+    "gui:G10.2": ["gui:G10.1","gui:G03.1","worker:W16"],
+    "gui:G04": ["gui:G10.2","gui:G02.2"],
+    "gui:G05": ["gui:G10.2","worker:W14","buckle:B06"],
+    "gui:G07": ["gui:G00"],
+    "gui:G11": ["gui:G04","gui:G02.2","gui:G09.2"],
+    "gui:G06": ["gui:G03.2","gui:G04","gui:G05","gui:G07","gui:G08.1","gui:G08.2","gui:G08.3","gui:G08.4","gui:G10.2","gui:G11","buckle:B15.1"],
+    "gui:G12.3": ["gui:G12.2","buckle:B07","buckle:B10","buckle:B11"],
+    "gui:G08.1": ["gui:G10.2","gui:G12.2","gui:G02.3","buckle:B06"],
+    "gui:G08.2": ["gui:G10.2","gui:G12.3","gui:G02.3","buckle:B10","buckle:B11"],
+    "gui:G08.3": ["gui:G10.2","gui:G12.3","gui:G05","buckle:B07"],
+    "gui:G08.4": ["gui:G10.2","gui:G12.2","gui:G02.3","buckle:B06"]
+  },
+  "joins": {
+    "buckle:B01": ["buckle:B01.1","buckle:B01.2"],
+    "buckle:B02": ["buckle:B02.1","buckle:B02.2"],
+    "buckle:B04": ["buckle:B04.1","buckle:B04.2"],
+    "buckle:B15": ["buckle:B15.1","buckle:B15.2"],
+    "gui:G01": ["gui:G01.1","gui:G01.2"],
+    "gui:G02": ["gui:G02.1","gui:G02.2","gui:G02.3"],
+    "gui:G03": ["gui:G03.1","gui:G03.2"],
+    "gui:G09": ["gui:G09.1","gui:G09.2"],
+    "gui:G10": ["gui:G10.1","gui:G10.2"],
+    "gui:G12": ["gui:G12.1","gui:G12.2","gui:G12.3"],
+    "gui:G08": ["gui:G08.1","gui:G08.2","gui:G08.3","gui:G08.4"]
+  },
+  "completed": ["buckle:B13"],
+  "external": ["belt:E-BELT"]
+}
+```
+
 ## Parallel delivery and integration gates
 
-Task IDs beginning W belong to [Worker plan](../../fleet-worker/plan.md#work-breakdown); B and D IDs
+Task IDs beginning W belong to [Worker plan](https://github.com/klh/fleet-worker/blob/main/plan.md#work-breakdown); B and D IDs
 belong here. Belt and GUI stay independent repositories; this plan consumes their published
 endpoints/images and contracts. Their files are never implicitly assigned to a Buckle or Worker
 lane.
@@ -130,25 +253,25 @@ lane.
 | Gate                                     | Ready branches (each card's dependencies still apply)                  | Exit                                                                                |
 | ---------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | 0 — inventory                            | W00 and B00                                                            | Actual runtime, ownership and Gondolin feasibility recorded.                        |
-| 1 — contracts                            | W01, then B01                                                          | Worker API and gateway identity/evidence artifacts frozen.                          |
+| 1 — contracts                            | W01/B01.1 in parallel; B01.2 follows W01                               | Worker API and gateway identity/evidence artifacts frozen.                          |
 | 2 — foundations                          | W02, W03, W08 and B02                                                  | Guest bootstrap, queue/store, charters and engine deployment accepted.              |
 | 3 — domain modules                       | W04, W05, W13, W15 and B03, B04, B06; W06 follows W04; W14 follows B06 | Placement/intake/commands and scoped model route ready.                             |
 | 4 — first pull                           | W16; B05 can run alongside; W18 follows W06/W13                        | One real charter→pull→Pi→model/read-only-tool outcome survives guest replacement.   |
 | 5 — trial readiness                      | W07 and W12; W09 follows W07; W10 follows W09; B14 follows W16/B05/B06 | W17's wake, mission, local-child, effect, read/trace and gateway gates accepted.    |
 | 6 — backlog trial and remaining features | W17; W11, B07–B12 and W20 may proceed or be queued by W17 when ready   | Accepted remaining work, including remote protocols, Lens and Auto Router adoption. |
-| 7 — release                              | B15, then W19                                                          | Full release evidence, external E-GUI gate and removed obsolete paths.              |
+| 7 — release                              | B15.1 → GUI G06/E-GUI → B15.2 → W19                                    | Full release evidence, external E-GUI gate and removed obsolete paths.              |
 
-B09 may start after B01/B02/B04 and E-BELT; B08 after B05/B06 and E-BELT. These Belt branches do not
+B09 may start after B01.1/B02.1/B04.1 and E-BELT; B08 after B04.2/B05/B06 and E-BELT. These Belt branches do not
 block W16/W17. B07 can start after W14; B10/B11 after W18. Finishing a gate does not require
 unrelated later branches to finish. Shared-file integration remains serialized per repository.
 
-This table is an overview. Each card's dependencies are authoritative and may delay a lane within a
-gate. Do not start a dependent implementation merely because its gate is visible. Integration wiring
+This table is an overview. The canonical namespaced JSON graph is authoritative;
+card dependency fields reference it and must match after every edit. Do not start a dependent implementation merely because its gate is visible. Integration wiring
 and deployment are serialized; independent modules and their scoped tests run in parallel. Do not
 hold the backlog trial until every optional feature or remote-child case is implemented: its
 explicit prerequisites define the first usable system. Required later features still gate W19/B15.
 
-The [Absurd backlog trial](../../fleet-worker/plan.md#absurd-backlog-trial) is the single trial
+The [Absurd backlog trial](https://github.com/klh/fleet-worker/blob/main/plan.md#absurd-backlog-trial) is the single trial
 procedure for both repos. W17 imports a reviewed snapshot of remaining ready leaves, including
 Buckle tasks. File reservations and dependency-ready admission must work before that import. The
 import manifest is the runtime snapshot; these Markdown plans remain design and acceptance records,
@@ -162,13 +285,13 @@ its fixture first, then pass integration acceptance against the actual producer.
 
 | Producer                                     | Required handoff                                                                            | Consumer and ordering                                                                                              |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| W01                                          | Runner/work/command/read Zod contract artifact with receipt and epoch semantics             | B01 consumes before gateway contracts are frozen.                                                                  |
+| W01                                          | Runner/work/command/read Zod contract artifact with receipt and epoch semantics             | B01.2 consumes native correlation; B01.1 existing gateway contracts need not wait.                                 |
 | B01, B06                                     | Correlation schema and reachable gateway metrics/spend collector                            | W14 instruments and joins Pi evidence; B07 follows W14 for real Lens traces.                                       |
 | B02, B03, B04                                | Pinned engine + scoped model route with real tool/stream receipt                            | W16's first supervisor work uses it; Auto Router is not required yet.                                              |
 | W06, W13, W18                                | Authorized Worker command/read API and thin MCP/A2A endpoints                               | B10/B11 register and qualify those endpoints through LiteLLM/Buckle; Worker never implements the gateway registry. |
 | W16, B05, B06                                | First live Pi pull plus gateway reliability/evidence                                        | B14 accepts the integrated baseline; W17 follows B14 and its listed Worker reliability gates.                      |
 | E-BELT, B08                                  | Qualified classifier and callable generated router alias with served-model/attempt evidence | W20 proves Pi must/prefer/context/tool semantics before default traffic changes; B15 follows W20.                  |
-| W17 plus remaining required feature receipts | Backlog trial, reviewed commits, scope/identity/stream/recovery evidence                    | B15 qualifies gateway release; W19 follows B15, remote-child proof and E-GUI to retire old runtime.                |
+| W17 plus remaining required feature receipts | Backlog trial, reviewed commits, scope/identity/stream/recovery evidence                    | B15.1 qualifies backend features; G06/E-GUI then B15.2 cutover; W19 retires runtime last.                          |
 
 No gateway task creates Worker mission logic. No Worker task regenerates Buckle engine
 configuration. A required change in the other repo becomes a linked leaf owned there, and the
@@ -188,14 +311,20 @@ A producer change requires a concrete missing generic domain capability: name th
 examined, the absent domain operation/data, its authority and a reusable contract, then assign a
 scoped owner leaf. The current W06/W13 Worker bindings and B06 evidence gaps qualify for that
 review; a preferred table shape does not. GUI client/projection work never blocks on a cosmetic
-Buckle API redesign. [GUI plan](../../fleet-buckle-gui/plan.md) owns all GUI deployment work.
+Buckle API redesign. [GUI plan](https://github.com/klh/fleet-buckle-gui/blob/main/plan.md) owns all GUI deployment work. The binding
+[complete operation/source map](https://github.com/klh/fleet-buckle-gui/blob/main/docs/gui-api-map.md)
+covers every GUI read and mutation with native source/owner/gate, shared method and
+GUI-only route. B01/B02/B04/B06/B07/B10/B11 publish the real generic capability
+contracts it needs. Existing LiteLLM APIs are consumed directly or through qualified
+Buckle passthrough; missing audit/native reads become scoped producer requirements,
+not invented endpoints or permanently disabled final GUI actions.
 
 ## External acceptance gates
 
-| Gate   | Producer and required artifact                                                                                                                                                                                                                                      | Consumers                                                   |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| E-BELT | fleet-belt supplies an immutable release manifest: model/checkpoint/backend/image revisions, private endpoint/auth contract and independent real System One inference, capacity, quality and recovery receipts. [Belt plan](../../fleet-belt/plan.md) owns serving. | B08, B09; other baseline work continues while absent.       |
-| E-GUI  | fleet-buckle-gui supplies a compatible published image and 100-runner observation receipt for Worker contract revision, snapshot/reconnect/gap behavior and authenticated commands. [GUI plan](../../fleet-buckle-gui/plan.md) owns implementation.                 | W19; W17 can use authorized Worker reads plus CLI evidence. |
+| Gate   | Producer and required artifact                                                                                                                                                                                                                                                                 | Consumers                                                   |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| E-BELT | fleet-belt supplies an immutable release manifest: model/checkpoint/backend/image revisions, private endpoint/auth contract and independent real System One inference, capacity, quality and recovery receipts. [Belt plan](https://github.com/klh/fleet-belt/blob/main/plan.md) owns serving. | B08, B09; other baseline work continues while absent.       |
+| E-GUI  | fleet-buckle-gui supplies a compatible published image and 100-runner observation receipt for Worker contract revision, snapshot/reconnect/gap behavior and authenticated commands. [GUI plan](https://github.com/klh/fleet-buckle-gui/blob/main/plan.md) owns implementation.                 | W19; W17 can use authorized Worker reads plus CLI evidence. |
 
 W00/B00 record artifact locations and actual revisions in their handoff; B08/B09/W19 validate the
 corresponding gate before acceptance. A source file, stub or README claim is not a live release
@@ -212,32 +341,32 @@ wording.
 - **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
 - **Depends on:** none.
 - **Owns:** tasks/refactor-inventory.md; no runtime edits.
-- **Remaining:** Refresh reachable-source and deployed-image/config inventories, including the already removed src/agents tree and stale OpenAPI coverage. Reserve exact integration files; do not create discovery, GUI read models or workflow endpoints in Buckle.
+- **Remaining:** Refresh reachable-source, mounted route, current deployed image/config/seed/mount inventories; reconcile AGENTS/inventory stale removed trees and incomplete OpenAPI. Capture C562 live/repo deployment drift with the Worker owner before any redeploy. Reserve exact integration files and qualify the assigned environment/source bundle before lane dispatch. No discovery, GUI read model or workflow endpoint in Buckle.
 - **Verification:** Import/route map plus live image/config receipt; shared-file ownership is
   explicit.
 
 ### B01 — Freeze gateway identity and evidence contracts
 
 - **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
-- **Depends on:** B00, W01.
+- **Depends on:** package join of `buckle:B01.1`, `buckle:B01.2`; use each sub-gate's canonical dependencies, not the aggregate label.
 - **Owns:** src/schemas/ and versioned contract fixtures; integration owns exports.
-- **Remaining:** Publish compatible existing gateway schema/OpenAPI artifacts and actual route/scoping contracts for clients, including mounted faces currently omitted from OpenAPI. Bind Worker identity/evidence consumers and fix schema-test framework discovery. Documenting an existing route is not permission to redesign it for a page.
+- **Remaining:** B01.1 publishes existing gateway schema/OpenAPI/route/scope/error/engine-passthrough artifacts independently of Worker changes. B01.2 consumes W01's native identity and publishes correlation/evidence contracts without changing model routes for GUI tables. Repair schema-test framework discovery. The GUI operation map consumes these artifacts and native LiteLLM APIs; no invented source or route is acceptable.
 - **Verification:** Schema denied/malformed cases and compatible published fixtures for Worker/GUI.
 
 ### B02 — Qualify engine deployment and config generation
 
 - **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
-- **Depends on:** B01.
+- **Depends on:** package join of `buckle:B02.1`, `buckle:B02.2`; use each sub-gate's canonical dependencies, not the aggregate label.
 - **Owns:** tools/src/buckle.gen-engine-config.ts; deploy/engine/, deploy/settings/, compose,
   package and lock files; integration lane.
-- **Remaining:** Qualify the effective engine URL/credential, pinned generated configuration and live canary; then deploy the required DB lifecycle, roles, migrations, salt/backup/restore, logging and trusted-proxy settings. Current config-only LiteLLM and generated YAML do not establish DB-backed features or an available UI.
+- **Remaining:** B02.1 qualifies current engine URL/scoped credentials, pinned effective generated config and real authenticated model-wire canary. B02.2 deploys DB lifecycle/roles/migrations/salt/backup/restore and qualified management/logging/config precedence. Current config-only LiteLLM neither supplies DB-backed management nor an available UI. Publish exact supported native API/version artifacts; B07 must select a release supporting required Lens APIs and rerun affected baseline/management contracts after any version change.
 - **Verification:** Generated config round-trip, authenticated engine canary, DB outage/backup
   restore; no PAT exposure.
 
 ### B03 — Preserve base model wire
 
 - **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
-- **Depends on:** B01, B02.
+- **Depends on:** `buckle:B01.1`, `buckle:B02.1`.
 - **Owns:** src/proxy/ model/stream files reserved by B00; no identity or retry-owner files.
 - **Remaining:** Qualify existing model-wire helpers against the actual entitled engine/provider path: tools, quiet/cut/cancel streams, terminal/in-band errors, drop/sanitize/provider parameters and JSON/reasoning behavior. Preserve byte identity and do not infer completion or token usage at response headers.
 - **Verification:** Hermetic Copilot wire matrix and one live entitled VMSS model/tool stream; no
@@ -246,16 +375,16 @@ wording.
 ### B04 — Enforce scoped caller identity
 
 - **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
-- **Depends on:** B01, B02.
+- **Depends on:** package join of `buckle:B04.1`, `buckle:B04.2`; use each sub-gate's canonical dependencies, not the aggregate label.
 - **Owns:** src/access/, src/admission/, identity passthrough files reserved by B00.
-- **Remaining:** Retain the real-ingress revocation/scoped-token fix from #29. Bind and qualify required LiteLLM scoped identities/keys, quotas/budgets and revocation at both boundaries, including DB loss and BYOC isolation. Entra profiles and expanded GUI RBAC stay deferred.
+- **Remaining:** B04.1 retains #29's real-ingress scoped-token/revocation fix and qualifies present caller access without waiting for the whole DB feature set. B04.2 binds actual DB-backed engine keys/teams/grants/quotas/budgets, including durable lifecycle audit or a separately specified reusable generic audit source. Qualify key hash/opaque ID lookup without leaking raw secrets, tenant isolation, DB loss and BYOC boundaries. GUI profile/expanded Entra RBAC remain deferred; native service authorization is required now.
 - **Verification:** Deny, revoke, quota, DB failure and cross-user isolation cases at both
   boundaries.
 
 ### B05 — Bound retry and routing policy
 
 - **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
-- **Depends on:** B03, B04.
+- **Depends on:** `buckle:B03`, `buckle:B04.1`.
 - **Owns:** src/proxy/ retry/deadline files reserved by B00; config requests handed to B02 owner.
 - **Remaining:** Choose and enforce one actual attempt/deadline owner across Pi/gateway/provider. Prove pre/post-first-chunk fallback, hard pins/grants, Retry-After and long quiet streams against the pinned chain; manually sending another request is not an internal retry-budget test.
 - **Verification:** Classifier/model/peer failure, quiet stream and Retry-After tests show bounded
@@ -264,9 +393,9 @@ wording.
 ### B06 — Publish gateway metrics and spend evidence
 
 - **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
-- **Depends on:** B01, B02.
+- **Depends on:** `buckle:B01.2`, `buckle:B02.1`.
 - **Owns:** src/metrics/ and src/trace/ gateway collectors; no Lens deployment files.
-- **Remaining:** Bind terminal model-attempt/usage/spend correlation into the real request path and private engine collector. Publish existing or genuinely missing generic evidence reads for consumers; qualify unknown price, spend lag, collector loss, retention/SLO/alert ownership. No GUI summary or page-specific log endpoint.
+- **Remaining:** Bind terminal request/attempt/route-decision/denial/usage/spend correlation into the real path and private collector. Consume native LiteLLM paginated logs/reports first; name genuinely absent generic evidence reads, ownership and retained audit source required by the GUI map, then publish exact contract artifacts before consumer dispatch. Define complete scoped query windows, retention, unknown price, export/spend lag, collector-loss/SLO/alert ownership. No page-specific summary or GUI log API.
 - **Verification:** A schema-valid fixture carries the W14 correlation fields; missing-price,
   spend-lag and collector-outage cases pass. W14 subsequently proves a live Pi call joins this
   collector.
@@ -274,16 +403,16 @@ wording.
 ### B07 — Deploy Lens with agent traces
 
 - **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
-- **Depends on:** B02, B04, B06, W14.
+- **Depends on:** `buckle:B02.2`, `buckle:B04.2`, `buckle:B06`, `worker:W14`.
 - **Owns:** deploy/lens/ and tracing configuration; shared Compose edits through integration lane.
-- **Remaining:** Deploy and qualify the existing Lens/ClickHouse scaffold with pinned images, restricted access, retention, backup and trace credentials. Store native Worker model/tool spans, join spend and run a redacted investigation. There are no running Lens containers in the verified VMSS baseline.
+- **Remaining:** Pin and deploy a supporting Lens/ClickHouse release with restricted access/roles, retention, backup and trace credentials. Qualify the current-docs trace list/detail/query and saved-investigation contracts (not found in the inspected 1.103.0 proxy tree) or publish an exact qualified equivalent. Store native Worker model/tool spans, correlate actual spend, measure export lag and exercise a redacted investigation. Revalidate affected gateway/native management contracts after engine upgrades; no live Lens baseline is established yet.
 - **Verification:** Stored/redacted trace, linked spend, backup restore and one useful investigation
   with current release qualification.
 
 ### B08 — Enable Auto Router with Belt Kev
 
 - **Status:** not implemented / producer-blocked; reviewed 2026-11-18.
-- **Depends on:** B04, B05, B06; E-BELT.
+- **Depends on:** `buckle:B04.2`, `buckle:B05`, `buckle:B06`, `belt:E-BELT`.
 - **Owns:** routing config specification/fixtures; engine generator edits serialized through B02
   owner.
 - **Remaining:** Consume qualified E-BELT System One inference and implement generated Auto Router deployment/tier/alias configuration on a supported pinned LiteLLM version. Prove hard pins, grants, context/tools, outage fallback and matched quality/cost/p95 before W20/default traffic adoption.
@@ -293,7 +422,7 @@ wording.
 ### B09 — Advertise authorized Kev decisions
 
 - **Status:** not implemented / producer-blocked; reviewed 2026-11-18.
-- **Depends on:** B01, B02, B04; E-BELT.
+- **Depends on:** `buckle:B01.1`, `buckle:B02.1`, `buckle:B04.1`, `belt:E-BELT`.
 - **Owns:** src/catalog/ decision files and decision proxy module reserved by B00.
 - **Remaining:** Implement/qualify Kev decision capability in the existing catalog/proxy contract using E-BELT origin and independent inference health. Prove authorization, stale/down behavior and decision wire; do not advertise Kev as chat.
 - **Verification:** Entitled/denied, stale inference health and decision wire tests.
@@ -301,7 +430,7 @@ wording.
 ### B10 — Expose scoped MCP commands
 
 - **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
-- **Depends on:** B03, B04, W18.
+- **Depends on:** `buckle:B03`, `buckle:B04.2`, `worker:W18`.
 - **Owns:** MCP gateway authorization/passthrough files reserved by B00; registration config through
   integration lane.
 - **Remaining:** Consume mounted W18 Worker MCP commands/reads, repair gateway/domain tool-name mismatch and have the generator consume reviewed native registry/grant config. Qualify an authorized replay-safe command and denied tool end to end; gateway transport never owns execution.
@@ -311,7 +440,7 @@ wording.
 ### B11 — Expose remote A2A runner invocation
 
 - **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
-- **Depends on:** B03, B04, W18.
+- **Depends on:** `buckle:B03`, `buckle:B04.2`, `worker:W18`.
 - **Owns:** A2A gateway authorization/passthrough files reserved by B00; registration config through
   integration lane.
 - **Remaining:** Register the mounted Worker A2A face through native LiteLLM and bind persistent runner/Pi/epoch identities. Remove any gateway-side substitute execution state; prove real discovery/send/stream/status/resubscribe/cancel, duplicate delivery and restart on the same fenced runner.
@@ -321,7 +450,7 @@ wording.
 ### B12 — Disposition optional engine capabilities
 
 - **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
-- **Depends on:** B05, B06.
+- **Depends on:** `buckle:B05`, `buckle:B06`.
 - **Owns:** tasks/engine-feature-decisions.md and feature-specific fixtures; no shared generator
   edits.
 - **Remaining:** Review the existing proposed capability dispositions against every detailed requirement and record actual owner decisions. Complete missing option coverage and matched on/off evidence before any enablement; the document enables nothing and cannot defer required Lens/Auto Router/MCP/A2A.
@@ -331,7 +460,7 @@ wording.
 ### B14 — Accept the integrated test rig
 
 - **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
-- **Depends on:** B03, B04, B05, B06, W16.
+- **Depends on:** `buckle:B03`, `buckle:B04.1`, `buckle:B05`, `buckle:B06`, `worker:W16`.
 - **Owns:** test/setup/, test/fixtures/, test/kit/, test/deploy/, playwright.config.*; integration
   lane.
 - **Remaining:** Repair actual Playwright discovery/framework/key-initialization failures, use the published forward Worker image and accepted W16 path, and qualify isolated topology/readiness, real identity/attempt/usage joins and an entitled live VMSS canary. Passing helper tests do not accept this rig.
@@ -341,11 +470,10 @@ wording.
 ### B15 — Qualify and release production features
 
 - **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
-- **Depends on:** B07, B08, B09, B10, B11, B12, B13, B14, W17, W20.
+- **Depends on:** package join of `buckle:B15.1`, `buckle:B15.2`; use each sub-gate's canonical dependencies, not the aggregate label.
 - **Owns:** test/rolling/, test/load/; deployment manifests/release pins in integration lane.
-- **Remaining:** Remove the unused Pi dependencies left after completed B13 removal; retire embedded deploy/gui packaging after the independent GUI release is accepted and its owner switches ingress. Keep container wiring separate from gateway APIs, re-run gateway regressions and qualify the combined required features on running digests. Prove DB/Redis/engine loss as applicable, real in-flight eight-runner interruption, 100-runner GUI receipt and forward rollback; merge state is not deployed acceptance.
-- **Verification:** Pinned release plus representative Fleet throughput, eight-runner interruption
-  and linked 100-runner GUI/Worker observation receipt.
+- **Remaining:** B15.1 independently qualifies required backend features on pinned running digests, removes unused Pi dependencies, proves DB/Redis/engine loss as configured, real eight-runner interruption and Worker model/router adoption; it does not wait for GUI E-GUI. G06 then qualifies the complete functional GUI and publishes E-GUI. B15.2 joins that receipt, coordinates ingress cutover with the GUI owner, retires embedded deploy/gui packaging and reruns affected regressions/rollback. No early smoke or legacy view satisfies E-GUI; W19 follows B15.2.
+- **Verification:** B15.1: pinned backend release, required feature cases, actual productive-runner throughput and eight-runner interruption. B15.2: full G06 operation-map/100-context receipt, current service/sidecar digests, coordinated cutover and tested rollback. Implementation/merge/queue-DONE never imply either acceptance.
 
 ### D01 — Human Entra/APIM and bounded CLI proof (deferred)
 
@@ -417,10 +545,10 @@ React host is not part of this design.
 
 ### Binding Pi Durable source and API map
 
-The [Worker vocabulary and running object](../../fleet-worker/plan.md#one-running-object) define
-runner semantics. The [Absurd binding](../../fleet-worker/plan.md#host-db-and-absurd-binding)
+The [Worker vocabulary and running object](https://github.com/klh/fleet-worker/blob/main/plan.md#one-running-object) define
+runner semantics. The [Absurd binding](https://github.com/klh/fleet-worker/blob/main/plan.md#host-db-and-absurd-binding)
 defines queue pull, pinned assignment and recovery. The
-[complete Pi Durable map](../../fleet-worker/plan.md#binding-pi-durable-surface-map) maps every
+[complete Pi Durable map](https://github.com/klh/fleet-worker/blob/main/plan.md#binding-pi-durable-surface-map) maps every
 upstream README heading and public interface. These are the single architecture/API specifications;
 Buckle implements model/protocol routing, identity and evidence at their boundaries.
 
@@ -441,7 +569,7 @@ SSE server or a replay log. The upstream Cloudflare example uses WebSockets; Fle
 browser feed may use SSE without copying that host.
 
 The
-[Worker operator requirements](../../fleet-worker/plan.md#operator-read-and-command-requirements-w06-w13-w17)
+[Worker operator requirements](https://github.com/klh/fleet-worker/blob/main/plan.md#operator-read-and-command-requirements-w06-w13-w17)
 define the browser-feed boundary and snapshot/watch guarantees. B03/B05 verify gateway model
 streams; the GUI repo implements browser SSE.
 
@@ -683,7 +811,7 @@ One wire or add a narrow adapter. Do not wrap Kev as a chat `classifier_type: ll
 as another provider. Pin and verify a LiteLLM build that supports the needed native decision routes;
 observed VMSS v1.103.0 predates the documented v1.104.2+ route availability. Pin image, tier map,
 default model, timeout, circuit breaker and fallback in generated config. Use
-[fleet-belt deployment gates](../../fleet-belt/plan.md) for its qualified image, private endpoint
+[fleet-belt deployment gates](https://github.com/klh/fleet-belt/blob/main/plan.md) for its qualified image, private endpoint
 and inference-readiness receipt. Do not confuse Belt IDs with Buckle B IDs.
 
 Preserve the anchored `.prefer` contract above: `must=a,b` tries only those models in order, and
@@ -819,7 +947,7 @@ B00 records caller, state owner and keep/move/delete disposition for every reach
 entry point, deployment and test. B13 already removed `src/agents/`; do not recreate it or
 follow the stale inventory's deletion recipe. B15 removes unused Pi dependencies and proves gateway
 regressions against the qualified forward Worker path.
-[Worker migration requirements](../../fleet-worker/plan.md#migration-inventory-requirements-w00-w08-w19)
+[Worker migration requirements](https://github.com/klh/fleet-worker/blob/main/plan.md#migration-inventory-requirements-w00-w08-w19)
 own seed/template/image facts.
 
 ## Deferred human BYOC requirements (D01)
