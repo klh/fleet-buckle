@@ -91,6 +91,34 @@ export function emitOpened(ctx: ForwardCtx, model: string, at: number): void {
   ctx.bus.emit(openedEventOf({ at, principal: ctx.principal, principalKind: ctx.kind, model }));
 }
 
+/** post-first-chunk failure: the visible generation is marked
+ *  interrupted (an SSE error event, NO [DONE]) and closed — never a
+ *  false clean terminal, never a second deployment spliced in. */
+export function interruptibleStream(src: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  const reader = src.getReader();
+  const enc = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const r = await reader.read().then(
+        (v) => v,
+        () => null,
+      );
+      if (r === null) {
+        controller.enqueue(
+          enc.encode(
+            'event: error\ndata: {"error":{"type":"interrupted","message":"upstream failed mid-stream"}}\n\n',
+          ),
+        );
+        controller.close();
+        return;
+      }
+      if (r.done) controller.close();
+      else controller.enqueue(r.value);
+    },
+    cancel: (reason) => reader.cancel(reason),
+  });
+}
+
 function servedResponse(
   outcome: ServedOutcome,
   injectedRule?: string | undefined,
@@ -99,7 +127,7 @@ function servedResponse(
 ): Response {
   // the streamed ride answers with the LIVE upstream body — the
   // first token reaches the client as the upstream sends it
-  const body = upstream?.body ?? outcome.text;
+  const body = upstream?.body ? interruptibleStream(upstream.body) : outcome.text;
   return new Response(body, {
     status: outcome.status,
     headers: {
