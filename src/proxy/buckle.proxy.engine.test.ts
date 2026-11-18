@@ -11,6 +11,7 @@ const DIR = mintKeyDir({
   "principal.gate@fleet.test.key": "bksk_gate_test",
   // the engine master key the gated world reads (keys.engine)
   "engine.master.key": "bksk_engine_master_test",
+  "engine.gate@fleet.test.key": "bksk_engine_scoped_gate",
 });
 const AUTH = { authorization: "Bearer bksk_gate_test" };
 const ACCESS: AccessRegistry = BuckleAccessRegistry.parse({
@@ -45,7 +46,7 @@ describe("the engine gate (keys.engine)", () => {
     });
     const r = await chat(world.base);
     expect(r.status).toBe(200);
-    expect(engine.seen.at(-1)?.auth).toBe("Bearer bksk_engine_master_test");
+    expect(engine.seen.at(-1)?.auth).toBe("Bearer bksk_engine_scoped_gate");
     world.stop();
     engine.stop();
     provider.stop();

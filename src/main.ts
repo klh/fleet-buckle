@@ -32,7 +32,7 @@ import {
 } from "./metrics/buckle.metrics.engine.ts";
 import { createEventBus } from "./events/buckle.events.bus.ts";
 import { judgeFromSettings, type ContextJudge } from "./context/buckle.context.judge.ts";
-import { authenticate, bearerOf, holdsScope } from "./access/buckle.access.registry.ts";
+import { authenticate, bearerOf, holdsScope, scopedTokenReader } from "./access/buckle.access.registry.ts";
 import { createLimiter, resolveRpmCap } from "./admission/buckle.admission.limits.ts";
 import { buildFederatedCatalog } from "./catalog/buckle.catalog.view.ts";
 import { buildTree } from "./catalog/buckle.catalog.topology.ts";
@@ -153,7 +153,7 @@ const chatFace: Face = async (srv, rq) => {
       bus: srv.bus,
       judge: srv.judge,
       principal,
-      tokenOf: srv.tokenOf,
+      tokenOf: scopedTokenReader(srv.settings, principal, srv.tokenOf),
       userToken: rq.userToken,
     }),
     rq.req,
@@ -293,7 +293,7 @@ const passThroughFace: Face = async (srv, rq) => {
   if (denied !== null) return denied;
   const refused = admitPrincipal(srv, rq.principal);
   if (refused !== null) return refused;
-  return passThrough(srv.settings, rq.req, `${rq.path}${rq.search}`, srv.tokenOf);
+  return passThrough(srv.settings, rq.req, `${rq.path}${rq.search}`, scopedTokenReader(srv.settings, rq.principal, srv.tokenOf));
 };
 
 /** the wire dialect by bare path — chat is the default face */

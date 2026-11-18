@@ -141,3 +141,18 @@ describe("engine key shape", () => {
     expect(resolveCredential(a.key, "human", () => { throw new Error("db"); })).toEqual({ ok: false, status: 503 });
   });
 });
+
+import { test as t2, expect as e2 } from "bun:test";
+import { authenticate as auth2, holdsScope as hs2, scopedTokenReader as str2 } from "./buckle.access.registry.ts";
+t2("regression: revoked principal never authenticates or holds scope; scoped engine key isolates users", () => {
+  const s: any = { keys: { engine: "/m", principals_dir: "/nonexistent" }, access: { principals: [
+    { id: "a", kind: "worker", revoked: true, groups: [] }, { id: "b", kind: "worker", revoked: false, groups: [] }],
+    grants: [{ principal: "a", scopes: ["models.use"] }, { principal: "b", scopes: ["models.use"] }], tiers: [] } };
+  e2(hs2(s, "a", "models.use")).toBe(false);
+  e2(hs2(s, "b", "models.use")).toBe(true);
+  e2(auth2(s, "bksk_x")).toBe(null);
+  const base = (p: string) => ({ "/m": "MASTER", "/nonexistent/engine.a.key": "KA", "/nonexistent/engine.b.key": "KB" } as any)[p] ?? null;
+  e2(str2(s, "b", base)("/m")).toBe("KB");
+  e2(str2(s, "a", base)("/m")).toBe("KA");
+  e2(str2(s, "b", (p: string) => (p === "/m" ? "MASTER" : null))("/m")).toBe(null);
+});
