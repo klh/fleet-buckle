@@ -35,10 +35,21 @@ const DROP_RESPONSE_HEADERS = new Set([
   "keep-alive",
 ]);
 
-function relayHeaders(req: Request): Record<string, string> {
+/** EGRESS AUDIT: internal correlation/topology headers never ride to
+ *  the engine/provider side (x-fleet*, x-buckle*, runner/epoch/
+ *  conversation/submission/request ids, trace context, baggage). */
+const DROP_REQUEST_PREFIXES = ["x-fleet", "x-buckle", "x-runner", "x-epoch", "x-conversation", "x-submission", "x-request-id", "x-correlation"];
+const DROP_REQUEST_EXACT = new Set(["tracestate", "baggage", "traceparent"]);
+
+function isInternalHeader(name: string): boolean {
+  const k = name.toLowerCase();
+  return DROP_REQUEST_EXACT.has(k) || DROP_REQUEST_PREFIXES.some((p) => k.startsWith(p));
+}
+
+export function relayHeaders(req: Request): Record<string, string> {
   const out: Record<string, string> = {};
   req.headers.forEach((value, key) => {
-    if (!DROP_REQUEST_HEADERS.has(key)) out[key] = value;
+    if (!DROP_REQUEST_HEADERS.has(key) && !isInternalHeader(key)) out[key] = value;
   });
   return out;
 }
