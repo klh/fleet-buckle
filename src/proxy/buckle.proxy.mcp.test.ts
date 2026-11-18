@@ -107,9 +107,9 @@ describe("MCP through Buckle/LiteLLM to the Worker face", () => {
     try {
       const a = (await (await call(world.base, "bksk_alice_mcp", "worker_submit_command")).json()) as Record<string, unknown>;
       const b = (await (await call(world.base, "bksk_alice_mcp", "worker_submit_command")).json()) as Record<string, unknown>;
-      expect(a.replayed).toBe(false);
-      expect(b.replayed).toBe(true);
-      expect(b.receipt).toBe(a.receipt);
+      expect(a['replayed']).toBe(false);
+      expect(b['replayed']).toBe(true);
+      expect(b['receipt']).toBe(a['receipt']);
       expect(r.executions()).toBe(1);
     } finally {
       world.stop();
