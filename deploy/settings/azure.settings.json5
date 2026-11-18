@@ -10,7 +10,12 @@
     label: "azure",
     ports: { buckle: 4111 },
   },
+  // compose service DNS name — default's 127.0.0.1:4000 is unreachable
+  // from the buckle container (B02)
+  engine: { url: "http://engine:4000" },
   keys: {
+    // runtime-mounted engine master key (the live stack's path)
+    engine: "/state/keys/engine.master.key",
     // the shared /state volume: GUI + admin principal keys (0600,
     // minted on the hub, never baked into images)
     principals_dir: "/state/keys",
@@ -38,6 +43,6 @@
   timeouts: {
     // the seat's /models rate limit runs minutes; keep serving the
     // last-good catalog for up to an hour of consecutive faults
-    catalog_grace_ms: 3_600_000,
+    catalog_grace_ms: 3600000,
   },
 }
