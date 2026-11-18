@@ -152,6 +152,7 @@ export function scopedTokenReader(
   if (p === undefined || p.kind === "human") return base;
   return (path) => {
     if (path !== master) return base(path);
+    if (base(master) === null) return null; // gate off (unreadable master): open engine, as before
     const v = base(join(dir, `engine.${p.id}.key`));
     return v !== null && v.length > 0 ? v : null;
   };
