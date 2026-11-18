@@ -56,7 +56,7 @@ function freshId(hex: number): string {
   return s;
 }
 
-/** one exported span, in OTLP/HTTP JSON shape */
+/** one exported span, (exported as OTLP/HTTP protobuf) */
 const SpanEndSchema = z
   .object({
     traceparent: z.string().min(1),
@@ -68,47 +68,71 @@ const SpanEndSchema = z
   .strict();
 type SpanEnd = z.output<typeof SpanEndSchema>;
 
-/** fire-and-forget OTLP/HTTP JSON export (jaeger :4318/v1/traces).
- *  The sink url comes from settings (telemetry.otlp_url) — ONE home.
- *  Export failures are LOGGED faults, never silent, never fatal: the
- *  serving path does not depend on the sink. */
+// ── hand-rolled OTLP/HTTP protobuf (Jaeger accepts protobuf only) ──
+const enc = new TextEncoder();
+function varint(n: number | bigint): number[] {
+  let v = BigInt(n);
+  const out: number[] = [];
+  while (v > 0x7fn) {
+    out.push(Number(v & 0x7fn) | 0x80);
+    v >>= 7n;
+  }
+  out.push(Number(v));
+  return out;
+}
+/** length-delimited field */
+function ld(field: number, bytes: ArrayLike<number>): number[] {
+  return [...varint((field << 3) | 2), ...varint(bytes.length), ...Array.from(bytes)];
+}
+function vi(field: number, n: number | bigint): number[] {
+  return [...varint(field << 3), ...varint(n)];
+}
+function fx64(field: number, n: bigint): number[] {
+  const b = new Uint8Array(8);
+  new DataView(b.buffer).setBigUint64(0, n, true);
+  return [...varint((field << 3) | 1), ...b];
+}
+function hexBytes(h: string): number[] {
+  return (h.match(/../g) ?? []).map((x) => parseInt(x, 16));
+}
+function kv(key: string, value: string): number[] {
+  return [...ld(1, enc.encode(key)), ...ld(2, ld(1, enc.encode(value)))];
+}
+
+/** encode one span as an OTLP ExportTraceServiceRequest (protobuf) */
+export function encodeOtlpSpan(span: SpanEnd): Uint8Array {
+  const [t = "", s = ""] = span.traceparent.split("-").slice(1, 3);
+  const attrs = Object.entries(span.attributes ?? {}).flatMap(([k, v]) => ld(9, kv(k, String(v))));
+  const sp = [
+    ...ld(1, hexBytes(t)),
+    ...ld(2, hexBytes(s)),
+    ...ld(5, enc.encode(span.name)),
+    ...vi(6, 1),
+    ...fx64(7, BigInt(span.startedAt) * 1_000_000n),
+    ...fx64(8, BigInt(span.endedAt) * 1_000_000n),
+    ...attrs,
+  ];
+  const scopeSpans = [...ld(1, ld(1, enc.encode("fleet-buckle"))), ...ld(2, sp)];
+  const resource = ld(1, kv("service.name", "fleet-buckle"));
+  return Uint8Array.from(ld(1, [...ld(1, resource), ...ld(2, scopeSpans)]));
+}
+
+/** fire-and-forget OTLP/HTTP PROTOBUF export (jaeger :4318/v1/traces).
+ *  Sink url from settings (telemetry.otlp_url). Failures (transport OR
+ *  non-2xx) are LOGGED faults, never silent, never fatal. */
 export function exportSpan(end: SpanEnd, settings: BuckleSettings): void {
   const span = SpanEndSchema.parse(end);
   const base = settings.telemetry.otlp_url;
-  if (base === undefined) return; // no sink configured — traces still flow on the wire headers
-  const [t, s] = span.traceparent.split("-");
+  if (base === undefined) return; // no sink configured
   void fetch(`${base.replace(/\/$/, "")}/v1/traces`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      resourceSpans: [
-        {
-          resource: {
-            attributes: [{ key: "service.name", value: { stringValue: "fleet-buckle" } }],
-          },
-          scopeSpans: [
-            {
-              scope: { name: "fleet-buckle" },
-              spans: [
-                {
-                  traceId: t,
-                  spanId: s,
-                  name: span.name,
-                  kind: 1,
-                  startTimeUnixNano: span.startedAt * 1_000_000,
-                  endTimeUnixNano: span.endedAt * 1_000_000,
-                  attributes: Object.entries(span.attributes ?? {}).map(([key, value]) => ({
-                    key,
-                    value: { stringValue: String(value) },
-                  })),
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    }),
-  }).catch((e: unknown) => {
-    logFault("otlp.export", base, classifyFault(e));
-  });
+    headers: { "content-type": "application/x-protobuf" },
+    body: encodeOtlpSpan(span),
+  })
+    .then((res) => {
+      if (!res.ok) logFault("otlp.export", base, { kind: "io", detail: `HTTP ${res.status}` });
+    })
+    .catch((e: unknown) => {
+      logFault("otlp.export", base, classifyFault(e));
+    });
 }
