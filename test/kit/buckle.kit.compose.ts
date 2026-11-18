@@ -6,11 +6,21 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const COMPOSE_FILE = `${ROOT}/test/deploy/compose.test.yaml`;
-export const PROJECT = "fleet-buckle-test";
+const RIG = process.env["BUCKLE_RIG"] ?? "";
+if (!/^[a-z0-9-]*$/.test(RIG)) throw new Error("BUCKLE_RIG must match [a-z0-9-]*");
+export const PROJECT = RIG === "" ? "fleet-buckle-test" : `fleet-buckle-test-${RIG}`;
+const OFF = Number(process.env["BUCKLE_RIG_OFFSET"] ?? "0");
+// same port truth as buckle.kit.stack.ts PORTS (kept dependency-free here)
+const base: Record<string, number> = { P_JAEGER: 16686, P_OTLPG: 4317, P_OTLPH: 4318, P_ZAISEEN: 4742, P_B1: 4711, P_B1H: 4712, P_B2: 4721, P_B2H: 4722, P_B3: 4731, P_B3H: 4732 };
+const ENV = {
+  ...process.env,
+  ...Object.fromEntries(Object.entries(base).map(([k, v]) => [k, String(v + OFF)])),
+};
 
 export function compose(args: string): string {
   return execSync(`docker compose -f ${COMPOSE_FILE} -p ${PROJECT} ${args}`, {
     encoding: "utf8",
+    env: ENV,
     stdio: ["ignore", "pipe", "pipe"],
   });
 }
@@ -28,6 +38,7 @@ export function composeOn(file: string, project: string, ...args: string[]): voi
 export async function stackUp(): Promise<void> {
   execSync(`docker compose -f ${COMPOSE_FILE} -p ${PROJECT} up -d --build`, {
     encoding: "utf8",
+    env: ENV,
     stdio: "inherit",
   });
 }
@@ -35,6 +46,7 @@ export async function stackUp(): Promise<void> {
 export function stackDown(): void {
   execSync(`docker compose -f ${COMPOSE_FILE} -p ${PROJECT} down -v --remove-orphans`, {
     encoding: "utf8",
+    env: ENV,
     stdio: "inherit",
   });
 }

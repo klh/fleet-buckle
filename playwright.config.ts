@@ -37,6 +37,9 @@ export default defineConfig({
     },
     { name: "graph-teardown", testMatch: "**/setup/graph.teardown.ts" },
     { name: "graph", testMatch: "**/setup/graph.*.spec.ts", dependencies: ["graph-setup", "smoke"] },
+    // opt-in live canary: only runs when named (--project=canary) and
+    // BUCKLE_CANARY=1; no dependencies, not in the hermetic graph
+    { name: "canary", testMatch: "**/setup/*.canary.ts" },
     {
       name: "federation",
       testMatch: "**/federation/*.spec.ts",

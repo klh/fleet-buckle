@@ -1,8 +1,9 @@
 // The integrated flows, run after bounded readiness against the hermetic
 // stack: model identity, deny cases, trace join. Stream and retry proofs
-// need stub support and are tracked fixmes (not silently passing).
+// stream (SSE) and bounded retry ride the stub's stream / 429 fault modes.
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import { BuckleCorrelation } from "../../src/schemas/buckle.stats.zod.ts";
 import { PORTS } from "../kit/buckle.kit.stack.ts";
 
 // lazy: keys are minted by stack-setup, absent at --list time
@@ -40,24 +41,57 @@ test.describe.serial("graph flows", () => {
     expect(r.headers.get("content-type")).toContain("problem+json");
   });
 
-  test("trace join: inbound traceparent id is found in Jaeger", async () => {
-    const traceId = "9a".repeat(16);
+  test("trace join: traceparent reaches Jaeger and W14 correlation fields join", async () => {
+    // the W14 correlation row (B06 fixture) must satisfy the schema, and
+    // its traceparent's trace id is the join key the gateway must carry
+    const fixture = JSON.parse(
+      readFileSync(new URL("../../src/schemas/fixtures/read-model.v1.json", import.meta.url), "utf8"),
+    ) as { rows: { correlation: unknown }[] };
+    const corr = BuckleCorrelation.parse(fixture.rows[0]?.correlation);
+    const traceId = corr.traceparent.split("-")[1] as string;
     const r = await chat(
-      { authorization: `Bearer ${keyOf()}`, traceparent: `00-${traceId}-1234567890abcdef-01` },
+      {
+        authorization: `Bearer ${keyOf()}`,
+        traceparent: corr.traceparent,
+        "x-request-id": corr.request_id,
+      },
       ask,
     );
     expect(r.status).toBe(200);
+    let spans: { traceID: string; spans: { traceID: string; spanID: string }[] } | undefined;
     await expect
       .poll(
         async () => {
           const j = await fetch(`http://127.0.0.1:${PORTS.jaeger}/api/traces/${traceId}`);
-          return j.status;
+          if (j.status !== 200) return 0;
+          spans = ((await j.json()) as { data: typeof spans[] }).data[0];
+          return spans?.spans.length ?? 0;
         },
         { timeout: 30_000 },
       )
-      .toBe(200);
+      .toBeGreaterThan(0);
+    expect(spans?.traceID).toBe(traceId);
+    // every exported span of the join carries the W14 trace id
+    for (const sp of spans?.spans ?? []) expect(sp.traceID).toBe(traceId);
   });
 
-  test.fixme("streams: SSE passthrough (needs stub stream mode)", () => {});
-  test.fixme("retries: bounded retry/429 Retry-After (needs stub fault mode)", () => {});
+  test("streams: SSE passthrough ends with [DONE]", async () => {
+    const r = await chat({ authorization: `Bearer ${keyOf()}` }, { ...ask, stream: true });
+    expect(r.status).toBe(200);
+    expect(r.headers.get("content-type")).toContain("text/event-stream");
+    const text = await r.text();
+    expect(text).toContain("data: ");
+    expect(text).toContain("[DONE]");
+  });
+
+  test("retries: a stub 429 + Retry-After is bounded (relayed or retried to success)", async () => {
+    const key = `g${Date.now()}`;
+    const body = { ...ask, messages: [{ role: "user", content: `STUB-FAULT-429:${key}` }] };
+    const first = await chat({ authorization: `Bearer ${keyOf()}` }, body);
+    if (first.status === 429) {
+      expect(first.headers.get("retry-after")).not.toBeNull();
+      const again = await chat({ authorization: `Bearer ${keyOf()}` }, body);
+      expect(again.status).toBe(200);
+    } else expect(first.status).toBe(200);
+  });
 });

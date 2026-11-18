@@ -18,6 +18,8 @@ try {
 }
 
 let chats = 0;
+/** per-key call counts for the 429 fault mode */
+const faults = new Map<string, number>();
 
 /** the AGENT-CONTRACT oracle: the durable worker asks three STRICT
  *  JSON questions (classify / pin-down / implement). The provider stub
@@ -129,6 +131,8 @@ const server = Bun.serve({
       // narrowing (in-guards): the stub image carries no deps
       let answer = "plain";
       let model = "stub-chat";
+      let wantStream = false;
+      let faultKey: string | null = null;
       let contract: string | null = null;
       let systemMark = false;
       let systemHead: string | null = null;
@@ -161,6 +165,14 @@ const server = Bun.serve({
           // worker must always get its JSON back)
           if (systemMark && contract === null) answer = "injected";
         }
+        // B14 stub modes: `stream:true` answers SSE; a user message
+        // carrying STUB-FAULT-429:<key> answers 429 + Retry-After on the
+        // first call per key, then succeeds (bounded-retry oracle)
+        if (typeof body === "object" && body !== null) {
+          if ("stream" in body && body.stream === true) wantStream = true;
+          const m = JSON.stringify("messages" in body ? body.messages : "");
+          faultKey = /STUB-FAULT-429:([\w-]+)/.exec(m)?.[1] ?? null;
+        }
         // the LANE-PIN oracle: the model the engine actually received
         // (the pin wins over the body — the response echoes it)
         if (
@@ -174,6 +186,34 @@ const server = Bun.serve({
         // non-JSON body: still a passthrough stub
       }
       recordSeen("chat", model, systemMark, contract, systemHead, req.headers.get("authorization"), req.headers.get("copilot-integration-id"), req.headers.get("user-agent"));
+      if (faultKey !== null) {
+        faults.set(faultKey, (faults.get(faultKey) ?? 0) + 1);
+        if (faults.get(faultKey) === 1)
+          return Response.json(
+            { error: { message: "stub rate limit", type: "rate_limit_error" } },
+            { status: 429, headers: { "retry-after": "1" } },
+          );
+      }
+      if (wantStream) {
+        const enc = new TextEncoder();
+        const chunk = (delta: object, finish: string | null): string =>
+          `data: ${JSON.stringify({ id: "stub-chat", object: "chat.completion.chunk", model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
+        const parts = [
+          chunk({ role: "assistant", content: "stub " }, null),
+          chunk({ content: "stream" }, null),
+          chunk({}, "stop"),
+          "data: [DONE]\n\n",
+        ];
+        return new Response(
+          new ReadableStream({
+            start(c) {
+              for (const x of parts) c.enqueue(enc.encode(x));
+              c.close();
+            },
+          }),
+          { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } },
+        );
+      }
       return Response.json({
         id: "stub-chat",
         object: "chat.completion",

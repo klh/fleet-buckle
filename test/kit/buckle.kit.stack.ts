@@ -22,18 +22,27 @@ export async function stackUp(): Promise<void> {
 
 export { stackDown };
 
+/** per-rig isolation: BUCKLE_RIG (name) picks the compose project suffix
+ *  and BUCKLE_RIG_OFFSET (integer) shifts every host port, so parallel
+ *  hermetic rigs never collide. */
+const OFF = Number(process.env["BUCKLE_RIG_OFFSET"] ?? "0");
+if (!Number.isInteger(OFF) || OFF < 0 || OFF > 1000)
+  throw new Error("BUCKLE_RIG_OFFSET must be an integer 0..1000");
+
 /** host ports of the demo topology — the single port truth for specs */
 export const PORTS = {
-  b1: 4711,
-  b1Health: 4712,
-  b2: 4721,
-  b2Health: 4722,
-  b3: 4731,
-  b3Health: 4732,
-  jaeger: 16686,
-  ghStub: 4741,
-  zaiSeen: 4742,
-  workerWake: 4743,
+  b1: 4711 + OFF,
+  b1Health: 4712 + OFF,
+  b2: 4721 + OFF,
+  b2Health: 4722 + OFF,
+  b3: 4731 + OFF,
+  b3Health: 4732 + OFF,
+  jaeger: 16686 + OFF,
+  otlpGrpc: 4317 + OFF,
+  otlpHttp: 4318 + OFF,
+  ghStub: 4741 + OFF,
+  zaiSeen: 4742 + OFF,
+  workerWake: 4743 + OFF,
 } as const;
 
 export const SERVICES = [
