@@ -3,8 +3,10 @@
 // wrong key are 401/403. Usage: ENGINE_URL=http://engine:4000 \
 //   ENGINE_KEY_FILE=/state/keys/engine.master.key bun this.ts
 import { readFileSync } from "node:fs";
+import { z } from "zod";
 
-export type CanaryReceipt = { positive: number; anonymous: number; wrongKey: number; ok: boolean };
+const CanaryReceiptSchema = z.object({ positive: z.number(), anonymous: z.number(), wrongKey: z.number(), ok: z.boolean() });
+export type CanaryReceipt = z.output<typeof CanaryReceiptSchema>;
 
 export async function runCanary(url: string, key: string): Promise<CanaryReceipt> {
   const get = async (auth?: string) =>

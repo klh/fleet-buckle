@@ -404,7 +404,7 @@ wording.
 
 - **Status:** partial implementation; remaining acceptance open; reviewed 2026-11-18.
 - **Depends on:** `buckle:B02.2`, `buckle:B04.2`, `buckle:B06`, `worker:W14`.
-- **Owns:** deploy/lens/ and tracing configuration; shared Compose edits through integration lane.
+- **Owns:** deploy/compose.lens/ and tracing configuration; shared Compose edits through integration lane.
 - **Remaining:** Pin and deploy a supporting Lens/ClickHouse release with restricted access/roles, retention, backup and trace credentials. Qualify the current-docs trace list/detail/query and saved-investigation contracts (not found in the inspected 1.103.0 proxy tree) or publish an exact qualified equivalent. Store native Worker model/tool spans, correlate actual spend, measure export lag and exercise a redacted investigation. Revalidate affected gateway/native management contracts after engine upgrades; no live Lens baseline is established yet.
 - **Verification:** Stored/redacted trace, linked spend, backup restore and one useful investigation
   with current release qualification.

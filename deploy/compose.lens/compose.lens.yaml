@@ -1,4 +1,4 @@
-# B07 Lens fragment (early-access; see README.md). Merge: docker compose -f compose.yaml -f lens/compose.lens.yaml
+# B07 Lens fragment (early-access; see README.md). Merge: docker compose -f compose.yaml -f compose.lens/compose.lens.yaml
 # Images MUST be digest pinned: set LENS_IMAGE and CLICKHOUSE_IMAGE in lens.env as repo@sha256:...
 services:
   lens-clickhouse:

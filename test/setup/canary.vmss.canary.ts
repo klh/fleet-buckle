@@ -1,6 +1,7 @@
 // OPT-IN live VMSS canary (BUCKLE_CANARY=1 + BUCKLE_CANARY_URL + BUCKLE_CANARY_KEY).
 // Never part of the hermetic graph; absent opt-in it is skipped, not green.
 import { expect, test } from "@playwright/test";
+import { z } from "zod";
 
 test.skip(process.env["BUCKLE_CANARY"] !== "1", "live VMSS canary is opt-in (BUCKLE_CANARY=1)");
 
@@ -15,5 +16,6 @@ test("canary: live gateway serves the requested model", async () => {
     body: JSON.stringify({ model, messages: [{ role: "user", content: "canary" }] }),
   });
   expect(r.status).toBe(200);
-  expect(((await r.json()) as { model?: string }).model).toBe(model);
+  const body = z.object({ model: z.string().optional() }).safeParse(await r.json());
+  expect(body.success && body.data.model).toBe(model);
 });

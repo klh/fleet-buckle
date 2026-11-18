@@ -1,28 +1,31 @@
 // metrics/buckle.metrics.join.ts — join request/attempt/spend
 // receipts into the versioned read model. Unknown stays null.
+import { z } from "zod";
 import {
   BUCKLE_METRIC_LABELS,
   BuckleReadModel,
-  type BuckleCorrelation,
+  BuckleCorrelation,
   type BuckleCostState,
   type BuckleSpendJoinRow,
 } from "../schemas/buckle.stats.zod.ts";
 
-export interface RequestReceipt {
-  correlation: BuckleCorrelation;
-  model: string;
-  provider?: string | null;
-  ok?: boolean | null;
-  attempts: number;
-  prompt_tokens?: number | null;
-  completion_tokens?: number | null;
-}
+const RequestReceiptSchema = z.object({
+  correlation: BuckleCorrelation,
+  model: z.string(),
+  provider: z.string().nullish(),
+  ok: z.boolean().nullish(),
+  attempts: z.number(),
+  prompt_tokens: z.number().nullish(),
+  completion_tokens: z.number().nullish(),
+});
+export type RequestReceipt = z.output<typeof RequestReceiptSchema>;
 /** spend receipt: cost undefined/null = engine has no price */
-export interface SpendReceipt {
-  request_id: string;
-  cost_usd?: number | null;
-  priced?: boolean;
-}
+const SpendReceiptSchema = z.object({
+  request_id: z.string(),
+  cost_usd: z.number().nullish(),
+  priced: z.boolean().optional(),
+});
+export type SpendReceipt = z.output<typeof SpendReceiptSchema>;
 
 export const DEFAULT_SLO = { scrape_freshness_s: 60, spend_lag_budget_s: 300, join_completeness_target: 0.99 };
 export const DEFAULT_RETENTION = { rows_days: 30, aggregates_days: 400 };

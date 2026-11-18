@@ -3,6 +3,7 @@
 // stream (SSE) and bounded retry ride the stub's stream / 429 fault modes.
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import { z } from "zod";
 import { BuckleCorrelation } from "../../src/schemas/buckle.stats.zod.ts";
 import { PORTS } from "../kit/buckle.kit.stack.ts";
 
@@ -19,6 +20,9 @@ const chat = (headers: Record<string, string>, body: object): Promise<Response> 
     headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body),
   });
+const JaegerBody = z.object({
+  data: z.array(z.object({ traceID: z.string(), spans: z.array(z.object({ traceID: z.string(), spanID: z.string() })) })),
+});
 const ask = { model: "qwen/qwen3.8-max-prime", messages: [{ role: "user", content: "graph" }] };
 
 test.describe.serial("graph flows", () => {
@@ -28,9 +32,9 @@ test.describe.serial("graph flows", () => {
         timeout: 90_000,
       })
       .toBe(200);
-    const body = (await (await chat({ authorization: `Bearer ${keyOf()}` }, ask)).json()) as {
-      model?: string;
-    };
+    const body = z
+      .object({ model: z.string().optional() })
+      .parse(await (await chat({ authorization: `Bearer ${keyOf()}` }, ask)).json());
     expect(body.model).toBe(ask.model);
   });
 
@@ -44,9 +48,13 @@ test.describe.serial("graph flows", () => {
   test("trace join: traceparent reaches Jaeger and W14 correlation fields join", async () => {
     // the W14 correlation row (B06 fixture) must satisfy the schema, and
     // its traceparent's trace id is the join key the gateway must carry
-    const fixture = JSON.parse(
-      readFileSync(new URL("../../src/schemas/fixtures/read-model.v1.json", import.meta.url), "utf8"),
-    ) as { rows: { correlation: unknown }[] };
+    const fixture = z
+      .object({ rows: z.array(z.object({ correlation: z.unknown() })) })
+      .parse(
+        JSON.parse(
+          readFileSync(new URL("../../src/schemas/fixtures/read-model.v1.json", import.meta.url), "utf8"),
+        ),
+      );
     const corr = BuckleCorrelation.parse(fixture.rows[0]?.correlation);
     const traceId = corr.traceparent.split("-")[1] as string;
     let r: Response | undefined;
@@ -70,7 +78,7 @@ test.describe.serial("graph flows", () => {
         async () => {
           const j = await fetch(`http://127.0.0.1:${PORTS.jaeger}/api/traces/${traceId}`);
           if (j.status !== 200) return 0;
-          spans = ((await j.json()) as { data: typeof spans[] }).data[0];
+          spans = JaegerBody.parse(await j.json()).data[0];
           return spans?.spans.length ?? 0;
         },
         { timeout: 30_000 },

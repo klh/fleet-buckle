@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { z } from "zod";
 import { A2A_PROTOCOL_VERSION, handleA2a, type A2aBinding, type A2aDeps } from "./buckle.proxy.a2a.ts";
 
 function world() {
@@ -17,17 +18,21 @@ function world() {
   };
   return { m, log, deps, bump: () => void epoch++ };
 }
+const CallReply = z.object({
+  result: z.object({ id: z.string(), status: z.object({ state: z.string() }) }).optional(),
+  error: z.object({ code: z.number() }).optional(),
+});
 const call = (d: A2aDeps, method: string, params: unknown, auth = "Bearer ok") =>
   handleA2a(
     new Request("http://x/a2a/r", { method: "POST", headers: { authorization: auth }, body: JSON.stringify({ id: 1, method, params }) }),
     d,
-  ).then((r) => r.json() as Promise<{ result?: { id: string; status: { state: string } }; error?: { code: number } }>);
+  ).then(async (r) => CallReply.parse(await r.json()));
 
 describe("B11 A2A gateway", () => {
   test("card pins protocol", async () => {
     const { deps } = world();
     const r = await handleA2a(new Request("http://x/a2a/r/.well-known/agent-card.json"), deps);
-    expect(((await r.json()) as { protocolVersion: string }).protocolVersion).toBe(A2A_PROTOCOL_VERSION);
+    expect(z.object({ protocolVersion: z.string() }).parse(await r.json()).protocolVersion).toBe(A2A_PROTOCOL_VERSION);
   });
   test("auth rejected", async () => {
     const { deps } = world();

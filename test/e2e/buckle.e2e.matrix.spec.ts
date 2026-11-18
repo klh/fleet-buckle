@@ -11,9 +11,15 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const KEY = (p: string) => readFileSync(join(ROOT, `test/deploy/keys/.gen/${p}`), "utf8").trim();
-const alice = KEY("principal.alice@fleet.key");
-const bob = KEY("principal.bob@fleet.key");
-const carol = KEY("principal.carol@fleet.key");
+// keys are minted by stack-setup: read only after setup, never at --list time
+let alice = "";
+let bob = "";
+let carol = "";
+test.beforeAll(() => {
+  alice = KEY("principal.alice@fleet.key");
+  bob = KEY("principal.bob@fleet.key");
+  carol = KEY("principal.carol@fleet.key");
+});
 
 import { BuckleModelsResponse } from "../../src/schemas/buckle.model.wire.zod.ts";
 import { BuckleProblem } from "../../src/schemas/buckle.problem.zod.ts";

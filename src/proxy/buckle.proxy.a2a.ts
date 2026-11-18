@@ -3,36 +3,49 @@
 // persists the A2A task id -> {runner UUID, Pi submission id, writer
 // epoch} mapping so duplicate delivery, restart and cancel all hit the
 // same fenced runner. The LiteLLM kill-switch webhook is NOT cancellation.
+import { z } from "zod";
+
 export const A2A_PROTOCOL_VERSION = "0.3" as const;
 
-export interface A2aBinding {
-  readonly taskId: string;
-  readonly runnerUuid: string;
-  readonly piSubmissionId: string;
-  readonly writerEpoch: number;
-  readonly state: "submitted" | "working" | "canceled" | "completed" | "failed";
-}
+const A2aBindingSchema = z.object({
+  taskId: z.string(),
+  runnerUuid: z.string(),
+  piSubmissionId: z.string(),
+  writerEpoch: z.number(),
+  state: z.enum(["submitted", "working", "canceled", "completed", "failed"]),
+});
+export type A2aBinding = Readonly<z.output<typeof A2aBindingSchema>>;
+
+const A2aRpcSchema = z.object({
+  id: z.unknown().optional(),
+  method: z.string().optional(),
+  params: z.record(z.string(), z.unknown()).optional(),
+});
+const A2aMessageSchema = z.object({ messageId: z.string().optional() }).passthrough();
 
 /** durable store seam (Worker/DB backed in prod, Map in the fixture) */
-export interface A2aBindingStore {
-  get(key: string): Promise<A2aBinding | undefined>;
-  put(key: string, b: A2aBinding): Promise<void>;
-}
+const A2aBindingStoreSchema = z.object({
+  get: z.custom<(key: string) => Promise<A2aBinding | undefined>>(),
+  put: z.custom<(key: string, b: A2aBinding) => Promise<void>>(),
+});
+export type A2aBindingStore = z.output<typeof A2aBindingStoreSchema>;
 
 /** the Worker host admission/cancel API */
-export interface A2aWorker {
-  admit(idempotencyKey: string, message: unknown): Promise<Omit<A2aBinding, "state">>;
-  cancel(b: A2aBinding): Promise<"canceled" | "stale-epoch">;
-  status(b: A2aBinding): Promise<A2aBinding["state"]>;
-}
+const A2aWorkerSchema = z.object({
+  admit: z.custom<(idempotencyKey: string, message: unknown) => Promise<Omit<A2aBinding, "state">>>(),
+  cancel: z.custom<(b: A2aBinding) => Promise<"canceled" | "stale-epoch">>(),
+  status: z.custom<(b: A2aBinding) => Promise<A2aBinding["state"]>>(),
+});
+export type A2aWorker = z.output<typeof A2aWorkerSchema>;
 
-export interface A2aDeps {
-  readonly store: A2aBindingStore;
-  readonly worker: A2aWorker;
+const A2aDepsSchema = z.object({
+  store: A2aBindingStoreSchema,
+  worker: A2aWorkerSchema,
   /** caller must hold the a2a scope */
-  readonly authorize: (req: Request) => boolean;
-  readonly card: Record<string, unknown>;
-}
+  authorize: z.custom<(req: Request) => boolean>(),
+  card: z.record(z.string(), z.unknown()),
+});
+export type A2aDeps = Readonly<z.output<typeof A2aDepsSchema>>;
 
 const rpc = (id: unknown, result?: unknown, code?: number, message?: string): Response =>
   Response.json(
@@ -44,12 +57,12 @@ export async function handleA2a(req: Request, d: A2aDeps): Promise<Response> {
   if (url.pathname.endsWith("/.well-known/agent-card.json"))
     return Response.json({ ...d.card, protocolVersion: A2A_PROTOCOL_VERSION });
   if (!d.authorize(req)) return new Response("forbidden", { status: 403 });
-  const body = (await req.json()) as { id?: unknown; method?: string; params?: Record<string, unknown> };
+  const body = A2aRpcSchema.parse(await req.json());
   const p = body.params ?? {};
   switch (body.method) {
     case "message/send":
     case "message/stream": {
-      const msg = p["message"] as { messageId?: string } | undefined;
+      const msg = A2aMessageSchema.optional().parse(p["message"]);
       if (msg?.messageId === undefined) return rpc(body.id, undefined, -32602, "messageId required");
       const key = `msg:${msg.messageId}`;
       let b = await d.store.get(key);

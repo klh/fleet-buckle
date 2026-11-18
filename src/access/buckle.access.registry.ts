@@ -4,9 +4,11 @@
 // exactly that value; grants (scopes) decide the face. No registry
 // configured = fail CLOSED (401). healthz + /metrics stay open — health
 // is outside-process by law.
+import { z } from "zod";
 import { join } from "node:path";
 import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
 import type { BuckleScope } from "../schemas/buckle.access.zod.ts";
+import { attempt } from "../fault.ts";
 import { listDir, readToken } from "../settings.ts";
 
 const KEY_PREFIX = "principal.";
@@ -65,22 +67,25 @@ export function isRevoked(settings: BuckleSettings, principal: string): boolean 
   return p === undefined || p.revoked;
 }
 
-export interface EngineKeyShape {
-  principalId: string;
-  keyAlias: string;
+const EngineKeyShapeSchema = z.object({
+  principalId: z.string(),
+  keyAlias: z.string(),
   /** secret PATH, never a value */
-  keyPath: string;
-  teams: string[];
-  maxBudget?: number;
-  budgetDuration?: string;
-  rpmLimit?: number;
+  keyPath: z.string(),
+  teams: z.array(z.string()),
+  maxBudget: z.number().optional(),
+  budgetDuration: z.string().optional(),
+  rpmLimit: z.number().optional(),
   /** ordinary model keys never carry admin routes */
-  routeFamilies: ("chat" | "responses" | "embeddings" | "models")[];
-}
+  routeFamilies: z.array(z.enum(["chat", "responses", "embeddings", "models"])),
+});
+export type EngineKeyShape = z.output<typeof EngineKeyShapeSchema>;
 
-export type EngineKeyVerdict =
-  | { ok: true; key: EngineKeyShape }
-  | { ok: false; status: 401 | 403 | 503; reason: string };
+const EngineKeyVerdictSchema = z.union([
+  z.object({ ok: z.literal(true), key: EngineKeyShapeSchema }),
+  z.object({ ok: z.literal(false), status: z.union([z.literal(401), z.literal(403), z.literal(503)]), reason: z.string() }),
+]);
+export type EngineKeyVerdict = z.output<typeof EngineKeyVerdictSchema>;
 
 /** principal -> scoped LiteLLM virtual-key shape. Unknown/revoked = 401.
  *  `admin` scope never becomes an engine model-key route (admin escalation denied). */
@@ -118,6 +123,12 @@ export function engineKeyFor(
   };
 }
 
+const CredentialVerdictSchema = z.union([
+  z.object({ ok: z.literal(true), token: z.string() }),
+  z.object({ ok: z.literal(false), status: z.union([z.literal(401), z.literal(503)]) }),
+]);
+type CredentialVerdict = z.output<typeof CredentialVerdictSchema>;
+
 /** credential resolution: a BYOC failure is a denial, never a worker-key fallback;
  *  a DB/engine failure fails closed (503). */
 export function resolveCredential(
@@ -125,13 +136,13 @@ export function resolveCredential(
   kind: string,
   read: (path: string) => string | null,
   workerKeyPath?: string,
-): { ok: true; token: string } | { ok: false; status: 401 | 503 } {
-  let token: string | null;
-  try {
-    token = read(key.keyPath);
-  } catch {
-    return { ok: false, status: 503 };
-  }
+): CredentialVerdict {
+  const got = attempt<{ token: string | null } | null>(
+    () => ({ token: read(key.keyPath) }),
+    () => null,
+  );
+  if (got === null) return { ok: false, status: 503 };
+  const token = got.token;
   if (token !== null && token.length > 0) return { ok: true, token };
   void workerKeyPath; // deliberately unused: no fallback
   return { ok: false, status: kind === "human" ? 401 : 503 };
