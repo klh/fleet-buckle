@@ -10,7 +10,8 @@
 // operator-facing, never the client's fault.
 import { z } from "zod";
 
-import { bodyText as readBody, httpSend, logFault, retryAfterSeconds } from "../fault.ts";
+import { bodyText as readBody, httpSend, logFault } from "../fault.ts";
+import { retryAfterSeconds } from "../fault.retry.ts";
 import {
   HOP_DEADLINE_HEADER,
   HOP_PATH_HEADER,

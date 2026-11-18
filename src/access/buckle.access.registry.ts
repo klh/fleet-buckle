@@ -7,6 +7,7 @@
 import { join } from "node:path";
 import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
 import type { BuckleScope } from "../schemas/buckle.access.zod.ts";
+import { attempt } from "../fault.ts";
 import { listDir, readToken } from "../settings.ts";
 
 const KEY_PREFIX = "principal.";
@@ -126,12 +127,11 @@ export function resolveCredential(
   read: (path: string) => string | null,
   workerKeyPath?: string,
 ): { ok: true; token: string } | { ok: false; status: 401 | 503 } {
-  let token: string | null;
-  try {
-    token = read(key.keyPath);
-  } catch {
-    return { ok: false, status: 503 };
-  }
+  const token = attempt<string | null | undefined>(
+    () => read(key.keyPath),
+    () => undefined,
+  );
+  if (token === undefined) return { ok: false, status: 503 };
   if (token !== null && token.length > 0) return { ok: true, token };
   void workerKeyPath; // deliberately unused: no fallback
   return { ok: false, status: kind === "human" ? 401 : 503 };
