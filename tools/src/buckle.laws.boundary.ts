@@ -39,7 +39,7 @@ export function checkBoundaryEscape(
 // reviewed baseline (post P1.5 extraction): every legacy worker/agent/
 // seed path still standing. ADDITIONS fail the law; REMOVALS shrink
 // this list — the ratchet only turns one way.
-export const LEGACY_BASELINE = [
+export const LEGACY_BASELINE: string[] = [
 ];
 
 const rel = (f: string): string => f.slice(f.indexOf("src/"));
