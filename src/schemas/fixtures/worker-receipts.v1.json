@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "source": "klh/fleet-worker src/contracts/{receipts,epochs}.zod.ts (fixture per docs/contracts/ARTIFACT-PUBLICATION.md; no source import)",
+  "valid": {
+    "acceptedReceipt": { "state": "accepted", "requestId": "req-1", "submissionId": "sub-1", "epoch": 3, "duplicate": false },
+    "settledReceipt": { "state": "settled", "requestId": "req-1", "submissionId": "sub-1", "epoch": 3, "outcome": "completed" },
+    "runnerAssignment": { "runnerId": "3f2b8c1e-5d4a-4b7e-9a10-2c6d8e9f0a1b", "rootConversationId": "pi-conv-1", "pinnedAt": "2025-01-01T00:00:00Z", "writerEpoch": 3 }
+  },
+  "invalid": {
+    "negativeEpoch": { "state": "accepted", "requestId": "req-1", "submissionId": "sub-1", "epoch": -1, "duplicate": false },
+    "badOutcome": { "state": "settled", "requestId": "req-1", "submissionId": "sub-1", "epoch": 3, "outcome": "ok" }
+  }
+}
