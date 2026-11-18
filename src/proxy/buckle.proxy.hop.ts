@@ -10,7 +10,7 @@
 // operator-facing, never the client's fault.
 import { z } from "zod";
 
-import { bodyText as readBody, httpSend, logFault } from "../fault.ts";
+import { bodyText as readBody, httpSend, logFault, retryAfterSeconds } from "../fault.ts";
 import {
   HOP_DEADLINE_HEADER,
   HOP_PATH_HEADER,
@@ -47,10 +47,10 @@ export type HopOutcome = z.output<typeof HopOutcome>;
 function respondOf(self: string, sent: Response, text: string): HopOutcome {
   if (sent.status === 429) {
     // relay the peer's verdict: the client must see Retry-After
-    const retryAfterS = Number(sent.headers.get("retry-after") ?? "1");
+    const retryAfterS = retryAfterSeconds(sent.headers.get("retry-after"));
     return HopOutcome.parse({
       kind: "rate-limited",
-      retryAfterS: Number.isFinite(retryAfterS) && retryAfterS > 0 ? retryAfterS : 1,
+      retryAfterS,
       detail: text.slice(0, 200),
     });
   }
