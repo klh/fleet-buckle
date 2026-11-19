@@ -15,6 +15,17 @@ vocabulary, task dependencies and Pi Durable source map govern the work.
 Edit the plan when the owner directs it; otherwise propose changes with
 evidence before changing binding architecture.
 
+
+## Greenfield/transition operating mode
+
+During greenfield/transition phases: deploy what works, accept known debt,
+fix forward. The law scanner, qlty hooks, and typecheck are quality signals —
+not release gates. Block only on: security, data loss, credential leaks.
+Everything else: ship and iterate. If the same intervention fails 3+ times
+without forward progress, change approach entirely instead of continuing.
+When a leaf fails, embed the failure text in the re-mint brief so the next
+lane has the context to avoid the same failure.
+
 ## Standalone repository boundary
 
 Read the ownership and execution rules in `tasks/plan.md` before rollout edits. Each lane
