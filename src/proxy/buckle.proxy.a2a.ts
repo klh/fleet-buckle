@@ -71,6 +71,7 @@ export async function handleA2a(req: Request, d: A2aDeps): Promise<Response> {
         b = { ...a, state: "submitted" };
         await d.store.put(key, b);
         await d.store.put(`task:${b.taskId}`, b);
+        await d.store.put(`taskmsg:${b.taskId}`, { ...b, taskId: key });
       }
       return rpc(body.id, { kind: "task", id: b.taskId, status: { state: b.state } });
     }
@@ -84,6 +85,8 @@ export async function handleA2a(req: Request, d: A2aDeps): Promise<Response> {
           return rpc(body.id, undefined, -32002, "writer epoch fenced");
         const n = { ...b, state: "canceled" as const };
         await d.store.put(`task:${b.taskId}`, n);
+        const link = await d.store.get(`taskmsg:${b.taskId}`);
+        if (link !== undefined) await d.store.put(link.taskId, n);
         return rpc(body.id, { kind: "task", id: b.taskId, status: { state: "canceled" } });
       }
       const state = await d.worker.status(b);
