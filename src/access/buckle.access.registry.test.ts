@@ -156,3 +156,31 @@ t2("regression: revoked principal never authenticates or holds scope; scoped eng
   e2(str2(s, "a", base)("/m")).toBe("KA");
   e2(str2(s, "b", (p: string) => (p === "/m" ? "MASTER" : null))("/m")).toBe(null);
 });
+
+import { virtualKeyBody } from "./buckle.access.registry.ts";
+import { admitBudget } from "../admission/buckle.admission.limits.ts";
+
+describe("virtual key body + budget", () => {
+  const acc = BuckleAccessRegistry.parse({
+    principals: [
+      { id: "svc@fleet", kind: "service", groups: ["t1"], limits: { max_budget: 2, max_rpm: 5 } },
+      { id: "adm@fleet", kind: "developer" },
+    ],
+    grants: [
+      { principal: "svc@fleet", scopes: ["models.use"] },
+      { principal: "adm@fleet", scopes: ["admin"] },
+    ],
+  });
+  const s = { access: acc } as unknown as BuckleSettings;
+  test("scoped per principal; admin/unknown denied", () => {
+    expect(virtualKeyBody(s, "svc@fleet", "/w")).toMatchObject({ user_id: "svc@fleet", team_id: "t1", max_budget: 2, rpm_limit: 5 });
+    expect(virtualKeyBody(s, "adm@fleet", "/w")).toBeNull();
+    expect(virtualKeyBody(s, "nobody", "/w")).toBeNull();
+  });
+  test("budget quota and DB failure", () => {
+    expect(admitBudget(2, 1).allowed).toBe(true);
+    expect(admitBudget(2, 2)).toMatchObject({ allowed: false, status: 429 });
+    expect(admitBudget(2, null)).toMatchObject({ allowed: false, status: 503 });
+    expect(admitBudget(undefined, null).allowed).toBe(true);
+  });
+});

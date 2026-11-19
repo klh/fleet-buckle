@@ -168,3 +168,26 @@ export function scopedTokenReader(
     return v !== null && v.length > 0 ? v : null;
   };
 }
+
+/** LiteLLM `/key/generate` body for a runner virtual key (DB-backed). Team
+ *  and budget come from the registry; models-only routes, never admin. A
+ *  verdict failure (revoked, no grant, admin-only) yields null = mint nothing. */
+export function virtualKeyBody(
+  settings: BuckleSettings,
+  principal: string,
+  workerKeyDir: string | undefined,
+): Record<string, unknown> | null {
+  const v = engineKeyFor(settings, principal, workerKeyDir);
+  if (!v.ok) return null;
+  const k = v.key;
+  return {
+    key_alias: k.keyAlias,
+    user_id: k.principalId, // per-principal: cross-user spend/keys never shared
+    team_id: k.teams[0],
+    metadata: { teams: k.teams },
+    ...(k.maxBudget !== undefined ? { max_budget: k.maxBudget } : {}),
+    ...(k.budgetDuration !== undefined ? { budget_duration: k.budgetDuration } : {}),
+    ...(k.rpmLimit !== undefined ? { rpm_limit: k.rpmLimit } : {}),
+    allowed_routes: ["llm_api_routes"],
+  };
+}
