@@ -58,4 +58,13 @@ describe("B11 A2A gateway", () => {
     w.bump();
     expect((await call(w.deps, "tasks/cancel", { id: "t1" })).error?.code).toBe(-32002);
   });
+  test("duplicate after cancel stays canceled; stream/resubscribe/unknown", async () => {
+    const w = world();
+    await call(w.deps, "message/stream", { message: { messageId: "m3" } });
+    await call(w.deps, "tasks/cancel", { id: "t1" });
+    expect((await call(w.deps, "message/send", { message: { messageId: "m3" } })).result?.status.state).toBe("canceled");
+    expect((await call(w.deps, "tasks/resubscribe", { id: "t1" })).result?.status.state).toBe("canceled");
+    expect((await call(w.deps, "tasks/get", { id: "nope" })).error?.code).toBe(-32001);
+    expect(w.log.admits).toBe(1);
+  });
 });
