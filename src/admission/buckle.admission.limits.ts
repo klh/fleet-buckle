@@ -59,3 +59,18 @@ export function resolveRpmCap(
   }
   return 0;
 }
+
+/** budget verdict from the engine's spend row: over budget → 429, spend
+ *  unknown (DB failure) → 503 deny. Never admits on an unverifiable spend. */
+export function admitBudget(
+  maxBudget: number | undefined,
+  spend: number | null,
+): { allowed: true } | { allowed: false; status: 429 | 503; reason: string } {
+  if (maxBudget === undefined) return { allowed: true };
+  if (spend === null || !Number.isFinite(spend)) {
+    return { allowed: false, status: 503, reason: "spend unverifiable; fail closed" };
+  }
+  return spend >= maxBudget
+    ? { allowed: false, status: 429, reason: "budget exceeded" }
+    : { allowed: true };
+}
