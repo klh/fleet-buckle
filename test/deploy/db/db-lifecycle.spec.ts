@@ -131,7 +131,7 @@ test("4 DB outage: record the pinned image's behavior; readiness is not an autho
   await d.waitFor(async () => (await d.exec(PG, ["pg_isready", "-h", "127.0.0.1", "-U", "postgres"])).code === 0, 60_000, "pg back");
   await new Promise((r) => setTimeout(r, 8000));
   const back = await probe();
-  rec.outage = { up, down, freshUnknownKeyDuringOutage: fresh, back };
+  rec['outage'] = { up, down, freshUnknownKeyDuringOutage: fresh, back };
   // the unverifiable key is never admitted with a 2xx
   expect(down.unknownKeyModels.startsWith("2")).toBe(false);
   expect(fresh.startsWith("2")).toBe(false);
