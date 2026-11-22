@@ -362,3 +362,29 @@ new code should not add to it.
   digests and off-repo credentials, and never depend on `stack-setup`.
 - `openapi.json` is GENERATED from the wire schemas, committed, and
   diffed — consumers and tests use it; it never drifts from code.
+
+## Connected architecture — sibling repos (crosslinks)
+
+The five repos form one system. Keep these links current; every repo's
+AGENTS.md carries the same map.
+
+- [fleet](https://github.com/klh/fleet) — the monorepo: fleet-buckle lives at
+  `packages/buckle` mirror; docs + plans + shared AGENTS.md.
+- [fleet-worker](https://github.com/klh/fleet-worker) — Pi Durable runtime,
+  native runner, queue, placement; publishes the contracts artifact this repo's
+  clients consume (`contracts-artifact/worker-contracts.v1.json`).
+- [fleet-buckle-gui](https://github.com/klh/fleet-buckle-gui) — the GUI: browser
+  assets + GUI-only API; its server-side Buckle client (src/api/buckle) consumes
+  THIS repo's `/v1/*` faces. Chat playground → POST /api/chat.json → the model
+  wire here.
+- [fleet-belt](https://github.com/klh/fleet-belt) — local-model provider:
+  profiles → converge the engine's litellm config + outside-process probes;
+  belt never routers, never proxies the request path (see its
+  docs/architecture.md).
+- Request path law: `Worker or local CLI → Buckle → LiteLLM Auto Router →
+  selected model`. Belt provides models to LiteLLM like any remote provider;
+  other buckles may point upstreams at a belt.
+- Live deployment: Azure VMSS RG-FLEET-BUCKLE-TEST — gate :4111, gui :8080,
+  engine :4000 (litellm + mscopilot seat + belt `canary-chat` row), supervisor,
+  postgres, review-watch. The Copilot seat's monthly quota exhausted
+  2026-11-20 — `canary-chat` (belt, Qwen3-0.6B via llama.cpp) covers tests.
