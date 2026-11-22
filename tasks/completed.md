@@ -28,3 +28,15 @@ Lens, MCP and A2A have no qualified deployment. No B15 release qualification is 
 Local review logs: `/tmp/fb-plan-reconcile-unit.log`,
 `/tmp/fb-plan-reconcile-mechanisms.log`, `/tmp/fb-plan-reconcile-ingress.log`.
 Release receipts need published raw artifacts, not these temporary paths alone.
+
+## Landed 2026-11-20 — VMSS engine/belt integration + models.use grant (verified same day)
+
+| Landed scope | Evidence | Remaining |
+| --- | --- | --- |
+| Engine serves the belt-configured canary model row (`canary-chat`, Qwen3-0.6B via llama.cpp) — belt convergence output landed in the GENERATED engine yaml (never hand-edited). | compose service `canary-llm` + engine yaml row; completion verified through the engine AND through the gate lane path. | Belt service containerization (belt runs the convergence loop today via compose `belt`). |
+| `gui@azure` granted `models.use` (the GUI chat wire 403 closed). | settings grants row + gate restart; root-wire completion with the gui principal returned the canary reply. | The gui playground still surfaces the seat-quota error for Copilot models — honest state until the seat resets. |
+| Engine BELT_API_KEY env wired (litellm openai provider requires a non-empty key; llama-server ignores it). | compose engine environment; completion 500 → 200 verified. | — |
+| Token throughput surfaced: gate `/v1/stats` `self.tps` (10s rolling window) exposed on the GUI usage/overview metrics. | Already-tracked `tps` in the stats face; gui consumes it. | Lane-traffic attribution per principal remains coarse. |
+
+These are deployment/integration receipts, not B-card gate closures. B15/B15.1
+gates remain as scoped.
