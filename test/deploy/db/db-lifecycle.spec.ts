@@ -71,7 +71,7 @@ test("1 roles + worker migration run once and are idempotent-guarded", async () 
   await d.stop(LE); await d.start(LE);
   await d.waitFor(async () => (await http("GET", "/health/readiness", {})).startsWith("200"), 240_000, "engine readiness 2");
   expect(await count()).toBe(first);
-  rec.migrations = { engineApplied: first, afterRestart: await count() };
+  rec['migrations'] = { engineApplied: first, afterRestart: await count() };
 });
 
 test("2 worker role cannot touch engine DB and vice versa", async () => {
@@ -89,7 +89,7 @@ test("2 worker role cannot touch engine DB and vice versa", async () => {
   const w2 = await psql("litellm", "fleet_worker", 'select * from "LiteLLM_VerificationToken"', "worker-pw");
   expect(w2.out).toMatch(/permission denied for table LiteLLM_VerificationToken/);
   await sup("postgres", "REVOKE CONNECT ON DATABASE litellm FROM fleet_worker");
-  rec.roles = { workerToEngine: w.out.trim(), engineToWorker: e.out.trim(), workerTableLevel: w2.out.trim() };
+  rec['roles'] = { workerToEngine: w.out.trim(), engineToWorker: e.out.trim(), workerTableLevel: w2.out.trim() };
 });
 
 test("3 pg_dump restore round-trip on a second database", async () => {
@@ -108,7 +108,7 @@ test("3 pg_dump restore round-trip on a second database", async () => {
   const tokA = (await psql("litellm", "litellm_engine", 'select md5(string_agg(token,\',\' order by token)) from "LiteLLM_VerificationToken"', "engine-pw")).out.trim();
   const tokB = (await sup("litellm_restore", 'select md5(string_agg(token,\',\' order by token)) from "LiteLLM_VerificationToken"')).out.trim();
   expect(tokB).toBe(tokA);
-  rec.backup = { dumpBytes: dump.out.trim(), tokens: before, restoredTokens: after, md5: tokA };
+  rec['backup'] = { dumpBytes: dump.out.trim(), tokens: before, restoredTokens: after, md5: tokA };
 });
 
 test("4 DB outage: record the pinned image's behavior; readiness is not an authorization signal", async () => {
