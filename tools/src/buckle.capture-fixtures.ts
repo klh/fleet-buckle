@@ -29,12 +29,14 @@ const expandTilde = (p: string): string => (p.startsWith("~") ? join(homedir(), 
  *  own servable flag (copilot model_picker_enabled, previews
  *  excluded). No id lists — curation by taste is the bug this fixes. */
 const RAW_SELECTION: Record<KnownProviderLabel, { path: string; filter: "all" | "pickable" }> = {
+  openai: { path: "/models", filter: "all" },
   openrouter: { path: "/models/user", filter: "all" },
   mscopilot: { path: "/models", filter: "pickable" },
   zai: { path: "/models", filter: "all" },
 };
 
 const OUT_FILE: Record<KnownProviderLabel, string> = {
+  openai: "openai.models.json",
   openrouter: "openrouter.models.json",
   mscopilot: "mscopilot.models.json",
   zai: "zai.models.json",

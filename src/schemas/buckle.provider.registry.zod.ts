@@ -41,6 +41,14 @@ export const KnownProviderSchema = z.object({
 export type KnownProvider = z.output<typeof KnownProviderSchema>;
 
 export const KNOWN_PROVIDERS = {
+  openai: {
+    url: "http://engine:4000/v1",
+    dialect: "openai",
+    catalog_headers: {},
+    key_env: "AZURE_API_KEY",
+    key_file: "/state/keys/engine.master.key",
+    user_token: false,
+  },
   openrouter: {
     url: "https://openrouter.ai/api/v1",
     dialect: "openai",

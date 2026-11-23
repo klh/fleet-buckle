@@ -59,6 +59,7 @@ export async function engineChat(call: {
   if (settings.engine === undefined) return { outcome: noEngineOutcome() };
   const engine = `${settings.engine.url.replace(/\/$/, "")}${enginePath}`;
   const engineToken = settings.keys?.engine !== undefined ? tokenOf(settings.keys.engine) : null;
+  console.error(`[engine-leg] token=${engineToken === null ? "ABSENT" : `present(${engineToken.length})`} engine=${settings.engine?.url ?? "-"}`);
   const sent = await httpSend(
     engine,
     {

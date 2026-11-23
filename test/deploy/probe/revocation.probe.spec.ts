@@ -20,7 +20,7 @@ const NET = "buckle_default";
 const run = String(Date.now());
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 
-async function docker(method: string, path: string, body?: BodyInit, headers: Record<string, string> = {}) {
+async function docker(method: string, path: string, body?: string | Uint8Array, headers: Record<string, string> = {}) {
   const res = await fetch(`http://docker${path}`, { method, body, headers, unix: SOCK } as RequestInit);
   const text = await res.text();
   if (res.status >= 400) throw new Error(`docker ${method} ${path}: ${res.status} ${text}`);
