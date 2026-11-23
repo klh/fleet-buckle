@@ -90,9 +90,17 @@ function wireRowsOf(data: unknown[], entry: ProviderEntry): BuckleModelWire[] {
   const rows: BuckleModelWire[] = [];
   for (const raw of data) {
     const row = ProviderRowSchema.safeParse(raw);
+    // engine catalog rows carry litellm's model_info id ("azure/gpt-6-luna")
+    // and owned_by — a per-leg origin beats the provider bucket label so
+    // legs from different upstreams stay distinguishable downstream
+    const rawRec = raw as { model_info?: { id?: string }; owned_by?: string };
+    const legPrefix = rawRec.model_info?.id?.split("/")[0] ?? "";
+    const legLabel = ["azure", "openai", "anthropic", "github_copilot", "bedrock", "vertex_ai"].includes(legPrefix)
+      ? legPrefix
+      : (rawRec.owned_by && rawRec.owned_by !== "openai" ? rawRec.owned_by : null);
     const parsed = BuckleModelWire.safeParse({
       id: row.success && typeof row.data.id === "string" ? row.data.id : undefined,
-      origin: { kind: "provider", label: entry.label, url: entry.url },
+      origin: { kind: "provider", label: legLabel ?? entry.label, url: entry.url },
       meta: raw,
     });
     if (parsed.success) rows.push(parsed.data);
