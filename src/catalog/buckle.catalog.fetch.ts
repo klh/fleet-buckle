@@ -90,13 +90,15 @@ function wireRowsOf(data: unknown[], entry: ProviderEntry): BuckleModelWire[] {
   const rows: BuckleModelWire[] = [];
   for (const raw of data) {
     const row = ProviderRowSchema.safeParse(raw);
-    // engine catalog rows carry litellm's model_info id ("azure/gpt-6-luna")
-    // and owned_by — a per-leg origin beats the provider bucket label so
-    // legs from different upstreams stay distinguishable downstream
-    const rawRec = raw as { model_info?: { id?: string }; owned_by?: string };
-    const legPrefix = rawRec.model_info?.id?.split("/")[0] ?? "";
-    const legLabel = ["azure", "openai", "anthropic", "github_copilot", "bedrock", "vertex_ai"].includes(legPrefix)
-      ? legPrefix
+    // litellm's /v1/models payload does NOT carry model_info.id — the
+    // per-leg upstream is only known from the engine config, which the
+    // gate does not read. AZURE_LEG_IDS: the deployed azure deployments
+    // (fleet-buckle-openai); kept in sync by the operator when legs land.
+    const AZURE_LEG_IDS = new Set(["gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-astra"]);
+    const rowId = row.success && typeof row.data.id === "string" ? row.data.id : "";
+    const rawRec = raw as { owned_by?: string };
+    const legLabel = AZURE_LEG_IDS.has(rowId)
+      ? "azure"
       : (rawRec.owned_by && rawRec.owned_by !== "openai" ? rawRec.owned_by : null);
     const parsed = BuckleModelWire.safeParse({
       id: row.success && typeof row.data.id === "string" ? row.data.id : undefined,
