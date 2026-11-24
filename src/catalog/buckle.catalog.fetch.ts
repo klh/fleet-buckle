@@ -30,6 +30,14 @@ const cache = new Map<string, CacheEntry>();
 
 const ProviderCatalogSchema = z.object({ data: z.array(z.unknown()).optional() }).passthrough();
 
+/** litellm /model/info rows: the per-leg upstream (litellm_params.model
+ *  prefix). Schema law — never a hand-cast mirror. */
+const LegInfoRowSchema = z.object({
+  model_name: z.string().optional(),
+  litellm_params: z.object({ model: z.string().optional() }).passthrough().optional(),
+}).passthrough();
+const LegInfoSchema = z.object({ data: z.array(LegInfoRowSchema).optional() }).passthrough();
+
 const ProviderRowSchema = z.object({ id: z.unknown() }).passthrough();
 
 /** one provider registry entry, resolved for fetching: its label,
@@ -97,8 +105,8 @@ function wireRowsOf(
     // the per-leg upstream comes from the engine's /model/info map
     // (litellm_params.model prefix: azure/, github_copilot/, openai/…)
     // — fetched ahead of the rows and keyed by model name. No stamping.
-    const rawRec = raw as { id?: string };
-    const legLabel = legProviders.get(rawRec.id ?? "") ?? null;
+    const rowId = row.success && typeof row.data.id === "string" ? row.data.id : "";
+    const legLabel = legProviders.get(rowId) ?? null;
     const parsed = BuckleModelWire.safeParse({
       id: row.success && typeof row.data.id === "string" ? row.data.id : undefined,
       origin: { kind: "provider", label: legLabel ?? entry.label, url: entry.url },
@@ -125,17 +133,12 @@ async function legProvidersOf(
   if (sent === null || !sent.ok) return new Map();
   const body = await bodyJson(sent);
   if (!body.ok) return new Map();
-  const rows = Array.isArray((body.data as { data?: unknown[] }).data)
-    ? ((body.data as { data: unknown[] }).data)
-    : [];
+  const parsed = LegInfoSchema.safeParse(body.data);
+  if (!parsed.success) return new Map();
   const out = new Map<string, string>();
-  for (const row of rows) {
-    const r = row as {
-      model_name?: string;
-      litellm_params?: { model?: string };
-    };
-    const prefix = r.litellm_params?.model?.split("/")[0] ?? "";
-    if (r.model_name && prefix) out.set(r.model_name, prefix);
+  for (const row of parsed.data.data ?? []) {
+    const prefix = row.litellm_params?.model?.split("/")[0] ?? "";
+    if (row.model_name && prefix) out.set(row.model_name, prefix);
   }
   return out;
 }
