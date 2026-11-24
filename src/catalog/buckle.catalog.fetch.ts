@@ -86,20 +86,19 @@ function headersOf(
 
 /** map a provider's raw rows onto the wire — id verbatim when the
  *  row carries a string id, the WHOLE raw row as meta (pure) */
-function wireRowsOf(data: unknown[], entry: ProviderEntry): BuckleModelWire[] {
+function wireRowsOf(
+  data: unknown[],
+  entry: ProviderEntry,
+  legProviders: Map<string, string>,
+): BuckleModelWire[] {
   const rows: BuckleModelWire[] = [];
   for (const raw of data) {
     const row = ProviderRowSchema.safeParse(raw);
-    // litellm's /v1/models payload does NOT carry model_info.id — the
-    // per-leg upstream is only known from the engine config, which the
-    // gate does not read. AZURE_LEG_IDS: the deployed azure deployments
-    // (fleet-buckle-openai); kept in sync by the operator when legs land.
-    const AZURE_LEG_IDS = new Set(["gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-astra"]);
-    const rowId = row.success && typeof row.data.id === "string" ? row.data.id : "";
-    const rawRec = raw as { owned_by?: string };
-    const legLabel = AZURE_LEG_IDS.has(rowId)
-      ? "azure"
-      : (rawRec.owned_by && rawRec.owned_by !== "openai" ? rawRec.owned_by : null);
+    // the per-leg upstream comes from the engine's /model/info map
+    // (litellm_params.model prefix: azure/, github_copilot/, openai/…)
+    // — fetched ahead of the rows and keyed by model name. No stamping.
+    const rawRec = raw as { id?: string };
+    const legLabel = legProviders.get(rawRec.id ?? "") ?? null;
     const parsed = BuckleModelWire.safeParse({
       id: row.success && typeof row.data.id === "string" ? row.data.id : undefined,
       origin: { kind: "provider", label: legLabel ?? entry.label, url: entry.url },
@@ -110,6 +109,37 @@ function wireRowsOf(data: unknown[], entry: ProviderEntry): BuckleModelWire[] {
   return rows;
 }
 
+/** the engine's per-leg upstream map (model name → provider label),
+ *  from litellm's /model/info. Non-engine providers yield an empty
+ *  map (their rows keep the provider bucket label). */
+async function legProvidersOf(
+  entry: ProviderEntry,
+  call: FetchCall,
+  userToken: string | null,
+): Promise<Map<string, string>> {
+  const sent = await httpSend(
+    `${entry.url.replace(/\/$/, "")}/model/info`,
+    { headers: headersOf(entry, call, userToken) },
+    call.timeouts.provider_fetch_ms,
+  ).catch(() => null);
+  if (sent === null || !sent.ok) return new Map();
+  const body = await bodyJson(sent);
+  if (!body.ok) return new Map();
+  const rows = Array.isArray((body.data as { data?: unknown[] }).data)
+    ? ((body.data as { data: unknown[] }).data)
+    : [];
+  const out = new Map<string, string>();
+  for (const row of rows) {
+    const r = row as {
+      model_name?: string;
+      litellm_params?: { model?: string };
+    };
+    const prefix = r.litellm_params?.model?.split("/")[0] ?? "";
+    if (r.model_name && prefix) out.set(r.model_name, prefix);
+  }
+  return out;
+}
+
 /** send one catalog request and parse the payload: rows on 2xx with
  *  a data array, else a fault (logged by the CALLER at the seam) */
 async function fetchRows(
@@ -117,6 +147,7 @@ async function fetchRows(
   call: FetchCall,
   userToken: string | null,
 ): Promise<{ ok: true; rows: BuckleModelWire[] } | { ok: false; fault: Fault }> {
+  const legProviders = await legProvidersOf(entry, call, userToken);
   const sent = await httpSend(
     `${entry.url.replace(/\/$/, "")}/models`,
     { headers: headersOf(entry, call, userToken) },
@@ -134,7 +165,7 @@ async function fetchRows(
         detail: (catalog.error?.issues ?? []).map((i) => i.message).join("; ") || "no data rows",
       },
     };
-  return { ok: true, rows: wireRowsOf(catalog.data.data, entry) };
+  return { ok: true, rows: wireRowsOf(catalog.data.data, entry, legProviders) };
 }
 
 /** a failed fetch answers from grace when the last good entry is

@@ -33,6 +33,8 @@ const serveSeat = async () => {
   const server = Bun.serve({
     port: 0,
     fetch: async (req) => {
+      // the legProvidersOf probe rides /model/info — never counted as a seat pull
+      if (new URL(req.url).pathname.endsWith("/model/info")) return Response.json({ data: [] });
       seen.push(req.headers.get("authorization") ?? "(none)");
       const bearer = (req.headers.get("authorization") ?? "").replace(/^Bearer /u, "");
       if (bearer === "tok-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") {
