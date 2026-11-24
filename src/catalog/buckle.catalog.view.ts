@@ -46,18 +46,23 @@ function directHopRowsOf(
     });
 }
 
-/** the catalog's SET accumulator — one row per model id, first
- *  admission wins. Factory-typed (the live-values idiom). */
+/** the catalog's SET accumulator — one row per (model id, ORIGIN):
+ *  the same model may be served by several providers (copilot's
+ *  gpt-6-luna AND azure's gpt-6-luna are distinct rows), and a transit
+ *  copy of a peer row is still the same row. First admission per
+ *  pair wins (own rows precede peers). Factory-typed. */
 function createModelSet() {
   const seen = new Set<string>();
   const models: BuckleModelWire[] = [];
   return {
     admit(rows: Iterable<BuckleModelWire>): void {
-      for (const row of rows)
-        if (!seen.has(row.id)) {
-          seen.add(row.id);
+      for (const row of rows) {
+        const key = `${row.id}\u0000${row.origin.kind}:${row.origin.url}`;
+        if (!seen.has(key)) {
+          seen.add(key);
           models.push(row);
         }
+      }
     },
     rows(): BuckleModelWire[] {
       return models;

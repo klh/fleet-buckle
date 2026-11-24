@@ -147,7 +147,7 @@ describe("the federated catalog (the matrix views)", () => {
     }
   });
 
-  test("the catalog is a SET — an id served by own + two peers lists ONCE (own wins, then hubs order)", async () => {
+  test("an id served by own + peers lists once per ORIGIN — same model via several providers stays distinct (own wins per origin, then hubs order)", async () => {
     const dir = matrixKeyDir();
     const b2 = await bootPeer(dir, {
       label: "b2",
@@ -171,15 +171,23 @@ describe("the federated catalog (the matrix views)", () => {
       expect(r.status).toBe(200);
       const body = BuckleModelsResponse.parse(await r.json());
       const ids = body.models.map((m) => m.id);
-      // however many hubs serve an id, the row appears exactly once
-      expect(ids.length).toBe(new Set(ids).size);
+      // rows are unique per (id, origin): the same id from own + a peer
+      // appears TWICE (distinct providers), never duplicated per provider
+      const keys = body.models.map((m) => `${m.id}|${m.origin.kind}:${m.origin.url}`);
+      expect(keys.length).toBe(new Set(keys).size);
+      // per-origin: own-shared appears THRICE (own row + the b2 hop +
+      // the b3 hop — every origin is a distinct serve), peer-shared
+      // twice (b2 + b3 hops)
       expect([...ids].sort()).toEqual([
         "openai/own-model",
         "openai/own-shared",
+        "openai/own-shared",
+        "openai/own-shared",
         "openai/peer-model",
         "openai/peer-shared",
+        "openai/peer-shared",
       ]);
-      // own beats peers: never hop for what we serve
+      // own beats peers PER ORIGIN: the own row keeps kind=provider
       expect(body.models.find((m) => m.id === "openai/own-shared")?.origin).toMatchObject({
         kind: "provider",
       });
