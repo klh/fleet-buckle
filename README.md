@@ -24,6 +24,8 @@ federation. Read [AGENTS.md](AGENTS.md).
 - [Test operations](docs/test-flow.md): actual project names, fixtures and rig boundaries.
 - [BYOC evidence](docs/byoc-verification.md): dated test receipts; human rollout is D01.
 - [Context injection](docs/context_injection.md): implemented decision seam and known gaps.
+- [Deploy HOWTO](docs/HOWTO_DEPLOY.md): the proven Azure VM shape — models, Gondolin on
+  libkrun, the gotchas paid for in blood.
 - [Decisions](docs/decisions/): config, module, federation and telemetry constraints.
 - GUI design and implementation belong to [fleet-buckle-gui](../fleet-buckle-gui/plan.md). Runtime
   execution, seeds and recovery belong to [fleet-worker](../fleet-worker/plan.md).

@@ -45,6 +45,12 @@ the owner pilot. It adds no imports or dependencies to Buckle runtime.
 The plan is the single delivery contract. Preserve unrelated work and
 do not relax laws or tests to make a change pass.
 
+## Deployment
+
+The proven single-VM deployment shape (models, Gondolin on libkrun, watcher)
+is [docs/HOWTO_DEPLOY.md](docs/HOWTO_DEPLOY.md) — read it before Azure work;
+it carries the live gotchas (capacity=50 TPM, volume ownership, kvm gid).
+
 ## Azure VMSS work placement after `/clear`
 
 Read [`../fleet-worker/docs/vmss-work-intake.md`](../fleet-worker/docs/vmss-work-intake.md)
