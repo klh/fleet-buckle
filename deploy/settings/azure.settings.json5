@@ -47,6 +47,14 @@
     // from KNOWN_PROVIDERS; the credential is ALWAYS the caller's
     // /w/<lane>/<token> — nothing to configure here, ever
     mscopilot: {},
+    // the ENGINE as a provider (the catalog law): the flock unit serves
+    // its azure legs THROUGH litellm — the catalog lists what the engine
+    // serves; chat forwards on the engine leg as before
+    azure: {
+      url: "http://engine:4000/v1",
+      dialect: "openai",
+      key: "/state/keys/engine.master.key",
+    },
   },
   timeouts: {
     // the engine's /v1/models walk takes ~150s (litellm walks every
