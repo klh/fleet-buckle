@@ -3,7 +3,7 @@ model: auto-router
 lane: general
 variables:
   repo.issues_uri: https://github.com/owner/repo/issues
-  repo.name: repo.name
+  repo.name: klh/fleet-recovery-rig
 defaults:
   # runtime knobs this template runs under — mirror of fleet-worker's
   # supervisor.defaults.ts (SUPERVISOR_DEFAULTS); change them together

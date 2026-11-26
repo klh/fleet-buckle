@@ -2,8 +2,8 @@
 model: auto-router
 lane: general
 variables:
-  repo: repo
-  token: token
+  repo: klh/fleet-recovery-rig
+  token: the caller credential (never logged)
 defaults:
   # runtime knobs this template runs under — mirror of fleet-worker's
   # supervisor.defaults.ts (SUPERVISOR_DEFAULTS); change them together
