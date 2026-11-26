@@ -31,7 +31,7 @@ services:
   # principals and the engine spends the PAT for them)
   engine:
     # litellm v1.103.0
-    image: ghcr.io/berriai/litellm@sha256:bd089afdcd35b894b14a93f9743cdc8b591f82da1a38dd43a010a7b0c9de5fd7
+    image: ghcr.io/berriai/litellm@sha256:ce00096d012719d58c52cecfa373f7c6256dd1b0ff08f6fa607e10e9628f1f46
     command: ["--config", "/etc/engine/mscopilot.litellm.yaml", "--port", "4000"]
     env_file:
       - path: .env
