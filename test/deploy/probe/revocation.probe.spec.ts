@@ -1,3 +1,4 @@
+import { z } from "zod";
 // revocation.probe.spec.ts — B04.1 acceptance: the REAL-ingress revocation
 // probe. Boots a THROWAWAY container of the freshly built buckle image
 // (PROBE_IMAGE) on the compose network buckle_default via the Docker
@@ -12,6 +13,9 @@ import { test, expect } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+
+/** the mint reply wire shape (the zod-first law — no hand-cast) */
+const KeyReplySchema = z.object({ key: z.string().min(1) });
 
 const SOCK = "/var/run/docker.sock";
 const IMAGE = process.env["PROBE_IMAGE"] ?? "buckle:b814c4b-probe";
@@ -102,7 +106,7 @@ test("B04.1 real-ingress revocation probe", async () => {
         body: JSON.stringify({ principal }),
       });
       expect(r.status).toBe(201);
-      return ((await r.json()) as { key: string }).key;
+      return KeyReplySchema.parse(await r.json()).key;
     };
     const victim = await mint("victim@probe");
     const bystander = await mint("bystander@probe");

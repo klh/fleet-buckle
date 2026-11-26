@@ -44,9 +44,13 @@ export const start = (name: string) => api("POST", `/containers/${name}/start`);
 export const netCreate = (name: string) => api("POST", "/networks/create", { Name: name });
 export const netRm = (name: string) => api("DELETE", `/networks/${name}`);
 
+/** the docker exec-create wire shape (the zod-first law — no hand-cast) */
+const ExecCreateSchema = z.object({ Id: z.string().min(1) });
+const ExecInspectSchema = z.object({ ExitCode: z.number() });
+
 export async function exec(name: string, cmd: string[], stdin?: string): Promise<{ code: number; out: string }> {
   const created = await api("POST", `/containers/${name}/exec`, { Cmd: cmd, AttachStdout: true, AttachStderr: true, AttachStdin: stdin !== undefined });
-  const id = (JSON.parse(created.text) as { Id: string }).Id;
+  const id = ExecCreateSchema.parse(JSON.parse(created.text)).Id;
   const out = await new Promise<string>((resolve, reject) => {
     const req = http.request(
       { socketPath: "/var/run/docker.sock", method: "POST", path: `/exec/${id}/start`, headers: { "content-type": "application/json", connection: "Upgrade", upgrade: "tcp" } },
@@ -61,7 +65,7 @@ export async function exec(name: string, cmd: string[], stdin?: string): Promise
     req.on("error", reject);
     req.end(JSON.stringify({ Detach: false, Tty: false }));
   });
-  const info = JSON.parse((await api("GET", `/exec/${id}/json`)).text) as { ExitCode: number };
+  const info = ExecInspectSchema.parse(JSON.parse((await api("GET", `/exec/${id}/json`)).text));
   return { code: info.ExitCode, out };
 }
 

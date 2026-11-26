@@ -1,3 +1,4 @@
+import { z } from "zod";
 // B02 QUAL: production database lifecycle on a throwaway postgres:16 + the PINNED LiteLLM image.
 // Cases: migration once/idempotent, role split, pg_dump round-trip, DB-outage deny path.
 // Needs /var/run/docker.sock. The outage case RECORDS what the pinned image does and asserts
@@ -22,6 +23,9 @@ const PY = "import sys,urllib.request as u,json\nm,p,a,b=sys.argv[1:5]\nr=u.Requ
 const short = (s: string) => s.slice(0, 220);
 const http = async (m: string, p: string, h: object, b?: object) =>
   (await d.exec(LE, ["python3", "-c", PY, m, p, JSON.stringify(h), b ? JSON.stringify(b) : ""])).out.trim();
+/** the engine key/generate wire shape (the zod-first law — no hand-cast) */
+const KeyGenerateSchema = z.object({ key: z.string().min(1) });
+
 const MASTER = { authorization: "Bearer sk-master", "content-type": "application/json" };
 const CHAT = { model: "fake", messages: [{ role: "user", content: "hi" }] };
 
@@ -93,7 +97,7 @@ test("2 worker role cannot touch engine DB and vice versa", async () => {
 });
 
 test("3 pg_dump restore round-trip on a second database", async () => {
-  const g = JSON.parse((await http("POST", "/key/generate", MASTER, { models: ["fake"] })).slice(4)) as { key: string };
+  const g = KeyGenerateSchema.parse(JSON.parse((await http("POST", "/key/generate", MASTER, { models: ["fake"] })).slice(4)));
   key = g.key;
   const q = 'select count(*) from "LiteLLM_VerificationToken"';
   const before = (await psql("litellm", "litellm_engine", q, "engine-pw")).out.trim();
