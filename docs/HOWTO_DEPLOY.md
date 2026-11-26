@@ -67,7 +67,11 @@ endpoint, which has no DNS) with `api-version=2024-10-21`.
 
 Keys go in `/opt/buckle/.env` (paths/values only there):
 `AZURE_API_KEY/AZURE_API_BASE`, `AZURE_MULTI_API_KEY/AZURE_MULTI_API_BASE`,
-`ZAI_API_KEY` (glm leg), `ENGINE_MASTER_KEY`.
+`ENGINE_MASTER_KEY`.
+
+**ZAI models are LOCAL-ONLY** (owner's machines, never azure/onprem):
+the flock engine yaml carries NO zai leg — do not add one. glm lives
+on the local rigs only.
 
 ## 3. Stack
 
