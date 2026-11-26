@@ -4,8 +4,9 @@ lane: general
 variables:
   repo: klh/fleet-recovery-rig
 defaults:
-  # runtime knobs this template runs under — mirror of fleet-worker's
-  # supervisor.defaults.ts (SUPERVISOR_DEFAULTS); change them together
+  # runtime knobs this template RUNS UNDER — an OVERRIDE of the
+  # supervisor's defaults (supervisor.defaults.ts is the fallback when
+  # a charter declares nothing here; the charter wins)
   max_attempts: 3
   lease_ms: 900000
 ---
