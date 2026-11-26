@@ -24,16 +24,24 @@
     principals: [
       { id: "gui@azure", kind: "service", groups: [] },
       { id: "owner@azure", kind: "human", groups: [] },
+      { id: "worker@azure", kind: "service", groups: [] },
     ],
     grants: [
       {
         principal: "gui@azure",
-        scopes: ["admin", "models.list", "stats.read", "tree.read"],
+        // engine.passthrough: the GUI's logs face rides the gate's
+        // verbatim /spend/logs leg; models.use: the chat playground
+        scopes: ["admin", "models.list", "models.use", "stats.read", "tree.read", "engine.passthrough"],
       },
       { principal: "owner@azure", scopes: ["models.list", "models.use", "stats.read"] },
+      { principal: "worker@azure", scopes: ["models.list", "models.use"] },
     ],
     tiers: [],
   },
+  lanes: [
+    { id: "b3-gpt-consult", model: "claude-sonnet-5.5" },
+    { id: "b3-repoagent-v1-calculon", model: "claude-sonnet-5.5" },
+  ],
   providers: {
     // BYOC by registry default: url+dialect+catalog headers resolve
     // from KNOWN_PROVIDERS; the credential is ALWAYS the caller's
@@ -41,6 +49,9 @@
     mscopilot: {},
   },
   timeouts: {
+    // the engine's /v1/models walk takes ~150s (litellm walks every
+    // leg); the 1.5s default starves the catalog on every cold boot
+    provider_fetch_ms: 200000,
     // the seat's /models rate limit runs minutes; keep serving the
     // last-good catalog for up to an hour of consecutive faults
     catalog_grace_ms: 3600000,
