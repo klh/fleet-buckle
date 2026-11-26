@@ -26,6 +26,8 @@ federation. Read [AGENTS.md](AGENTS.md).
 - [Context injection](docs/context_injection.md): implemented decision seam and known gaps.
 - [Deploy HOWTO](docs/HOWTO_DEPLOY.md): the proven Azure VM shape — models, Gondolin on
   libkrun, the gotchas paid for in blood.
+- [Control-plane gaps](docs/CONTROL-PLANE-GAPS.md): the road to "no az/ssh/PAT for
+  humans" — every escape hatch mapped to the fleet surface it needs.
 - [Decisions](docs/decisions/): config, module, federation and telemetry constraints.
 - GUI design and implementation belong to [fleet-buckle-gui](../fleet-buckle-gui/plan.md). Runtime
   execution, seeds and recovery belong to [fleet-worker](../fleet-worker/plan.md).
