@@ -31,6 +31,8 @@ const SawRequest = z
     hopPath: z.string().nullable(),
     deadline: z.string().nullable(),
     raw: z.string(),
+    sessionId: z.string().nullable(),
+    laneId: z.string().nullable(),
     /** the copilot seat's demanded integration id (BYOC proofs) */
     copilotId: z.string().nullable(),
     /** the request path (chat vs catalog rides, engine-leg proofs) */
@@ -48,6 +50,8 @@ function sawOf(req: Request, raw: string): SawRequest {
     copilotId: req.headers.get("copilot-integration-id"),
     path: new URL(req.url).pathname,
     raw,
+    sessionId: req.headers.get("x-session-id"),
+    laneId: req.headers.get("x-fleet-lane"),
   });
 }
 

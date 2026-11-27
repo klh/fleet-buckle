@@ -1,0 +1,5 @@
+[
+  { "name": "opaque values", "headers": { "x-session-id": "not-a-uuid/session:42", "x-fleet-lane": "lane/42:child", "x-untrusted-identity": "owner@azure" }, "sessionId": "not-a-uuid/session:42", "laneId": "lane/42:child" },
+  { "name": "absent", "headers": {}, "sessionId": null, "laneId": null },
+  { "name": "empty", "headers": { "x-session-id": "", "x-fleet-lane": "" }, "sessionId": "", "laneId": "" }
+]

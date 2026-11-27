@@ -98,6 +98,7 @@ export async function hopChat(call: HopChatCall): Promise<WithUpstream<HopOutcom
   if (budget <= 0) return { outcome: { kind: "refused", detail: "hop deadline exhausted" } };
   const deadline = ride.deadline ?? Date.now() + timeoutMs;
   const headers: Record<string, string> = {
+    ...ride.attribution,
     "content-type": "application/json",
     traceparent: continueTraceparent(ride.traceparent),
     [HOP_PATH_HEADER]: [...ride.path, self].join(","),
