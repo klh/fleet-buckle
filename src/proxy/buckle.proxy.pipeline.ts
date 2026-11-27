@@ -19,6 +19,7 @@ import {
   type HopRide,
   HopRideSchema,
   HopPeerSchema,
+  attributionHeaders,
   hopDeadlineOf,
   hopPathOf,
   wouldLoop,
@@ -127,7 +128,7 @@ function injectContext(ctx: ForwardCtx, req: Request, stamp: LegStamp, ask: Body
       bodyStart: ask.raw.slice(0, 512),
       ...pick("repo", req.headers.get("x-fleet-repo")),
       // the PATH slug is the attribution contract; the header is the fallback
-      ...pick("lane", stamp.laneSlug || req.headers.get("x-fleet-lane")),
+      ...pick("lane", stamp.laneSlug || req.headers.get("x-fleet-lane") || null),
       ...pick("work", req.headers.get("x-fleet-work")),
     }),
   );
@@ -177,6 +178,7 @@ export async function forwardChat(
   //     trace, inbound path, chain budget
   const ride = HopRideSchema.parse({
     body: raw,
+    attribution: attributionHeaders(req.headers),
     traceparent,
     path: hopPathOf(req.headers.get(HOP_PATH_HEADER)),
     deadline: hopDeadlineOf(req.headers.get(HOP_DEADLINE_HEADER)),
@@ -267,6 +269,7 @@ async function serveUser(
     label,
     url,
     raw: ride.body,
+    attribution: ride.attribution,
     traceparent: ride.traceparent,
     route: stamp.route,
     token: ctx.userToken,
@@ -315,6 +318,7 @@ async function serveEngine(
   const sent = await engineChat({
     settings: ctx.settings,
     raw: ride.body,
+    attribution: ride.attribution,
     traceparent: ride.traceparent,
     tokenOf: ctx.tokenOf,
     enginePath: ENGINE_PATH[stamp.route],

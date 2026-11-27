@@ -4,6 +4,7 @@
 // Outcome is a zod-typed union the caller maps into client responses;
 // every type here is zod-derived (the type law).
 import { z } from "zod";
+import type { HopRide } from "../federation/buckle.federation.protocol.ts";
 import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
 import { bodyText, httpSend, parseJson } from "../fault.ts";
 import type { TokenReader } from "../federation/buckle.federation.peer.ts";
@@ -50,6 +51,7 @@ const LITELLM_TAGS_HEADER = "x-litellm-tags";
 export async function engineChat(call: {
   settings: BuckleSettings;
   raw: string;
+  attribution?: HopRide["attribution"];
   traceparent: string;
   tokenOf: TokenReader;
   enginePath: string;
@@ -64,6 +66,7 @@ export async function engineChat(call: {
     {
       method: "POST",
       headers: {
+        ...call.attribution,
         "content-type": "application/json",
         traceparent: continueTraceparent(traceparent),
         ...(fleetTags !== "" ? { [LITELLM_TAGS_HEADER]: fleetTags } : {}),
