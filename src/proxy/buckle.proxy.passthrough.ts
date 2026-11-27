@@ -11,6 +11,7 @@
 import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
 import { httpSend } from "../fault.ts";
 import type { TokenReader } from "../federation/buckle.federation.peer.ts";
+import { attributionHeaders } from "../federation/buckle.federation.protocol.ts";
 import { problemResponse } from "../problem.ts";
 
 /** request headers the relay NEVER forwards: hop-internal state,
@@ -51,7 +52,8 @@ export function relayHeaders(req: Request): Record<string, string> {
   req.headers.forEach((value, key) => {
     if (!DROP_REQUEST_HEADERS.has(key) && !isInternalHeader(key)) out[key] = value;
   });
-  return out;
+  // Only the optional lane/session metadata is exempt from internal-header stripping.
+  return { ...out, ...attributionHeaders(req.headers) };
 }
 
 /** relay one request verbatim to the engine — the pass-through leg.

@@ -2,3 +2,5 @@
 # the root /test tree belongs to @playwright/test (.spec.ts).
 [test]
 root = "src"
+# Playwright owns *.spec.ts; keep the migration runner on *.test.ts.
+pathIgnorePatterns = ["**/*.spec.ts"]

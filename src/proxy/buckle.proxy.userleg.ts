@@ -23,6 +23,7 @@
 // Body bytes verbatim, the W3C trace CONTINUED. The outcome shape is
 // the engine leg's (served|fault) so settleServed maps both through
 // ONE surface.
+import type { HopRide } from "../federation/buckle.federation.protocol.ts";
 import type { BuckleSettings } from "../schemas/buckle.settings.zod.ts";
 import { bodyText, httpSend } from "../fault.ts";
 import { continueTraceparent } from "../trace/buckle.trace.export.ts";
@@ -50,6 +51,7 @@ export async function userChat(call: {
   label: string;
   url: string;
   raw: string;
+  attribution?: HopRide["attribution"];
   traceparent: string;
   route: ChatRoute;
   token: string;
@@ -105,6 +107,7 @@ function relayTo(
     {
       method: "POST",
       headers: {
+        ...call.attribution,
         "content-type": "application/json",
         traceparent: continueTraceparent(call.traceparent),
         ...extraHeaders,

@@ -19,10 +19,23 @@ export const HOP_PATH_HEADER = "x-fleet-buckle-hop-path";
  *  origin's budget, however many hops deep it goes */
 export const HOP_DEADLINE_HEADER = "x-fleet-buckle-deadline-ms";
 
+/** Optional, unverified client metadata; never an admission or identity assertion. */
+const ATTRIBUTION_HEADERS = ["x-session-id", "x-fleet-lane"] as const;
+
+export function attributionHeaders(headers: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const name of ATTRIBUTION_HEADERS) {
+    const value = headers.get(name);
+    if (value !== null) out[name] = value;
+  }
+  return out;
+}
+
 /** the headers a proxy forwards VERBATIM (the hop's whole wire
  *  context: identity, trace, path, deadline) — the ONE list; the
  *  test kit's stubs read it, never re-type it */
 export const VERBATIM_HOP_HEADERS = [
+  ...ATTRIBUTION_HEADERS,
   "traceparent",
   "authorization",
   HOP_PATH_HEADER,
@@ -72,6 +85,8 @@ export const HopRideSchema = z
     traceparent: z.string(),
     path: z.array(z.string()),
     deadline: z.number().int().nullable(),
+    // Transport metadata only; no format checks and no invented identifiers.
+    attribution: z.record(z.string(), z.string()).optional(),
   })
   .strict();
 export type HopRide = z.output<typeof HopRideSchema>;

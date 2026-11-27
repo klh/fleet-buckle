@@ -34,7 +34,7 @@
         scopes: ["admin", "models.list", "models.use", "stats.read", "tree.read", "engine.passthrough"],
       },
       { principal: "owner@azure", scopes: ["models.list", "models.use", "stats.read"] },
-      { principal: "worker@azure", scopes: ["models.list", "models.use"] },
+      { principal: "worker@azure", scopes: ["models.list", "models.use", "stats.read"] },
     ],
     tiers: [],
   },
