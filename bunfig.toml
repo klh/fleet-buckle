@@ -2,3 +2,6 @@
 # the root /test tree belongs to @playwright/test (.spec.ts).
 [test]
 root = "src"
+
+# Playwright owns colocated .spec.ts as well as /test.
+pathIgnorePatterns = ["**/*.spec.ts"]

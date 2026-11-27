@@ -71,9 +71,9 @@ cross-repo event-plane acceptance remains open on fleet-worker#256.
 - `bun --bun playwright test --list`: 66 tests, 15 files; new specs discovered
   only in `unit`. `--project=unit`: 4/4 pass (alias removal/config retention,
   refusal cases, private/exclusive candidate, parser-error redaction).
-- `bun test $(git ls-files '*.test.ts')`: 150/150 legacy tests pass. Plain
-  `bun test` also discovers the new Playwright spec and errors because it
-  is not a Bun suite; use the explicitly separated runners above.
+- Plain `bun test`: 150/150 legacy tests pass. `bunfig.toml` excludes
+  Playwright `.spec.ts` files from Bun discovery; all four new tests remain
+  discovered and executed by the Playwright `unit` project.
 - `bun run check`: laws hold; OpenAPI unchanged/in sync.
 - `bun run typecheck`: blocked by existing missing `z` imports in
   `test/deploy/db/docker.fixture.ts:48–49`; no changed-file errors.
