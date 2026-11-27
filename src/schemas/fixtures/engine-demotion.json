@@ -1,0 +1,10 @@
+{
+  "model_list": [
+    {"model_name": "canary-chat", "litellm_params": {"model": "openai/canary-chat", "api_base": "http://canary-llm:8021/v1"}},
+    {"model_name": "azure/test-twin", "litellm_params": {"model": "azure/test-twin", "api_key": "os.environ/AZURE_API_KEY"}, "model_info": {"id": "fixture-twin"}},
+    {"model_name": "canary-chat", "litellm_params": {"model": "openai/canary-chat", "api_base": "http://another-missing-canary:8021/v1"}}
+  ],
+  "general_settings": {"master_key": "os.environ/ENGINE_MASTER_KEY", "pass_through_endpoints": [{"path": "/v1/byoc/mscopilot", "target": "https://example.invalid", "forward_headers": true}]},
+  "litellm_settings": {"drop_params": true},
+  "router_settings": {"num_retries": 1}
+}
